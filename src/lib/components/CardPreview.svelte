@@ -69,12 +69,22 @@
     border-color: var(--frame-lit);
     box-shadow: 0 0 20px rgba(224, 190, 118, .35), 0 14px 26px rgba(0, 0, 0, .6),
       inset 0 1px 0 rgba(255, 232, 180, .28);
+    /* A spell circling the card. The animation keeps one even halo lit at all
+       times and orbits a brighter accent around it, so no edge ever goes dark. */
+    animation: fs-spell 3.4s linear infinite;
+  }
+
+  /* Every card lifts on hover — unplayable ones too, so you can always read
+     a card's text without having the mana to cast it. */
+  .card:hover {
+    transform: translateY(-22px) scale(1.1);
+    box-shadow: 0 30px 50px rgba(0, 0, 0, .75), 0 0 26px rgba(240, 214, 138, .22);
+    opacity: 1;
+    z-index: 200;
   }
 
   .card.playable:hover {
-    transform: translateY(-22px) scale(1.1);
     box-shadow: 0 30px 50px rgba(0, 0, 0, .75), 0 0 34px rgba(240, 214, 138, .4);
-    z-index: 200;
   }
 
   .card.drawn { animation: fs-draw .42s cubic-bezier(.2, .9, .3, 1); }

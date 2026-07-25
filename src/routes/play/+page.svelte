@@ -67,6 +67,13 @@
     targets.flatMap((t) => (t.kind === 'minion' ? [t.minion.instanceId] : []))
   );
 
+  // Nothing affordable in hand and nothing left that can swing: the turn is
+  // spent, so the End Turn button lights up rather than making you hunt.
+  $: spent =
+    myTurn &&
+    !me.hand.some((_, i) => canPlayCard(state, 'player', i)) &&
+    !me.board.some(canAttack);
+
   // The hand never overlaps: it scales down as it grows, so no card can cover
   // a neighbour's cost crystal or stat gems. HAND_LIMIT is 10.
   $: handScale = Math.min(1, Math.min(handWidth - 90, 1260) / (Math.max(1, me.hand.length) * 146));
@@ -254,8 +261,6 @@
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId })}
       />
-    {:else}
-      <span class="empty">empty field</span>
     {/each}
   </section>
 
@@ -276,8 +281,6 @@
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onMyMinion(minion.instanceId)}
       />
-    {:else}
-      <span class="empty">empty field</span>
     {/each}
   </section>
 
@@ -299,7 +302,7 @@
       />
     </div>
 
-    <button class="end-turn" on:click={onEndTurn} disabled={!myTurn}>
+    <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
       {myTurn ? 'End Turn' : 'Waiting'}
     </button>
   </section>
@@ -440,14 +443,6 @@
     padding: 6px 28px;
   }
 
-  .empty {
-    font-family: var(--display);
-    font-size: 12px;
-    letter-spacing: .24em;
-    text-transform: uppercase;
-    color: #4a3a26;
-  }
-
   .centre {
     position: relative;
     display: flex;
@@ -490,6 +485,11 @@
     cursor: pointer;
     box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5),
       0 0 18px rgba(224, 190, 118, .25);
+  }
+
+  .end-turn.spent:not(:disabled) {
+    border-color: #8fc8ff;
+    animation: fs-end-turn 1.6s ease-in-out infinite;
   }
 
   /* Cards keep an 8px gap and never overlap; the row scales instead. */
