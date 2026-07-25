@@ -1,26 +1,37 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type { Rarity } from '../../types/cards';
   import {
     DECK_SIZE,
     MAX_COPIES,
     addCard,
     autoBuild,
     canAdd,
-    countOf,
     deckEntries,
     deckProblems,
     emptyDeck,
+    groupByTemplate,
     maxDeckSize,
+    pruneDeck,
     removeCard,
+    removeCards,
+    templateCount,
     type Collection,
     type Deck
   } from '$lib/decks/deck';
-  import { loadCollection, loadDeck, saveDeck } from '$lib/decks/storage';
+  import { loadCollection, loadDeck, saveCollection, saveDeck } from '$lib/decks/storage';
 
   let collection: Collection | null = null;
   let deck: Deck = emptyDeck();
-  let search = '';
   let saved = false;
+
+  let search = '';
+  let costFilter = 'all';
+  let rarityFilter: Rarity | 'all' = 'all';
+  let expanded: string | null = null;
+  let selected = new Set<string>();
+
+  const RARITIES: Rarity[] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 
   onMount(() => {
     collection = loadCollection();
@@ -28,18 +39,34 @@
     if (stored) deck = stored;
   });
 
-  $: pool = collection
-    ? collection.cards
-        .filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()))
-        .sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name))
-    : [];
+  $: groups = collection ? groupByTemplate(deck, collection) : [];
+
+  // Filters apply to the flashcards inside a template, so searching narrows
+  // which versions you see without hiding the card itself.
+  $: visible = groups
+    .map((group) => {
+      const term = search.trim().toLowerCase();
+      const cards = term
+        ? group.cards.filter(
+            (c) =>
+              c.name.toLowerCase().includes(term) ||
+              c.description.toLowerCase().includes(term)
+          )
+        : group.cards;
+      return { ...group, cards };
+    })
+    .filter((group) => group.cards.length > 0)
+    .filter((group) => costFilter === 'all' || group.sample.cost === Number(costFilter))
+    .filter((group) => rarityFilter === 'all' || group.sample.rarity === rarityFilter);
 
   $: entries = collection ? deckEntries(deck, collection) : [];
   $: problems = collection ? deckProblems(deck, collection) : [];
   $: capacity = collection ? maxDeckSize(collection) : 0;
+  $: distinct = collection ? templateCount(collection) : 0;
 
   function add(id: string) {
-    deck = addCard(deck, id);
+    if (!collection) return;
+    deck = addCard(deck, collection, id);
     saved = false;
   }
 
@@ -63,6 +90,32 @@
     saveDeck(deck);
     saved = true;
   }
+
+  function toggleExpand(templateId: string) {
+    expanded = expanded === templateId ? null : templateId;
+  }
+
+  function toggleSelect(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selected = next;
+  }
+
+  /** Deletion is always explicit — nothing is ever removed by importing. */
+  function deleteSelected() {
+    if (!collection || selected.size === 0) return;
+    const count = selected.size;
+    if (!confirm(`Delete ${count} card${count === 1 ? '' : 's'} from your library?`)) return;
+
+    const next = removeCards(collection, selected);
+    collection = next;
+    deck = pruneDeck(deck, next);
+    saveCollection(next);
+    saveDeck(deck);
+    selected = new Set();
+    saved = true;
+  }
 </script>
 
 <svelte:head><title>Decks — Flashstone</title></svelte:head>
@@ -79,11 +132,14 @@
       <div>
         <h1>Deck builder</h1>
         <p class="sub">
-          {collection.cards.length} cards in “{collection.name}”. Max {MAX_COPIES} copies of
-          any card.
+          {collection.cards.length} flashcards across {distinct} cards. Max {MAX_COPIES} copies
+          of a card, whichever flashcards you pick.
         </p>
       </div>
       <div class="controls">
+        {#if selected.size > 0}
+          <button class="danger" on:click={deleteSelected}>Delete {selected.size}</button>
+        {/if}
         <button class="ghost" on:click={build}>Auto-build</button>
         <button class="ghost" on:click={clear} disabled={deck.cardIds.length === 0}>
           Clear
@@ -109,30 +165,81 @@
       <section class="pool">
         <div class="col-head">
           <h2>Collection</h2>
-          <input placeholder="Search cards…" bind:value={search} />
+          <span class="tally">{visible.length} shown</span>
         </div>
+
+        <div class="filters">
+          <input placeholder="Search question or answer…" bind:value={search} />
+          <select bind:value={costFilter} aria-label="Filter by cost">
+            <option value="all">Any cost</option>
+            {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as cost}
+              <option value={String(cost)}>{cost} mana</option>
+            {/each}
+          </select>
+          <select bind:value={rarityFilter} aria-label="Filter by rarity">
+            <option value="all">Any rarity</option>
+            {#each RARITIES as rarity}<option value={rarity}>{rarity}</option>{/each}
+          </select>
+        </div>
+
         <ul>
-          {#each pool as card (card.id)}
-            {@const inDeck = countOf(deck, card.id)}
+          {#each visible as group (group.templateId)}
+            {@const card = group.sample}
             <li>
-              <button
-                class="row"
-                class:maxed={!canAdd(deck, card.id)}
-                on:click={() => add(card.id)}
-                title={card.description}
-              >
-                <span class="cost">{card.cost}</span>
-                <span class="name">{card.name}</span>
-                {#if card.keywords.length > 0}
-                  <span class="kw">{card.keywords.join(' ')}</span>
-                {/if}
-                <span class="rarity {card.rarity.toLowerCase()}">{card.rarity[0]}</span>
-                <span class="stat">{card.attack}/{card.health}</span>
-                {#if inDeck > 0}<span class="have">{inDeck}</span>{/if}
-              </button>
+              <div class="row group" class:maxed={group.inDeck >= MAX_COPIES}>
+                <button
+                  class="pick"
+                  disabled={!canAdd(deck, collection, group.cards[0].id)}
+                  on:click={() => add(group.cards[0].id)}
+                  title="Add {group.cards[0].name}"
+                >
+                  <span class="cost">{card.cost}</span>
+                  <span class="stat big">{card.attack}/{card.health}</span>
+                  <span class="rarity {card.rarity.toLowerCase()}">{card.rarity[0]}</span>
+                  {#if card.keywords.length > 0}
+                    <span class="kw">{card.keywords.join(' ')}</span>
+                  {/if}
+                  <span class="name">{group.cards[0].name}</span>
+                </button>
+
+                <button
+                  class="expand"
+                  on:click={() => toggleExpand(group.templateId)}
+                  title="Choose which flashcard to use"
+                >
+                  {group.cards.length}
+                  {expanded === group.templateId ? '▾' : '▸'}
+                </button>
+
+                {#if group.inDeck > 0}<span class="have">{group.inDeck}</span>{/if}
+              </div>
+
+              {#if expanded === group.templateId}
+                <ul class="versions">
+                  {#each group.cards as version (version.id)}
+                    <li>
+                      <label class="version">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(version.id)}
+                          on:change={() => toggleSelect(version.id)}
+                        />
+                        <button
+                          class="version-add"
+                          disabled={!canAdd(deck, collection, version.id)}
+                          on:click={() => add(version.id)}
+                        >
+                          <span class="v-name">{version.name}</span>
+                          <span class="v-answer">{version.description}</span>
+                        </button>
+                      </label>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
             </li>
           {:else}
-            <li class="none">No cards match “{search}”.</li>
+            <li class="none">No cards match those filters.</li>
           {/each}
         </ul>
       </section>
@@ -327,7 +434,120 @@
     color: var(--text);
   }
   .row:hover { border-color: var(--frame-lit); background: rgba(74, 54, 32, 0.35); }
-  .row.maxed { opacity: 0.4; }
+  .row.maxed { opacity: 0.45; }
+
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .filters input { flex: 1 1 150px; max-width: none; }
+  .filters select {
+    background: var(--ink);
+    border: 1px solid var(--frame);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 6px 8px;
+    font-family: var(--body);
+    font-size: 13px;
+  }
+
+  /* A template row: one game card, however many flashcards wear it. */
+  .row.group { padding: 0; gap: 0; }
+
+  .pick,
+  .expand,
+  .version-add {
+    background: none;
+    border: none;
+    font-family: var(--body);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+  }
+
+  .pick {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    font-size: 14px;
+    min-width: 0;
+  }
+  .pick:disabled { cursor: default; }
+
+  .stat.big {
+    font-family: var(--display);
+    font-weight: 700;
+    color: var(--text);
+    flex: 0 0 auto;
+  }
+
+  .expand {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border-left: 1px solid var(--rule);
+    font-family: var(--display);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .expand:hover { color: var(--gold-bright); }
+
+  .row.group .have { padding-right: 9px; }
+
+  .versions {
+    list-style: none;
+    margin: 2px 0 8px 20px;
+    padding: 0 0 0 10px;
+    border-left: 1px solid var(--rule);
+    max-height: none;
+    overflow: visible;
+  }
+
+  .version {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+  }
+  .version input { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 4px; }
+
+  .version-add {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    min-width: 0;
+  }
+  .version-add:hover:not(:disabled) { background: rgba(74, 54, 32, 0.4); }
+  .version-add:disabled { opacity: 0.45; cursor: default; }
+
+  .v-name {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .v-answer {
+    font-size: 11px;
+    color: var(--text-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  button.danger {
+    background: linear-gradient(180deg, var(--blood), var(--blood-deep));
+    border-color: var(--blood-deep);
+    color: #f7e3df;
+  }
 
   .cost {
     flex: 0 0 22px;

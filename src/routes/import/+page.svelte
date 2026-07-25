@@ -1,7 +1,8 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import CardPreview from '$lib/components/CardPreview.svelte';
-  import { saveCollection } from '$lib/decks/storage';
+  import { mergeCollection } from '$lib/decks/deck';
+  import { loadCollection, saveCollection } from '$lib/decks/storage';
   import { parseCSV, type RawRow } from '$lib/parsers/csvParser';
   import { mapRowsToCards, type FieldMapping, type ImportSource } from '$lib/parsers/fieldMapper';
   import { parseMD } from '$lib/parsers/mdParser';
@@ -80,11 +81,14 @@
 
   function save() {
     if (!ready) return;
-    saveCollection({
-      name: fileName || 'Imported cards',
-      cards,
-      importedAt: new Date().toISOString()
-    });
+    // Merge, never replace: the library is permanent and only you delete from it.
+    saveCollection(
+      mergeCollection(loadCollection(), {
+        name: 'Library',
+        cards,
+        importedAt: new Date().toISOString()
+      })
+    );
     goto('/decks');
   }
 </script>
