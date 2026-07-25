@@ -1,14 +1,31 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import CardPreview from '$lib/components/CardPreview.svelte';
   import MinionView from '$lib/components/MinionView.svelte';
   import { buildDemoDeck } from '$lib/data/demoDeck';
+  import { isLegal, resolveDeck } from '$lib/decks/deck';
+  import { loadCollection, loadDeck } from '$lib/decks/storage';
   import { playAiTurn } from '$lib/engine/ai';
   import { attack, canPlayCard, createMatch, endTurn, playCard } from '$lib/engine/engine';
   import { HERO_HEALTH, canAttack, legalTargets } from '$lib/engine/state';
+  import type { Card } from '../types/cards';
 
-  let state = createMatch(buildDemoDeck(), buildDemoDeck(), Date.now() % 100000);
+  // Both sides play the same list, so imported cards show up on each board.
+  let deckCards: Card[] = buildDemoDeck();
+  let deckName = 'Demo deck';
+  let state = createMatch(deckCards, deckCards, Date.now() % 100000);
   let selectedId: string | null = null;
   let aiThinking = false;
+
+  onMount(() => {
+    const collection = loadCollection();
+    const saved = loadDeck();
+    if (collection && saved && isLegal(saved, collection)) {
+      deckCards = resolveDeck(saved, collection);
+      deckName = saved.name;
+      restart();
+    }
+  });
 
   $: me = state.players.player;
   $: foe = state.players.ai;
@@ -62,7 +79,7 @@
   }
 
   function restart() {
-    state = createMatch(buildDemoDeck(), buildDemoDeck(), Date.now() % 100000);
+    state = createMatch(deckCards, deckCards, Date.now() % 100000);
     selectedId = null;
     aiThinking = false;
   }
@@ -72,8 +89,14 @@
 
 <main>
   <header>
-    <h1>Flashstone</h1>
-    <p class="tagline">Import flashcards. Build decks. Play.</p>
+    <span class="deck-name">{deckName}</span>
+    {#if deckName === 'Demo deck'}
+      <span class="tagline">
+        Placeholder cards — <a href="/import">import flashcards</a> to play your own.
+      </span>
+    {:else}
+      <a class="tagline" href="/deck">Change deck</a>
+    {/if}
   </header>
 
   <section class="table">
@@ -198,9 +221,16 @@
     padding: 16px;
   }
 
-  header { text-align: center; margin-bottom: 8px; }
-  h1 { margin: 0; font-size: 24px; }
-  .tagline { margin: 2px 0 0; color: #8b8bb0; font-size: 13px; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .deck-name { font-size: 15px; font-weight: 600; }
+  .tagline { color: #8b8bb0; font-size: 12px; }
+  .tagline a, a.tagline { color: #a5b4fc; }
 
   .table {
     background: #16162e;
