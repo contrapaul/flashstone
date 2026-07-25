@@ -2,14 +2,15 @@
   import { page } from '$app/stores';
 
   const links = [
-    { href: '/', label: 'Play' },
-    { href: '/deck', label: 'Deck' },
-    { href: '/import', label: 'Import' }
+    { href: '/play', label: 'Play' },
+    { href: '/decks', label: 'Decks' },
+    { href: '/import', label: 'Import' },
+    { href: '/learn', label: 'Learn' }
   ];
 </script>
 
 <nav>
-  <span class="brand">Flashstone</span>
+  <a class="brand" href="/">Flashstone</a>
   <div class="links">
     {#each links as link}
       <a href={link.href} class:active={$page.url.pathname === link.href}>{link.label}</a>
@@ -39,7 +40,11 @@
   .brand {
     font-weight: 700;
     letter-spacing: 0.02em;
+    color: #e5e7eb;
+    text-decoration: none;
+    padding: 0;
   }
+  .brand:hover { background: none; }
 
   .links {
     display: flex;

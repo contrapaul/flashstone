@@ -65,7 +65,7 @@
   }
 </script>
 
-<svelte:head><title>Deck — Flashstone</title></svelte:head>
+<svelte:head><title>Decks — Flashstone</title></svelte:head>
 
 <main>
   {#if !collection}

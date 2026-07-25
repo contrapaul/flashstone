@@ -85,7 +85,7 @@
       cards,
       importedAt: new Date().toISOString()
     });
-    goto('/deck');
+    goto('/decks');
   }
 </script>
 
