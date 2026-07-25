@@ -1,0 +1,6 @@
+name = "flashstone"
+# Must stay within what the installed Workers runtime supports (wrangler 3.x → 2025-07-18).
+compatibility_date = "2025-07-18"
+# SvelteKit's server bundle imports node:async_hooks; without this the Worker won't boot.
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".svelte-kit/cloudflare"
