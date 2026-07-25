@@ -64,6 +64,14 @@ export interface Card {
   art?: { type: 'css' | 'image'; value: string }; // CSS class/hash or R2 URL
   tags?: string[]; // Flashcard metadata, used for rarity weighting & filtering
 
+  /**
+   * The template this card was bound to at import, from lib/data/templates.ts.
+   * Stored rather than recomputed, so growing the template library never
+   * re-maps cards you have already learned. Decks allow two copies per
+   * templateId, however many flashcards share it.
+   */
+  templateId?: string;
+
   // Import/Mapping metadata (stripped before match sync)
   _rawFront?: string;
   _rawBack?: string;

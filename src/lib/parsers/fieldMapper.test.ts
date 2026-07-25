@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CardSchema } from '../../validators/card.validator';
+import { templateById } from '../data/templates';
 import { parseCSV } from './csvParser';
 import { mapRowsToCards, type FieldMapping } from './fieldMapper';
 
@@ -119,62 +120,69 @@ describe('explicit columns win over derivation', () => {
       mapping
     );
     expect(card.name).toBe('Hand Tuned');
+    // Snaps to a real template rather than inventing a 4-cost 5/2 Legendary.
+    const template = templateById(card.templateId!)!;
+    expect(template).toBeDefined();
+    expect(card.cost).toBe(template.cost);
+    expect(card.attack).toBe(template.attack);
+    expect(card.health).toBe(template.health);
     expect(card.cost).toBe(4);
-    expect(card.attack).toBe(5);
-    expect(card.health).toBe(2);
     expect(card.rarity).toBe('Legendary');
   });
 
-  it('falls back to derivation for blank or unparseable cells', () => {
+  it('honours the columns it can read and ignores the rest', () => {
     const [card] = mapRowsToCards(
-      [{ Front: 'q', Back: 'a', Name: '', Cost: '', Atk: 'abc', Hp: '3', Rarity: 'nonsense' }],
+      [{ Front: 'q', Back: 'a', Name: '', Cost: '3', Atk: 'abc', Hp: '', Rarity: 'nonsense' }],
       mapping
     );
-    expect(card.health).toBe(3);
     expect(card.name).toBe('q');
-    expect(card.attack).toBeGreaterThanOrEqual(1);
+    expect(card.cost).toBe(3);
+    expect(card.templateId).toBeTruthy();
     expect(() => CardSchema.parse(card)).not.toThrow();
   });
 
-  it('clamps out-of-range supplied values instead of rejecting them', () => {
+  it('lands on a real template even for absurd values', () => {
     const [card] = mapRowsToCards(
       [{ Front: 'q', Back: 'a', Name: 'Huge', Cost: '99', Atk: '99', Hp: '-5', Rarity: '' }],
       mapping
     );
-    expect(card.cost).toBe(10);
-    expect(card.attack).toBe(9);
-    expect(card.health).toBe(1);
+    const template = templateById(card.templateId!);
+    expect(template).toBeDefined();
+    expect(card.cost).toBe(template!.cost);
+    expect(card.cost).toBeLessThanOrEqual(10);
     expect(() => CardSchema.parse(card)).not.toThrow();
   });
 });
 
-describe('rarity and keywords', () => {
+describe('template binding', () => {
   const sample = () =>
     mapRowsToCards(
       Array.from({ length: 600 }, (_, i) => ({ Front: `q${i}`, Back: `a${i}` })),
       PLAIN
     );
 
-  it('never gives a Common a keyword', () => {
-    for (const card of sample().filter((c) => c.rarity === 'Common')) {
-      expect(card.keywords).toEqual([]);
+  it('binds every card to a real template and copies its mechanics exactly', () => {
+    for (const card of sample()) {
+      const template = templateById(card.templateId!);
+      expect(template, `unknown template ${card.templateId}`).toBeDefined();
+      expect(card.cost).toBe(template!.cost);
+      expect(card.attack).toBe(template!.attack);
+      expect(card.health).toBe(template!.health);
+      expect(card.rarity).toBe(template!.rarity);
+      expect(card.keywords).toEqual(template!.keywords);
     }
   });
 
-  it('always gives a Legendary exactly one keyword', () => {
-    const legendaries = sample().filter((c) => c.rarity === 'Legendary');
-    expect(legendaries.length).toBeGreaterThan(0);
-    for (const card of legendaries) {
-      expect(card.keywords).toHaveLength(1);
-    }
+  it('always binds the same flashcard to the same template', () => {
+    const row = [{ Front: 'What is spaced repetition?', Back: 'Reviewing at intervals.' }];
+    expect(mapRowsToCards(row, PLAIN)[0].templateId).toBe(
+      mapRowsToCards(row, PLAIN)[0].templateId
+    );
   });
 
-  it('can roll Stealth, but only on rarer cards', () => {
-    const withStealth = sample().filter((c) => c.keywords.includes('Stealth'));
-    expect(withStealth.length).toBeGreaterThan(0);
-    for (const card of withStealth) {
-      expect(['Epic', 'Legendary']).toContain(card.rarity);
-    }
+  it('spreads a large collection across many templates', () => {
+    const used = new Set(sample().map((c) => c.templateId));
+    expect(used.size).toBeGreaterThan(20);
   });
 
   it('only ever assigns keywords the engine understands', () => {

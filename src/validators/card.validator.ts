@@ -33,6 +33,7 @@ export const CardSchema = z.object({
   description: z.string().min(1).max(200),
   art: z.object({ type: z.enum(['css', 'image']), value: z.string() }).optional(),
   tags: z.array(z.string()).default([]),
+  templateId: z.string().optional(),
   _rawFront: z.string().optional(),
   _rawBack: z.string().optional(),
   _importSource: z.enum(['csv', 'md', 'anki', 'manual']).optional()
