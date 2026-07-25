@@ -1,0 +1,120 @@
+/* Global Flashstone shell: palette, fonts and the shared motion vocabulary.
+   Imported once from +layout.svelte. Keyframes must live here, not in a
+   component's scoped <style>, because cards and minions share them. */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+:root {
+  --ink: #0b0805;
+  --ink-2: #150e08;
+  --panel: #1d140c;
+  --rule: #3d2e1c;
+  --frame: #6b4f2e;
+  --frame-lit: #e0be76;
+  --gold: #c9a95f;
+  --gold-bright: #f0d68a;
+  --parchment: #e9dcbd;
+  --parchment-ink: #3a2a15;
+  --text: #e6d9bd;
+  --text-dim: #9c8763;
+  --text-faint: #6b5c45;
+  --mana: #4a8fe0;
+  --mana-lit: #7fc4ff;
+  --blood: #e2604a;
+  --blood-deep: #8d1f16;
+  --attack: #f0b840;
+  --good: #7ed68c;
+  --frost: #96dcff;
+  --stealth: #a457e8;
+
+  --display: Cinzel, Georgia, serif;
+  --body: 'EB Garamond', Georgia, serif;
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--body);
+}
+
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--gold-bright); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #4a3722; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Motion vocabulary ───────────────────────────────────────── */
+
+@keyframes fs-frost {
+  0%, 100% { opacity: .85; }
+  50% { opacity: .55; }
+}
+
+@keyframes fs-summon {
+  0% { transform: translateY(26px) scale(.6); opacity: 0; filter: brightness(2.4); }
+  60% { transform: translateY(-4px) scale(1.06); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+@keyframes fs-draw {
+  0% { transform: translateX(240px) translateY(-90px) rotate(22deg) scale(.5); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+
+@keyframes fs-lunge-up {
+  0% { transform: none; }
+  45% { transform: translateY(-46px) scale(1.1); }
+  100% { transform: none; }
+}
+
+@keyframes fs-lunge-down {
+  0% { transform: none; }
+  45% { transform: translateY(46px) scale(1.1); }
+  100% { transform: none; }
+}
+
+@keyframes fs-shatter {
+  0% { transform: none; opacity: 1; filter: none; }
+  25% { transform: scale(1.08) rotate(-3deg); filter: brightness(2.2) saturate(.3); }
+  100% { transform: scale(.7) rotate(6deg) translateY(14px); opacity: 0; filter: brightness(.4) blur(3px); }
+}
+
+@keyframes fs-float {
+  0% { transform: translate(-50%, 0) scale(.6); opacity: 0; }
+  22% { transform: translate(-50%, -16px) scale(1.15); opacity: 1; }
+  100% { transform: translate(-50%, -52px) scale(1); opacity: 0; }
+}
+
+@keyframes fs-shake {
+  0%, 100% { transform: none; }
+  15% { transform: translate(-9px, 4px) rotate(-1.2deg); }
+  35% { transform: translate(8px, -3px) rotate(1deg); }
+  55% { transform: translate(-5px, 2px); }
+  78% { transform: translate(3px, -1px); }
+}
+
+@keyframes fs-banner {
+  0% { opacity: 0; transform: translateY(-14px) scaleX(.7); }
+  16% { opacity: 1; transform: none; }
+  78% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes fs-ready {
+  0%, 100% {
+    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 1px rgba(126,214,140,.5), 0 0 14px rgba(126,214,140,.35);
+  }
+  50% {
+    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 1px rgba(126,214,140,.85), 0 0 26px rgba(126,214,140,.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
