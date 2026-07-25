@@ -432,6 +432,68 @@ describe('win conditions', () => {
   });
 });
 
+describe('board placement', () => {
+  function boardNames(state: MatchState) {
+    return state.players.player.board.map((m) => m.card.name);
+  }
+
+  function seedBoard(state: MatchState, names: string[]) {
+    for (const name of names) {
+      playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, name })));
+    }
+  }
+
+  it('appends when no slot is given', () => {
+    const state = bareMatch();
+    seedBoard(state, ['A', 'B']);
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, name: 'C' })));
+    expect(boardNames(state)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('drops a minion into the slot it was aimed at', () => {
+    const state = bareMatch();
+    seedBoard(state, ['A', 'B', 'C']);
+
+    const i = give(state, 'player', minionCard({ cost: 0, name: 'New' }));
+    playCard(state, 'player', i, 1);
+    expect(boardNames(state)).toEqual(['A', 'New', 'B', 'C']);
+  });
+
+  it('places at the far left with slot 0', () => {
+    const state = bareMatch();
+    seedBoard(state, ['A', 'B']);
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, name: 'New' })), 0);
+    expect(boardNames(state)).toEqual(['New', 'A', 'B']);
+  });
+
+  it('clamps a slot beyond the board instead of leaving a hole', () => {
+    const state = bareMatch();
+    seedBoard(state, ['A']);
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, name: 'Far' })), 99);
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, name: 'Neg' })), -5);
+    expect(boardNames(state)).toEqual(['Neg', 'A', 'Far']);
+  });
+
+  it('leaves tokens and AI summons appending as before', () => {
+    const state = bareMatch();
+    seedBoard(state, ['A']);
+    playCard(
+      state,
+      'player',
+      give(
+        state,
+        'player',
+        minionCard({
+          cost: 0,
+          name: 'Summoner',
+          effects: [{ trigger: 'Battlecry', action: 'SummonToken', value: 1 }]
+        })
+      )
+    );
+    expect(boardNames(state)).toEqual(['A', 'Summoner', 'Study Note']);
+  });
+});
+
 describe('freeze', () => {
   it('stops a minion attacking', () => {
     const state = bareMatch();

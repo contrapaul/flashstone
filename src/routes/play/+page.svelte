@@ -59,7 +59,10 @@
   $: me = state.players.player;
   $: foe = state.players.ai;
   $: myTurn = state.current === 'player' && !state.winner && !aiThinking && !draining;
-  $: targets = myTurn && selectedId ? legalTargets(state, 'ai') : [];
+  // The attacker is whichever minion you tapped or are currently dragging from,
+  // so targets light up the same way for both gestures.
+  $: activeAttacker = drag?.kind === 'attack' ? drag.instanceId : selectedId;
+  $: targets = myTurn && activeAttacker ? legalTargets(state, 'ai') : [];
   $: heroTargetable = targets.some((t) => t.kind === 'hero');
   // Must be a reactive value, not a function call: Svelte only re-evaluates a
   // prop expression when something it references is dirty.
@@ -150,6 +153,7 @@
   // ── Player actions ───────────────────────────────────────────
 
   function onHandCard(index: number) {
+    if (swallowClick) return;
     if (!myTurn || !canPlayCard(state, 'player', index)) return;
     playCard(state, 'player', index);
     selectedId = null;
@@ -158,6 +162,7 @@
   }
 
   function onMyMinion(instanceId: string) {
+    if (swallowClick) return;
     if (!myTurn) return;
     const minion = me.board.find((m) => m.instanceId === instanceId);
     if (!minion || !canAttack(minion)) return;
@@ -165,6 +170,7 @@
   }
 
   function onEnemyTarget(target: { kind: 'minion'; instanceId: string } | { kind: 'hero' }) {
+    if (swallowClick) return;
     if (!myTurn || !selectedId) return;
     attack(state, 'player', selectedId, target);
     selectedId = null;
@@ -203,6 +209,197 @@
     setTimeout(() => (banner = null), 1400);
   }
 
+  // ── Dragging ─────────────────────────────────────────────────
+  // One gesture covers both input styles: a press that never travels 8px is a
+  // tap and falls through to the click handlers, while one that does becomes a
+  // drag. Pointer events mean mouse, pen and touch all take the same path.
+
+  const DRAG_THRESHOLD = 8;
+
+  type TargetRef = { kind: 'minion'; instanceId: string } | { kind: 'hero' };
+
+  type Drag =
+    | { kind: 'card'; handIndex: number; card: Card; slot: number }
+    | {
+        kind: 'attack';
+        instanceId: string;
+        from: { x: number; y: number };
+        target: TargetRef | null;
+      };
+
+  type Press =
+    | { id: number; x: number; y: number; kind: 'card'; handIndex: number }
+    | { id: number; x: number; y: number; kind: 'attack'; instanceId: string };
+
+  let drag: Drag | null = null;
+  let press: Press | null = null;
+  let pointer = { x: 0, y: 0 };
+  /** A completed drag must not also fire the element's click. */
+  let swallowClick = false;
+
+  let myBoardEl: HTMLElement | undefined;
+  let foeBoardEl: HTMLElement | undefined;
+  let foeHeroEl: HTMLElement | undefined;
+
+  function minionEls(board: HTMLElement | undefined): HTMLElement[] {
+    return board ? (Array.from(board.querySelectorAll('.minion')) as HTMLElement[]) : [];
+  }
+
+  function centreOf(el: Element): { x: number; y: number } {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function onCardPointerDown(event: PointerEvent, index: number) {
+    if (!myTurn || !canPlayCard(state, 'player', index)) return;
+    press = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      kind: 'card',
+      handIndex: index
+    };
+    pointer = { x: event.clientX, y: event.clientY };
+  }
+
+  function onMinionPointerDown(event: PointerEvent, instanceId: string) {
+    if (!myTurn) return;
+    const minion = me.board.find((m) => m.instanceId === instanceId);
+    if (!minion || !canAttack(minion)) return;
+    press = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      kind: 'attack',
+      instanceId
+    };
+    pointer = { x: event.clientX, y: event.clientY };
+  }
+
+  /** Where in your row a dragged card would land, from the pointer's x. */
+  function slotAt(x: number): number {
+    const els = minionEls(myBoardEl);
+    for (let i = 0; i < els.length; i++) {
+      const r = els[i].getBoundingClientRect();
+      if (x < r.left + r.width / 2) return i;
+    }
+    return els.length;
+  }
+
+  /** Your half of the table, with slack so you needn't hit the row exactly. */
+  function overMyBoard(y: number): boolean {
+    if (!myBoardEl) return false;
+    const r = myBoardEl.getBoundingClientRect();
+    return y >= r.top - 60 && y <= r.bottom + 60;
+  }
+
+  function targetAt(x: number, y: number): TargetRef | null {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+
+    // Read the rules directly rather than the reactive targetableIds: on the
+    // frame a drag begins those haven't been recomputed yet, which left the
+    // arrow refusing to snap until the next pointer move.
+    const allowed = legalTargets(state, 'ai');
+
+    const minionEl = el.closest('.minion');
+    if (minionEl && foeBoardEl?.contains(minionEl)) {
+      const index = minionEls(foeBoardEl).indexOf(minionEl as HTMLElement);
+      const minion = foe.board[index];
+      const legal =
+        minion &&
+        allowed.some((t) => t.kind === 'minion' && t.minion.instanceId === minion.instanceId);
+      return legal ? { kind: 'minion', instanceId: minion.instanceId } : null;
+    }
+
+    if (foeHeroEl?.contains(el) && allowed.some((t) => t.kind === 'hero')) {
+      return { kind: 'hero' };
+    }
+    return null;
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (!press || event.pointerId !== press.id) return;
+    pointer = { x: event.clientX, y: event.clientY };
+
+    if (!drag) {
+      const travelled = Math.hypot(event.clientX - press.x, event.clientY - press.y);
+      if (travelled < DRAG_THRESHOLD) return;
+
+      if (press.kind === 'card') {
+        const card = me.hand[press.handIndex];
+        if (!card) return;
+        drag = { kind: 'card', handIndex: press.handIndex, card, slot: me.board.length };
+      } else {
+        const { instanceId } = press;
+        const index = me.board.findIndex((m) => m.instanceId === instanceId);
+        const el = minionEls(myBoardEl)[index];
+        drag = {
+          kind: 'attack',
+          instanceId,
+          from: el ? centreOf(el) : { x: event.clientX, y: event.clientY },
+          target: null
+        };
+      }
+    }
+
+    drag =
+      drag.kind === 'card'
+        ? { ...drag, slot: slotAt(event.clientX) }
+        : { ...drag, target: targetAt(event.clientX, event.clientY) };
+
+    // Stops touch scrolling the page out from under the drag.
+    if (event.cancelable) event.preventDefault();
+  }
+
+  function onPointerUp(event: PointerEvent) {
+    if (!press || event.pointerId !== press.id) return;
+    const finished = drag;
+    press = null;
+    drag = null;
+
+    // No travel: leave it alone and let the click handler treat it as a tap.
+    if (!finished) return;
+
+    swallowClick = true;
+    setTimeout(() => (swallowClick = false), 0);
+
+    if (finished.kind === 'card') {
+      if (!overMyBoard(event.clientY)) return;
+      if (!canPlayCard(state, 'player', finished.handIndex)) return;
+      playCard(state, 'player', finished.handIndex, finished.slot);
+    } else {
+      if (!finished.target) return;
+      attack(state, 'player', finished.instanceId, finished.target);
+    }
+
+    selectedId = null;
+    state = state;
+    drain();
+  }
+
+  function onPointerCancel() {
+    press = null;
+    drag = null;
+  }
+
+  function targetCentre(target: TargetRef): { x: number; y: number } {
+    if (target.kind === 'hero') return foeHeroEl ? centreOf(foeHeroEl) : pointer;
+    const index = foe.board.findIndex((m) => m.instanceId === target.instanceId);
+    const el = minionEls(foeBoardEl)[index];
+    return el ? centreOf(el) : pointer;
+  }
+
+  function buildAim(from: { x: number; y: number }, target: TargetRef | null) {
+    const end = target ? targetCentre(target) : pointer;
+    // Bows the line upward so it never runs flat across the board.
+    const cx = (from.x + end.x) / 2;
+    const cy = Math.min(from.y, end.y) - 70;
+    return { path: `M ${from.x} ${from.y} Q ${cx} ${cy} ${end.x} ${end.y}`, end };
+  }
+
+  $: aim = drag?.kind === 'attack' ? buildAim(drag.from, drag.target) : null;
+
   $: phase = state.winner
     ? 'match over'
     : aiThinking
@@ -215,6 +412,12 @@
 </script>
 
 <svelte:head><title>Play — Flashstone</title></svelte:head>
+
+<svelte:window
+  on:pointermove={onPointerMove}
+  on:pointerup={onPointerUp}
+  on:pointercancel={onPointerCancel}
+/>
 
 <main class="table">
   <div class="vignette" aria-hidden="true"></div>
@@ -229,7 +432,7 @@
 
     <div></div>
 
-    <div class="hero-block">
+    <div class="hero-block" bind:this={foeHeroEl}>
       <HeroPortrait
         label="Opponent"
         side="foe"
@@ -251,7 +454,7 @@
     </div>
   </section>
 
-  <section class="board">
+  <section class="board" bind:this={foeBoardEl}>
     {#each foe.board as minion (minion.instanceId)}
       <MinionView
         {minion}
@@ -270,18 +473,26 @@
     <span class="rule"></span>
   </div>
 
-  <section class="board">
-    {#each me.board as minion (minion.instanceId)}
+  <section class="board mine" class:drop-open={drag?.kind === 'card'} bind:this={myBoardEl}>
+    {#each me.board as minion, i (minion.instanceId)}
+      {#if drag?.kind === 'card' && drag.slot === i}
+        <span class="drop-gap" aria-hidden="true"></span>
+      {/if}
       <MinionView
         {minion}
         ready={myTurn && canAttack(minion)}
-        selected={selectedId === minion.instanceId}
+        selected={selectedId === minion.instanceId ||
+          (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
         summoning={summoningId === minion.instanceId}
         attacking={attackingId === minion.instanceId ? 'up' : null}
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onMyMinion(minion.instanceId)}
+        on:pointerdown={(e) => onMinionPointerDown(e, minion.instanceId)}
       />
     {/each}
+    {#if drag?.kind === 'card' && drag.slot >= me.board.length}
+      <span class="drop-gap" aria-hidden="true"></span>
+    {/if}
   </section>
 
   <!-- You -->
@@ -309,15 +520,43 @@
 
   <section class="hand" style:transform={`scale(${handScale.toFixed(3)})`}>
     {#each me.hand as card, i (i + card.id)}
-      <CardPreview
-        {card}
-        playable={myTurn && canPlayCard(state, 'player', i)}
-        drawn={drawnIndex === i}
-        on:click={() => onHandCard(i)}
-        on:keydown={(e) => e.key === 'Enter' && onHandCard(i)}
-      />
+      <div class="hand-slot" class:lifted={drag?.kind === 'card' && drag.handIndex === i}>
+        <CardPreview
+          {card}
+          playable={myTurn && canPlayCard(state, 'player', i)}
+          drawn={drawnIndex === i}
+          on:click={() => onHandCard(i)}
+          on:keydown={(e) => e.key === 'Enter' && onHandCard(i)}
+          on:pointerdown={(e) => onCardPointerDown(e, i)}
+        />
+      </div>
     {/each}
   </section>
+
+  <!-- Drag layers: the card riding the pointer, and the targeting arrow. -->
+  {#if drag?.kind === 'card'}
+    <div
+      class="ghost"
+      style:left={`${pointer.x}px`}
+      style:top={`${pointer.y}px`}
+      aria-hidden="true"
+    >
+      <CardPreview card={drag.card} playable />
+    </div>
+  {/if}
+
+  {#if aim}
+    <svg class="aim" aria-hidden="true">
+      <path class="aim-line" d={aim.path} />
+      <circle
+        class="aim-head"
+        class:locked={drag?.kind === 'attack' && drag.target !== null}
+        cx={aim.end.x}
+        cy={aim.end.y}
+        r={drag?.kind === 'attack' && drag.target ? 15 : 11}
+      />
+    </svg>
+  {/if}
 
   {#each floats as float (float.id)}
     <FloatingNumber text={float.text} color={float.color} x={float.x} y={float.y} />
@@ -442,6 +681,69 @@
     min-height: 142px;
     padding: 6px 28px;
   }
+
+  /* Your row lights up as a drop zone while a card is in the air. */
+  .board.drop-open {
+    background: linear-gradient(180deg, transparent, rgba(126, 214, 140, .07), transparent);
+    box-shadow: inset 0 0 0 1px rgba(126, 214, 140, .18);
+    border-radius: 10px;
+  }
+
+  /* The space the dragged card would take, so the row opens where you aim. */
+  .drop-gap {
+    width: 96px;
+    height: 116px;
+    border-radius: 8px;
+    border: 1px dashed rgba(126, 214, 140, .55);
+    background: rgba(126, 214, 140, .08);
+    animation: fs-summon .18s ease;
+  }
+
+  .ghost {
+    position: fixed;
+    z-index: 400;
+    transform: translate(-50%, -55%) scale(1.06) rotate(-2deg);
+    pointer-events: none;
+    filter: drop-shadow(0 18px 26px rgba(0, 0, 0, .7));
+  }
+
+  /* The card left behind in hand while its ghost is being dragged. */
+  .hand-slot.lifted { opacity: .25; }
+
+  .aim {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 380;
+    pointer-events: none;
+  }
+
+  .aim-line {
+    fill: none;
+    stroke: rgba(126, 214, 140, .9);
+    stroke-width: 5;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 8px rgba(126, 214, 140, .8));
+  }
+
+  .aim-head {
+    fill: rgba(126, 214, 140, .28);
+    stroke: rgba(150, 255, 170, .95);
+    stroke-width: 3;
+  }
+
+  /* Locked onto a legal target: fill in. */
+  .aim-head.locked { fill: rgba(150, 255, 170, .75); }
+
+  /* Draggable things must not also pan the page on touch. Scoped to the table
+     so cards elsewhere (the import preview, the collection) still scroll. */
+  .hand :global(.card),
+  .board :global(.minion) {
+    touch-action: none;
+  }
+
+  .table { user-select: none; }
 
   .centre {
     position: relative;

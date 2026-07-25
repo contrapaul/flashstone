@@ -19,6 +19,7 @@
   style:--rarity={RARITY_COLOR[card.rarity]}
   on:click
   on:keydown
+  on:pointerdown
   role="button"
   tabindex="0"
 >

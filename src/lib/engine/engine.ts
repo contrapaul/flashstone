@@ -160,7 +160,17 @@ export function canPlayCard(state: MatchState, id: PlayerId, handIndex: number):
   return true;
 }
 
-export function playCard(state: MatchState, id: PlayerId, handIndex: number): boolean {
+/**
+ * `slot` is where on the board a dragged minion was dropped. Omitted, it joins
+ * the right-hand end. Position carries no rules weight — it exists so a card
+ * lands where you aimed it.
+ */
+export function playCard(
+  state: MatchState,
+  id: PlayerId,
+  handIndex: number,
+  slot?: number
+): boolean {
   if (!canPlayCard(state, id, handIndex)) return false;
   const p = state.players[id];
   const [card] = p.hand.splice(handIndex, 1);
@@ -168,7 +178,7 @@ export function playCard(state: MatchState, id: PlayerId, handIndex: number): bo
   state.log.push(`${id} plays ${card.name}.`);
 
   let summoned: MinionInstance | undefined;
-  if (card.type === 'Minion') summoned = summon(state, id, card);
+  if (card.type === 'Minion') summoned = summon(state, id, card, slot);
 
   // Battlecry-triggered effects fire on play, for minions and spells alike.
   for (const effect of card.effects) {
@@ -179,7 +189,12 @@ export function playCard(state: MatchState, id: PlayerId, handIndex: number): bo
   return true;
 }
 
-function summon(state: MatchState, id: PlayerId, card: Card): MinionInstance | undefined {
+function summon(
+  state: MatchState,
+  id: PlayerId,
+  card: Card,
+  slot?: number
+): MinionInstance | undefined {
   const p = state.players[id];
   if (p.board.length >= BOARD_LIMIT) return undefined;
   const minion: MinionInstance = {
@@ -196,7 +211,9 @@ function summon(state: MatchState, id: PlayerId, card: Card): MinionInstance | u
     silenced: false,
     buffed: false
   };
-  p.board.push(minion);
+  const at =
+    slot === undefined ? p.board.length : Math.min(Math.max(slot, 0), p.board.length);
+  p.board.splice(at, 0, minion);
   emit(state, { type: 'summon', owner: id, instanceId: minion.instanceId });
   return minion;
 }

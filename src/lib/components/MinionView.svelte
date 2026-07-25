@@ -37,6 +37,7 @@
   class:lunge-down={attacking === 'down'}
   style:--art={artFor(minion.card.name)}
   on:click
+  on:pointerdown
   title={minion.card.description}
 >
   {#if minion.divineShield}
