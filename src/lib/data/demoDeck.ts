@@ -142,6 +142,38 @@ export const DEMO_CARDS: Card[] = [
     keywords: [],
     effects: [{ trigger: 'Battlecry', action: 'Heal', target: 'Hero', value: 6 }],
     description: 'Restore 6 Health to your hero.'
+  },
+  {
+    id: '11111111-1111-4111-8111-111111111113',
+    name: 'Margin Note',
+    cost: 2,
+    type: 'Minion',
+    rarity: 'Rare',
+    attack: 3,
+    health: 2,
+    keywords: ['Stealth'],
+    effects: [],
+    description: 'Stealth. Hidden in the margins.'
+  },
+  {
+    id: '11111111-1111-4111-8111-111111111114',
+    name: 'Brain Freeze',
+    cost: 2,
+    type: 'Spell',
+    rarity: 'Uncommon',
+    keywords: [],
+    effects: [{ trigger: 'Battlecry', action: 'Freeze', target: 'EnemyMinion' }],
+    description: 'Freeze an enemy minion.'
+  },
+  {
+    id: '11111111-1111-4111-8111-111111111115',
+    name: 'Mental Block',
+    cost: 3,
+    type: 'Spell',
+    rarity: 'Rare',
+    keywords: [],
+    effects: [{ trigger: 'Battlecry', action: 'Silence', target: 'EnemyMinion' }],
+    description: 'Silence an enemy minion.'
   }
 ];
 

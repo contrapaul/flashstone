@@ -169,8 +169,16 @@ describe('rarity and keywords', () => {
     }
   });
 
+  it('can roll Stealth, but only on rarer cards', () => {
+    const withStealth = sample().filter((c) => c.keywords.includes('Stealth'));
+    expect(withStealth.length).toBeGreaterThan(0);
+    for (const card of withStealth) {
+      expect(['Epic', 'Legendary']).toContain(card.rarity);
+    }
+  });
+
   it('only ever assigns keywords the engine understands', () => {
-    const known = ['Taunt', 'Charge', 'DivineShield', 'Windfury'];
+    const known = ['Taunt', 'Charge', 'DivineShield', 'Windfury', 'Stealth'];
     for (const card of sample()) {
       for (const keyword of card.keywords) expect(known).toContain(keyword);
     }

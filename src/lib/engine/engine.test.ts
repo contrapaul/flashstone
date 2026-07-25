@@ -62,6 +62,19 @@ describe('card data', () => {
       expect(() => CardSchema.parse(card), card.name).not.toThrow();
     }
   });
+
+  // Guards against mechanics that exist in the engine but never reach the board.
+  it('gives the demo deck a card for every implemented mechanic', () => {
+    const actions = DEMO_CARDS.flatMap((c) => c.effects.map((e) => e.action));
+    const keywords = DEMO_CARDS.flatMap((c) => c.keywords);
+
+    for (const action of ['Freeze', 'Silence', 'DealDamage', 'DrawCard', 'Heal', 'SummonToken']) {
+      expect(actions, `no demo card uses ${action}`).toContain(action);
+    }
+    for (const keyword of ['Taunt', 'Charge', 'DivineShield', 'Stealth']) {
+      expect(keywords, `no demo card has ${keyword}`).toContain(keyword);
+    }
+  });
 });
 
 describe('turn structure', () => {

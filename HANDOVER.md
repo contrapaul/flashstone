@@ -145,37 +145,44 @@ readable. Using a build command means only built assets publish.
 
 ## 7. Known gaps and the next real feature
 
-### The import pipeline is written but connected to nothing
-Grep-verified: nothing in the app calls `parseCSV`, `parseMD`, `mapRowsToCards`,
-`CardSchema`, or the rarity helpers. The only reference outside their own files is a test.
-There is one route (`/`). Missing: file upload, column-mapping screen, a validation step,
-deck persistence (localStorage), and a deck picker.
+> **Keep this section current.** A stale version of it sent a later session
+> chasing two bugs that had already been fixed. If you resolve something here,
+> edit it in the same commit.
 
-### The blocker worth solving first — needs Paul's input
-A typical flashcard export has only front/back columns. Traced through `mapRowsToCards`:
-no attack/health columns → `isMinion` is false → **every card becomes a Spell**; and
-`parseEffectsFromText` only fires on the literal words "Battlecry"/"Deathrattle", which
-real answer text never contains → **`effects: []`**. So importing actual study material
-yields a deck of zero-effect spells that do nothing when played.
+### Import pipeline — done
+Shipped in `5f23472`. `/import` handles upload, column auto-matching, live preview
+and validation; `/decks` is the deck builder with auto-build; the play route uses
+the saved deck. Every imported flashcard becomes a **Minion** — question as name,
+answer as description. Stats come from explicit columns when present, otherwise
+from an FNV-1a hash of the card's text, with rarity-gated keywords. Deterministic:
+the same flashcard always yields the same card.
 
-This needs a **deterministic stat-derivation strategy** — hash card text into
-cost/attack/health/rarity. `src/types/cards.ts` already anticipates it in its header
-comment ("deterministic fallbacks, rarity-weighted drafting"). **Ask Paul how he wants
-decks to feel before building this** — it determines the whole game's texture.
+`art.ts` deliberately uses the same FNV-1a constants, so a card's art and its
+stats share a seed. Verified identical for identical input — don't "fix" either
+hash without changing both.
 
 ### Smaller known issues
-- `fieldMapper.ts` fallback cost is `(front.length + back.length) / 5` — a **float**, which
-  `CardSchema`'s `.int()` rejects. Every card imported without a cost column fails validation.
-- `fieldMapper.ts` hardcodes `_importSource: 'csv'` even for markdown input.
-- `GainKeyword` has no keyword field in the schema; the engine uses `effect.condition` to
-  carry the keyword name, defaulting to `Taunt`. Worth a proper schema field.
+- Nothing grants `armor`, so `HeroPortrait` shows a permanent 0. Wire a source or
+  drop the slot.
+- **No card uses `Freeze`, `Silence` or `Stealth`.** The mechanics are implemented
+  and tested, but nothing in `demoDeck.ts` uses the first two and the rarity
+  keyword pools in `fieldMapper.ts` don't include Stealth — so they never appear
+  in play.
+- `GainKeyword` has no keyword field in the schema; the engine uses `effect.condition`
+  to carry the keyword name, defaulting to `Taunt`. Worth a proper schema field.
 - `Passive` trigger is a no-op. `HeroPower` cards are treated as Spells.
 - Spells with no `Battlecry`-triggered effect do nothing when played.
-- `@sveltejs/adapter-auto` is an unused dependency.
-- `GainMana` was **added** to the `Action` union (and the Zod enum) to make The Coin
-  expressible — the original 8 actions couldn't represent it.
-- `weightedRandomPick` in `rarity.ts` uses `Math.random`, not the engine's seeded RNG.
-  Fine today (unused by the engine), but drafting features should use the seeded RNG.
+- One collection and one deck: importing replaces rather than merges.
+- Both sides play the player's deck (mirror match).
+- Markdown import works in principle but only CSV has been exercised end to end;
+  `parseMD`'s frontmatter fallback path looks unreachable.
+- `@sveltejs/adapter-auto` is an unused dependency; the project is still on
+  wrangler v3.
+- `GainMana` was added to the `Action` union (and the Zod enum) for The Coin;
+  `Freeze` and `Silence` were added for the overhaul. The union and the Zod enum
+  must always change together.
+- `weightedRandomPick` in `rarity.ts` uses `Math.random`, not the engine's seeded
+  RNG. Fine today (unused by the engine), but drafting features should use it.
 
 ---
 
@@ -183,7 +190,7 @@ decks to feel before building this** — it determines the whole game's texture.
 
 ```bash
 npm run dev      # http://localhost:5173
-npm test         # vitest, 33 tests
+npm test         # vitest, 77 tests
 npm run check    # svelte-check, expect 0 errors
 npm run build    # production build via adapter-cloudflare
 ```

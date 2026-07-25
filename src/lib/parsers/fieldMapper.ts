@@ -33,8 +33,8 @@ const RARITY_KEYWORDS: Record<Rarity, Keyword[]> = {
   Common: [],
   Uncommon: ['Taunt'],
   Rare: ['Taunt', 'Charge'],
-  Epic: ['Taunt', 'Charge', 'DivineShield'],
-  Legendary: ['Taunt', 'DivineShield', 'Windfury']
+  Epic: ['Taunt', 'Charge', 'DivineShield', 'Stealth'],
+  Legendary: ['Taunt', 'DivineShield', 'Windfury', 'Stealth']
 };
 
 /** Extra stat points on top of the vanilla curve. */

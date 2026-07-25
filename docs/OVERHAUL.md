@@ -1,10 +1,17 @@
 # Flashstone visual overhaul — porting notes
 
-Written 2026-07-25, alongside the `Flashstone.dc.html` mockup.
+> **Status: fully applied — nothing here is outstanding work.** Written
+> 2026-07-25 alongside the `Flashstone.dc.html` mockup as porting instructions.
+> All of it was carried out the same day, in `8d8841b` (play screen + engine)
+> and `b22d22a` (remaining routes). The `port/` staging directory has been
+> removed; its files now live at their real paths.
+>
+> Kept as the record of **why the engine looks the way it does** — above all
+> §1e, the event queue. Per-section status is noted inline.
 
-Everything under `port/` mirrors the repo's own paths — copy each file over the
-matching one in `flashstone/`. Files that **replace** an existing file are noted;
-the rest are new.
+The staging directory `port/` mirrored the repo's own paths; each file was
+copied over its matching one. Files that **replaced** an existing file are
+noted; the rest were new.
 
 ```
 port/src/utils/art.ts                        NEW
@@ -29,11 +36,15 @@ All Svelte 4 (`export let`, `$:`) with `lang="ts"`, per HANDOVER §4.
 
 ---
 
-## 1. What is NOT done — `engine.ts`
+## 1. `engine.ts` — ✅ all applied
 
-`engine.ts` is the one file I did not rewrite: it is 412 lines of load-bearing
-logic behind 33 passing tests, and the changes below want to be made and
-verified one at a time. Each is additive. **Run `npm test` after each.**
+At the time of writing this was the one file left un-ported: 412 lines of
+load-bearing logic behind 33 passing tests, so the changes were specified as
+diffs to apply and verify one at a time rather than a blind rewrite.
+
+**All five (1a–1e) are now in `src/lib/engine/engine.ts`**, including the full
+event queue — every emit site in the §1e table is wired. The suite is at 77
+tests. The diffs below are retained as the rationale for each change.
 
 ### 1a. New `MinionInstance` fields (required — `summon()` will not type-check without it)
 
@@ -155,34 +166,35 @@ is a synchronous engine that yields between steps — considerably more work.
 
 ---
 
-## 2. Also not done, and why
+## 2. Open questions at the time — all since resolved
 
-- **`ai.ts` is unaware of the new statuses.** It will happily try to attack with
-  a frozen minion (the engine rejects it, so it just wastes the swing) and does
-  not know that Stealth minions can't be targeted. `playAiTurn` should filter
-  on the new `canAttack` / `isTargetable` exports.
-- **`fieldMapper.ts` float-cost bug (HANDOVER §7).** Still there:
-  `(front.length + back.length) / 5` is a float and `CardSchema.int()` rejects
-  it, so every import without a cost column fails validation. I didn't touch it
-  because the fix depends on the stat-derivation decision below. The mockup
-  uses `clamp(1, 9, round(len / 26))` for cost, a hash-derived attack, and
-  `cost + 1 - (hash & 1)` for health — that's a proposal, not a decision.
-- **Stat derivation is still Paul's call** (HANDOVER §7). It determines the
-  game's texture and every card's art, because `art.ts` and the stat hash
-  should share a seed.
-- **`decks`, `import` and `learn` routes are not ported.** They're designed in
-  the mockup (deck builder with mana curve and card inspector, four-step import
-  with column mapping, the illustrated keyword codex) but they're static
-  markup translation — say the word and I'll do them next.
-- **Fonts load from Google.** For an offline-safe build, self-host Cinzel and
-  EB Garamond into `static/fonts/` and swap the `@import` in `flashstone.css`
-  for `@font-face` rules.
+- **`ai.ts` and the new statuses** — no change was needed. `playAiTurn` already
+  routes through `canAttack` and `legalTargets`, so frozen minions are skipped
+  and Stealth minions are unreachable automatically.
+- **`fieldMapper.ts` float-cost bug** — this was **already fixed** before the
+  port, in `5f23472`. The concern came from a stale `HANDOVER.md` §7. Cost is
+  `readInt(...) ?? weightedPick(rng, COST_WEIGHTS)`; both branches are integers.
+- **Stat derivation** — also already decided and shipped: explicit columns win,
+  otherwise an FNV-1a hash of the card's text drives cost, stats and rarity.
+  Note the mockup proposed a length-based cost (`round(len / 26)`), which Paul
+  had explicitly rejected earlier for clumping everything mid-curve. The
+  hash-based version stands.
+- **Shared seed for art and stats** — satisfied with no work. `art.ts`'s
+  `hashText` and `fieldMapper`'s `hashString` are the same FNV-1a with the same
+  constants; verified to return identical values for identical input.
+- **`decks`, `import` and `learn` routes** — restyled in `b22d22a`. They use the
+  overhaul's tokens and type, though not the richer mockup designs (deck builder
+  with mana curve and card inspector, four-step import, illustrated keyword
+  codex). Those remain available as a future step.
+- **Fonts** — no longer load from Google. `flashstone.css` declares self-hosted
+  `@font-face` rules against `static/fonts/`, with a Georgia fallback. See
+  `static/fonts/README.md` for the seven `.woff2` files required.
 
 ---
 
-## 3. New tests worth adding
+## 3. New tests — ✅ all added
 
-Alongside the existing 33:
+All five are in `src/lib/engine/engine.test.ts`; the suite went 64 → 77.
 
 - a frozen minion cannot attack, and thaws at the start of its controller's turn
 - Silence strips keywords and Divine Shield, and the minion stops being a Taunt
@@ -193,7 +205,13 @@ Alongside the existing 33:
 
 ---
 
-## 4. Verification checklist
+## 4. Verification checklist — ✅ passed
+
+Run at 1440×900. The fit check initially failed by 43px: a stray spacer `div` in
+the "you" hero row took row 1 / column 3 of a `1fr auto 1fr` grid, pushing End
+Turn onto a second grid row. Removing it, making `.table` `border-box` and
+subtracting 55px for the nav (54px + 1px border) brought the column to the
+intended 824px with zero page scroll.
 
 From the app directory, per HANDOVER §2:
 
