@@ -1,4 +1,5 @@
 import type { Card, Effect, Trigger } from '../../types/cards';
+import type { GameEvent } from './events';
 import { createRng, pick, shuffle, type Rng } from './rng';
 import {
   BOARD_LIMIT,
@@ -8,6 +9,7 @@ import {
   canAttack,
   legalTargets,
   opponentOf,
+  silence,
   type Character,
   type MatchState,
   type MinionInstance,
@@ -46,6 +48,7 @@ function createPlayer(id: PlayerId, deck: Card[]): PlayerState {
   return {
     id,
     health: HERO_HEALTH,
+    armor: 0,
     mana: 0,
     maxMana: 0,
     deck,
@@ -67,7 +70,8 @@ export function createMatch(playerDeck: Card[], aiDeck: Card[], seed = 1): Match
     winner: null,
     log: [],
     seed,
-    nextInstanceId: 1
+    nextInstanceId: 1,
+    events: []
   };
 
   // The player moves first; the AI gets an extra card and The Coin to compensate.
@@ -77,6 +81,11 @@ export function createMatch(playerDeck: Card[], aiDeck: Card[], seed = 1): Match
 
   startTurn(state, 'player');
   return state;
+}
+
+/** Queues an animation cue. Cosmetic only — no rule depends on the queue. */
+function emit(state: MatchState, event: GameEvent): void {
+  state.events.push(event);
 }
 
 /** Each match re-derives its RNG from the seed plus turn count so replays match. */
@@ -95,8 +104,10 @@ function startTurn(state: MatchState, id: PlayerId): void {
   for (const minion of p.board) {
     minion.summonedThisTurn = false;
     minion.attacksThisTurn = 0;
+    minion.frozen = false;
   }
   state.log.push(`— ${id} turn ${state.turnNumber} (${p.mana} mana) —`);
+  emit(state, { type: 'turn', owner: id });
   drawCard(state, id);
   triggerBoard(state, id, 'StartOfTurn');
 }
@@ -136,6 +147,7 @@ export function drawCard(state: MatchState, id: PlayerId): void {
     return;
   }
   p.hand.push(card);
+  emit(state, { type: 'draw', owner: id });
 }
 
 export function canPlayCard(state: MatchState, id: PlayerId, handIndex: number): boolean {
@@ -179,9 +191,13 @@ function summon(state: MatchState, id: PlayerId, card: Card): MinionInstance | u
     keywords: [...card.keywords],
     divineShield: card.keywords.includes('DivineShield'),
     summonedThisTurn: true,
-    attacksThisTurn: 0
+    attacksThisTurn: 0,
+    frozen: false,
+    silenced: false,
+    buffed: false
   };
   p.board.push(minion);
+  emit(state, { type: 'summon', owner: id, instanceId: minion.instanceId });
   return minion;
 }
 
@@ -208,6 +224,7 @@ export function attack(
   if (!chosen) return false;
 
   attacker.attacksThisTurn++;
+  emit(state, { type: 'attack', owner: id, instanceId: attacker.instanceId });
   for (const effect of attacker.card.effects) {
     if (effect.trigger === 'OnAttack') resolveEffect(state, id, attacker, effect);
   }
@@ -233,14 +250,25 @@ function damageMinion(state: MatchState, minion: MinionInstance, amount: number)
     minion.divineShield = false;
     minion.keywords = minion.keywords.filter((k) => k !== 'DivineShield');
     state.log.push(`${minion.card.name}'s Divine Shield absorbs the hit.`);
+    emit(state, { type: 'shield', instanceId: minion.instanceId });
     return;
   }
   minion.health -= amount;
+  emit(state, {
+    type: 'damage',
+    target: { kind: 'minion', instanceId: minion.instanceId },
+    amount
+  });
 }
 
 function damageHero(state: MatchState, id: PlayerId, amount: number): void {
   if (amount <= 0) return;
-  state.players[id].health -= amount;
+  const p = state.players[id];
+  // Armor soaks first and never goes negative.
+  const absorbed = Math.min(p.armor, amount);
+  p.armor -= absorbed;
+  p.health -= amount - absorbed;
+  emit(state, { type: 'damage', target: { kind: 'hero', owner: id }, amount });
   checkWinner(state);
 }
 
@@ -262,6 +290,7 @@ function checkDeaths(state: MatchState): void {
       state.players[owner].board = board.filter((m) => m.health > 0);
       for (const minion of dead) {
         state.log.push(`${minion.card.name} dies.`);
+        emit(state, { type: 'death', owner, instanceId: minion.instanceId });
         for (const effect of minion.card.effects) {
           if (effect.trigger === 'Deathrattle') resolveEffect(state, owner, minion, effect);
         }
@@ -382,13 +411,33 @@ function resolveEffect(
         break;
 
       case 'BuffAttack':
-        if (target.kind === 'minion') target.minion.attack += value;
+        if (target.kind === 'minion') {
+          target.minion.attack += value;
+          target.minion.buffed = true;
+          emit(state, { type: 'buff', instanceId: target.minion.instanceId });
+        }
         break;
 
       case 'BuffHealth':
         if (target.kind === 'minion') {
           target.minion.maxHealth += value;
           target.minion.health += value;
+          target.minion.buffed = true;
+          emit(state, { type: 'buff', instanceId: target.minion.instanceId });
+        }
+        break;
+
+      case 'Freeze':
+        if (target.kind === 'minion') {
+          target.minion.frozen = true;
+          emit(state, { type: 'freeze', instanceId: target.minion.instanceId });
+        }
+        break;
+
+      case 'Silence':
+        if (target.kind === 'minion') {
+          silence(target.minion);
+          emit(state, { type: 'silence', instanceId: target.minion.instanceId });
         }
         break;
 

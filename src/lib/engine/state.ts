@@ -17,11 +17,19 @@ export interface MinionInstance {
   divineShield: boolean;
   summonedThisTurn: boolean;
   attacksThisTurn: number;
+  /** Skips its next attack; cleared at the start of its controller's turn. */
+  frozen: boolean;
+  /** Keywords and effects stripped. Kept as a flag so the UI can grey it out. */
+  silenced: boolean;
+  /** Buffed since it was summoned — drives the green bloom on the stat gems. */
+  buffed: boolean;
 }
 
 export interface PlayerState {
   id: PlayerId;
   health: number;
+  /** Absorbs hero damage before health. Nothing grants it yet — see OVERHAUL.md. */
+  armor: number;
   mana: number;
   maxMana: number;
   deck: Card[];
@@ -38,6 +46,8 @@ export interface MatchState {
   log: string[];
   seed: number;
   nextInstanceId: number;
+  /** Ordered animation cues drained by the UI. See events.ts. */
+  events: import('./events').GameEvent[];
 }
 
 /** A minion or a hero — anything that can be damaged or healed. */
@@ -67,14 +77,20 @@ export function maxAttacksFor(minion: MinionInstance): number {
 
 export function canAttack(minion: MinionInstance): boolean {
   if (minion.attack <= 0) return false;
+  if (minion.frozen) return false;
   if (minion.attacksThisTurn >= maxAttacksFor(minion)) return false;
   if (minion.summonedThisTurn && !minion.keywords.includes('Charge')) return false;
   return true;
 }
 
+/** Stealth minions cannot be picked as a target — including as a Taunt. */
+export function isTargetable(minion: MinionInstance): boolean {
+  return !minion.keywords.includes('Stealth');
+}
+
 /** Taunt forces attackers to go through it first. */
 export function legalTargets(state: MatchState, defenderId: PlayerId): Character[] {
-  const board = state.players[defenderId].board;
+  const board = state.players[defenderId].board.filter(isTargetable);
   const taunts = board.filter((m) => m.keywords.includes('Taunt'));
   if (taunts.length > 0) {
     return taunts.map((minion) => ({ kind: 'minion', owner: defenderId, minion }));
@@ -83,4 +99,11 @@ export function legalTargets(state: MatchState, defenderId: PlayerId): Character
     ...board.map((minion) => ({ kind: 'minion' as const, owner: defenderId, minion })),
     { kind: 'hero' as const, owner: defenderId }
   ];
+}
+
+/** Strips everything a Silence should remove. Used by the Silence action. */
+export function silence(minion: MinionInstance): void {
+  minion.silenced = true;
+  minion.keywords = [];
+  minion.divineShield = false;
 }

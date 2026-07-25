@@ -12,7 +12,14 @@ import {
   endTurn,
   playCard
 } from './engine';
-import { BOARD_LIMIT, HERO_HEALTH, canAttack, legalTargets, type MatchState } from './state';
+import {
+  BOARD_LIMIT,
+  HERO_HEALTH,
+  canAttack,
+  legalTargets,
+  silence,
+  type MatchState
+} from './state';
 
 function minionCard(over: Partial<Card> = {}): Card {
   return {
@@ -409,5 +416,212 @@ describe('win conditions', () => {
     state.winner = 'player';
     const i = give(state, 'player', minionCard({ cost: 0 }));
     expect(canPlayCard(state, 'player', i)).toBe(false);
+  });
+});
+
+describe('freeze', () => {
+  it('stops a minion attacking', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, keywords: ['Charge'] })));
+    const minion = state.players.player.board[0];
+    expect(canAttack(minion)).toBe(true);
+
+    minion.frozen = true;
+    expect(canAttack(minion)).toBe(false);
+    expect(attack(state, 'player', minion.instanceId, { kind: 'hero' })).toBe(false);
+  });
+
+  it('thaws at the start of its controller next turn', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, keywords: ['Charge'] })));
+    state.players.player.board[0].frozen = true;
+
+    endTurn(state); // opponent's turn — still frozen
+    expect(state.players.player.board[0].frozen).toBe(true);
+
+    endTurn(state); // back to us — thawed
+    expect(state.players.player.board[0].frozen).toBe(false);
+    expect(canAttack(state.players.player.board[0])).toBe(true);
+  });
+
+  it('is applied by the Freeze action', () => {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0 })));
+    state.current = 'player';
+
+    const chill: Card = {
+      ...minionCard({ cost: 0, name: 'Chill' }),
+      type: 'Spell',
+      attack: undefined,
+      health: undefined,
+      effects: [{ trigger: 'Battlecry', action: 'Freeze', target: 'EnemyMinion' }]
+    };
+    playCard(state, 'player', give(state, 'player', chill));
+    expect(state.players.ai.board[0].frozen).toBe(true);
+  });
+});
+
+describe('silence', () => {
+  it('strips keywords and Divine Shield, and flags the minion', () => {
+    const state = bareMatch();
+    playCard(
+      state,
+      'player',
+      give(state, 'player', minionCard({ cost: 0, keywords: ['Taunt', 'DivineShield'] }))
+    );
+    const minion = state.players.player.board[0];
+    expect(minion.divineShield).toBe(true);
+
+    silence(minion);
+    expect(minion.keywords).toEqual([]);
+    expect(minion.divineShield).toBe(false);
+    expect(minion.silenced).toBe(true);
+  });
+
+  it('stops a silenced Taunt compelling attackers', () => {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, keywords: ['Taunt'] })));
+    state.current = 'player';
+
+    expect(legalTargets(state, 'ai').every((t) => t.kind === 'minion')).toBe(true);
+    silence(state.players.ai.board[0]);
+    expect(legalTargets(state, 'ai').some((t) => t.kind === 'hero')).toBe(true);
+  });
+});
+
+describe('stealth', () => {
+  it('keeps a minion out of the target list', () => {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, keywords: ['Stealth'] })));
+    state.current = 'player';
+
+    const targets = legalTargets(state, 'ai');
+    expect(targets.every((t) => t.kind === 'hero')).toBe(true);
+  });
+
+  it('does not compel attackers even when it also has Taunt', () => {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(
+      state,
+      'ai',
+      give(state, 'ai', minionCard({ cost: 0, keywords: ['Taunt', 'Stealth'] }))
+    );
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, name: 'Visible' })));
+    state.current = 'player';
+
+    const targets = legalTargets(state, 'ai');
+    const names = targets.flatMap((t) => (t.kind === 'minion' ? [t.minion.card.name] : ['hero']));
+    expect(names).toContain('Visible');
+    expect(names).toContain('hero');
+    expect(names).not.toContain('Test Minion');
+  });
+});
+
+describe('armor', () => {
+  function bolt(): Card {
+    return {
+      ...minionCard({ cost: 0, name: 'Bolt' }),
+      type: 'Spell',
+      attack: undefined,
+      health: undefined,
+      effects: [{ trigger: 'Battlecry', action: 'DealDamage', target: 'Hero', value: 3 }]
+    };
+  }
+
+  it('absorbs before health', () => {
+    const state = bareMatch();
+    state.players.ai.armor = 5;
+    playCard(state, 'player', give(state, 'player', bolt()));
+    expect(state.players.ai.armor).toBe(2);
+    expect(state.players.ai.health).toBe(HERO_HEALTH);
+  });
+
+  it('spills over once spent, and never goes negative', () => {
+    const state = bareMatch();
+    state.players.ai.armor = 2;
+    playCard(state, 'player', give(state, 'player', bolt()));
+    expect(state.players.ai.armor).toBe(0);
+    expect(state.players.ai.health).toBe(HERO_HEALTH - 1);
+  });
+});
+
+describe('event queue', () => {
+  it('starts every match with an events array', () => {
+    const state = createMatch(buildDemoDeck(), buildDemoDeck(), 5);
+    expect(Array.isArray(state.events)).toBe(true);
+  });
+
+  it('emits a summon cue when a minion lands', () => {
+    const state = bareMatch();
+    state.events = [];
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0 })));
+
+    const summons = state.events.filter((e) => e.type === 'summon');
+    expect(summons).toHaveLength(1);
+    expect(summons[0]).toMatchObject({
+      type: 'summon',
+      owner: 'player',
+      instanceId: state.players.player.board[0].instanceId
+    });
+  });
+
+  it('emits attack, damage and death cues for a lethal trade', () => {
+    const state = bareMatch();
+    playCard(
+      state,
+      'player',
+      give(state, 'player', minionCard({ cost: 0, attack: 5, health: 5, keywords: ['Charge'] }))
+    );
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 1, health: 1 })));
+    state.current = 'player';
+
+    state.events = [];
+    attack(state, 'player', state.players.player.board[0].instanceId, {
+      kind: 'minion',
+      instanceId: state.players.ai.board[0].instanceId
+    });
+
+    const types = state.events.map((e) => e.type);
+    expect(types).toContain('attack');
+    expect(types).toContain('damage');
+    expect(types).toContain('death');
+    expect(types.indexOf('attack')).toBeLessThan(types.indexOf('death'));
+  });
+
+  it('emits a shield cue instead of damage when Divine Shield soaks a hit', () => {
+    const state = bareMatch();
+    playCard(
+      state,
+      'player',
+      give(
+        state,
+        'player',
+        minionCard({ cost: 0, attack: 1, health: 4, keywords: ['Charge', 'DivineShield'] })
+      )
+    );
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 3, health: 9 })));
+    state.current = 'player';
+
+    state.events = [];
+    attack(state, 'player', state.players.player.board[0].instanceId, {
+      kind: 'minion',
+      instanceId: state.players.ai.board[0].instanceId
+    });
+
+    const attackerId = state.players.player.board[0].instanceId;
+    expect(state.events).toContainEqual({ type: 'shield', instanceId: attackerId });
+    expect(state.players.player.board[0].health).toBe(4);
   });
 });

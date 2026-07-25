@@ -1,13 +1,20 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import CardPreview from '$lib/components/CardPreview.svelte';
   import MinionView from '$lib/components/MinionView.svelte';
+  import HeroPortrait from '$lib/components/HeroPortrait.svelte';
+  import ManaTray from '$lib/components/ManaTray.svelte';
+  import CardBack from '$lib/components/CardBack.svelte';
+  import TurnBanner from '$lib/components/TurnBanner.svelte';
+  import FloatingNumber from '$lib/components/FloatingNumber.svelte';
+  import Chronicle from '$lib/components/Chronicle.svelte';
   import { buildDemoDeck } from '$lib/data/demoDeck';
   import { isLegal, resolveDeck } from '$lib/decks/deck';
   import { loadCollection, loadDeck } from '$lib/decks/storage';
   import { playAiTurn } from '$lib/engine/ai';
   import { attack, canPlayCard, createMatch, endTurn, playCard } from '$lib/engine/engine';
-  import { HERO_HEALTH, canAttack, legalTargets } from '$lib/engine/state';
+  import { EVENT_BEAT, type GameEvent } from '$lib/engine/events';
+  import { canAttack, legalTargets } from '$lib/engine/state';
   import type { Card } from '../../types/cards';
 
   // Both sides play the same list, so imported cards show up on each board.
@@ -17,19 +24,41 @@
   let selectedId: string | null = null;
   let aiThinking = false;
 
+  // ── Presentation-only state, driven by the engine's event queue ──
+  let summoningId: string | null = null;
+  let attackingId: string | null = null;
+  let dyingIds = new Set<string>();
+  let drawnIndex: number | null = null;
+  let hitHero: 'player' | 'ai' | null = null;
+  let banner: string | null = null;
+  let floats: { id: number; text: string; color: string; x: number; y: number }[] = [];
+  let floatSeq = 0;
+  let draining = false;
+  let handWidth = 1440;
+
   onMount(() => {
     const collection = loadCollection();
     const saved = loadDeck();
     if (collection && saved && isLegal(saved, collection)) {
       deckCards = resolveDeck(saved, collection);
       deckName = saved.name;
-      restart();
     }
+    restart();
+    onResize();
+    window.addEventListener('resize', onResize);
   });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') window.removeEventListener('resize', onResize);
+  });
+
+  function onResize() {
+    handWidth = window.innerWidth;
+  }
 
   $: me = state.players.player;
   $: foe = state.players.ai;
-  $: myTurn = state.current === 'player' && !state.winner && !aiThinking;
+  $: myTurn = state.current === 'player' && !state.winner && !aiThinking && !draining;
   $: targets = myTurn && selectedId ? legalTargets(state, 'ai') : [];
   $: heroTargetable = targets.some((t) => t.kind === 'hero');
   // Must be a reactive value, not a function call: Svelte only re-evaluates a
@@ -38,11 +67,87 @@
     targets.flatMap((t) => (t.kind === 'minion' ? [t.minion.instanceId] : []))
   );
 
+  // The hand never overlaps: it scales down as it grows, so no card can cover
+  // a neighbour's cost crystal or stat gems. HAND_LIMIT is 10.
+  $: handScale = Math.min(1, Math.min(handWidth - 90, 1260) / (Math.max(1, me.hand.length) * 146));
+
+  // ── Event playback ───────────────────────────────────────────
+  // The engine appends cues to state.events as it mutates. We drain them on a
+  // timeline so an attack lunges before its target shatters. State is already
+  // final by the time we start — these are cosmetics laid over the result.
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  async function drain() {
+    if (draining) return;
+    // Tolerates an engine that does not emit yet: the queue is simply empty.
+    if (!state.events) state.events = [];
+    draining = true;
+    while (state.events.length > 0) {
+      const event = state.events.shift() as GameEvent;
+      await play(event);
+      await sleep(EVENT_BEAT[event.type] * 0.6);
+      state = state;
+    }
+    draining = false;
+    state = state;
+  }
+
+  async function play(event: GameEvent) {
+    switch (event.type) {
+      case 'summon':
+        summoningId = event.instanceId;
+        setTimeout(() => (summoningId = null), EVENT_BEAT.summon);
+        break;
+      case 'attack':
+        attackingId = event.instanceId;
+        setTimeout(() => (attackingId = null), 520);
+        break;
+      case 'damage':
+        pushFloat(`-${event.amount}`, '#ff8a6a');
+        if (event.target.kind === 'hero') {
+          hitHero = event.target.owner;
+          setTimeout(() => (hitHero = null), 520);
+        }
+        break;
+      case 'shield':
+        pushFloat('Shield', '#f6dd93');
+        break;
+      case 'death':
+        dyingIds = new Set(dyingIds).add(event.instanceId);
+        setTimeout(() => {
+          const next = new Set(dyingIds);
+          next.delete(event.instanceId);
+          dyingIds = next;
+        }, EVENT_BEAT.death);
+        break;
+      case 'draw':
+        if (event.owner === 'player') {
+          drawnIndex = state.players.player.hand.length - 1;
+          setTimeout(() => (drawnIndex = null), EVENT_BEAT.draw);
+        }
+        break;
+      case 'turn':
+        banner = event.owner === 'player' ? 'Your Turn' : "Opponent's Turn";
+        setTimeout(() => (banner = null), EVENT_BEAT.turn);
+        break;
+    }
+  }
+
+  function pushFloat(text: string, color: string) {
+    const id = ++floatSeq;
+    floats = [...floats, { id, text, color, x: 50, y: 46 }];
+    setTimeout(() => (floats = floats.filter((f) => f.id !== id)), 900);
+  }
+
+  // ── Player actions ───────────────────────────────────────────
+
   function onHandCard(index: number) {
     if (!myTurn || !canPlayCard(state, 'player', index)) return;
     playCard(state, 'player', index);
     selectedId = null;
     state = state;
+    drain();
   }
 
   function onMyMinion(instanceId: string) {
@@ -57,6 +162,7 @@
     attack(state, 'player', selectedId, target);
     selectedId = null;
     state = state;
+    drain();
   }
 
   function onEndTurn() {
@@ -64,15 +170,17 @@
     selectedId = null;
     endTurn(state);
     state = state;
-    runAi();
+    drain().then(runAi);
   }
 
   function runAi() {
     if (state.winner || state.current !== 'ai') return;
     aiThinking = true;
     // A beat so the player can read what the AI did.
-    setTimeout(() => {
+    setTimeout(async () => {
       playAiTurn(state);
+      state = state;
+      await drain();
       aiThinking = false;
       state = state;
     }, 700);
@@ -82,162 +190,143 @@
     state = createMatch(deckCards, deckCards, Date.now() % 100000);
     selectedId = null;
     aiThinking = false;
+    dyingIds = new Set();
+    floats = [];
+    banner = 'Your Turn';
+    setTimeout(() => (banner = null), 1400);
   }
 
-  let logEl: HTMLDivElement | undefined;
-
-  /** The engine writes turn headers as "— player turn 3 (2 mana) —". */
-  function groupLog(lines: string[]) {
-    const turns: { header: string; events: string[] }[] = [];
-    for (const line of lines) {
-      if (line.startsWith('—')) {
-        turns.push({ header: line.replace(/—/g, '').trim(), events: [] });
-      } else {
-        if (turns.length === 0) turns.push({ header: 'Match start', events: [] });
-        turns[turns.length - 1].events.push(line);
-      }
-    }
-    return turns;
-  }
-
-  $: logTurns = groupLog(state.log);
-  // Keep the newest turn in view as the match plays out.
-  $: if (logEl && logTurns.length) scrollLog();
-
-  async function scrollLog() {
-    await tick();
-    if (logEl) logEl.scrollTop = logEl.scrollHeight;
-  }
+  $: phase = state.winner
+    ? 'match over'
+    : aiThinking
+      ? 'opponent is thinking'
+      : myTurn
+        ? selectedId
+          ? 'choose a target'
+          : 'your move'
+        : 'waiting';
 </script>
 
 <svelte:head><title>Play — Flashstone</title></svelte:head>
 
-<main>
-  <div class="layout">
-    <aside class="turn-log">
-      <h2>Turn log</h2>
-      <div class="log-scroll" bind:this={logEl}>
-        {#each logTurns as turn, i (i)}
-          <section class="turn">
-            <p class="turn-head">{turn.header}</p>
-            <ul>
-              {#each turn.events as event}
-                <li>{event}</li>
-              {/each}
-            </ul>
-          </section>
-        {/each}
-      </div>
-    </aside>
+<main class="table">
+  <div class="vignette" aria-hidden="true"></div>
 
-    <div class="board-area">
-      <header>
-        <span class="deck-name">{deckName}</span>
-        {#if deckName === 'Demo deck'}
-          <span class="tagline">
-            Placeholder cards — <a href="/import">import flashcards</a> to play your own.
-          </span>
-        {:else}
-          <a class="tagline" href="/decks">Change deck</a>
-        {/if}
-      </header>
+  <!-- Opponent -->
+  <section class="hero-row foe">
+    <div class="foe-hand" aria-hidden="true">
+      {#each foe.hand as _, i}
+        <span class="foe-card" style:transform={`rotate(${i * 3 - 6}deg)`} style:margin-left={i ? '-11px' : '0'}></span>
+      {/each}
+    </div>
 
-  <section class="table">
-    <!-- Opponent -->
-    <div class="side">
-      <div class="hero-row">
-        <button
-          class="hero enemy"
-          class:targetable={heroTargetable}
-          on:click={() => onEnemyTarget({ kind: 'hero' })}
-          disabled={!heroTargetable}
-        >
-          <span class="hero-label">Opponent</span>
-          <span class="hp">{foe.health}<small>/{HERO_HEALTH}</small></span>
-        </button>
-        <div class="meta">
-          <span>Hand {foe.hand.length}</span>
-          <span>Deck {foe.deck.length}</span>
-          <span>Mana {foe.mana}/{foe.maxMana}</span>
-        </div>
-      </div>
+    <div></div>
 
-      <div class="board">
-        {#each foe.board as minion (minion.instanceId)}
-          <MinionView
-            {minion}
-            targetable={targetableIds.has(minion.instanceId)}
-            on:click={() => onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId })}
-          />
-        {:else}
-          <p class="empty">no minions</p>
-        {/each}
+    <div class="hero-block">
+      <HeroPortrait
+        label="Opponent"
+        side="foe"
+        health={foe.health}
+        armor={foe.armor}
+        targetable={heroTargetable}
+        hit={hitHero === 'ai'}
+        on:click={() => onEnemyTarget({ kind: 'hero' })}
+      />
+      <div class="hero-meta">
+        <span>Opponent</span>
+        <span>Mana {foe.mana}/{foe.maxMana}</span>
       </div>
     </div>
 
-    <div class="divider">
-      {#if aiThinking}
-        <span class="thinking">Opponent is thinking…</span>
-      {:else if myTurn}
-        <span class="prompt">{selectedId ? 'Pick a target' : 'Your move'}</span>
-      {/if}
-    </div>
-
-    <!-- You -->
-    <div class="side">
-      <div class="board">
-        {#each me.board as minion (minion.instanceId)}
-          <MinionView
-            {minion}
-            ready={myTurn && canAttack(minion)}
-            selected={selectedId === minion.instanceId}
-            on:click={() => onMyMinion(minion.instanceId)}
-          />
-        {:else}
-          <p class="empty">no minions</p>
-        {/each}
-      </div>
-
-      <div class="hero-row">
-        <div class="hero you">
-          <span class="hero-label">You</span>
-          <span class="hp">{me.health}<small>/{HERO_HEALTH}</small></span>
-        </div>
-        <div class="meta">
-          <span>Deck {me.deck.length}</span>
-          <span class="mana">Mana {me.mana}/{me.maxMana}</span>
-        </div>
-        <button class="end-turn" on:click={onEndTurn} disabled={!myTurn}>End turn</button>
-      </div>
+    <div class="deck-pile">
+      <CardBack scale={0.34} hue={266} mark="F" />
+      <span class="deck-count">{foe.deck.length}</span>
     </div>
   </section>
 
-  <section class="hand">
-    {#each me.hand as card, i (i + card.id)}
-      <div
-        class="hand-slot"
-        class:playable={myTurn && canPlayCard(state, 'player', i)}
-        role="button"
-        tabindex="0"
-        on:click={() => onHandCard(i)}
-        on:keydown={(e) => e.key === 'Enter' && onHandCard(i)}
-      >
-        <CardPreview {card} />
-      </div>
+  <section class="board">
+    {#each foe.board as minion (minion.instanceId)}
+      <MinionView
+        {minion}
+        targetable={targetableIds.has(minion.instanceId)}
+        summoning={summoningId === minion.instanceId}
+        attacking={attackingId === minion.instanceId ? 'down' : null}
+        dying={dyingIds.has(minion.instanceId)}
+        on:click={() => onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId })}
+      />
     {:else}
-      <p class="empty">hand empty</p>
+      <span class="empty">empty field</span>
     {/each}
   </section>
 
-    </div>
+  <div class="centre">
+    <span class="rule"></span>
+    <span class="phase">{phase}</span>
+    <span class="rule"></span>
   </div>
+
+  <section class="board">
+    {#each me.board as minion (minion.instanceId)}
+      <MinionView
+        {minion}
+        ready={myTurn && canAttack(minion)}
+        selected={selectedId === minion.instanceId}
+        summoning={summoningId === minion.instanceId}
+        attacking={attackingId === minion.instanceId ? 'up' : null}
+        dying={dyingIds.has(minion.instanceId)}
+        on:click={() => onMyMinion(minion.instanceId)}
+      />
+    {:else}
+      <span class="empty">empty field</span>
+    {/each}
+  </section>
+
+  <!-- You -->
+  <section class="hero-row you">
+    <ManaTray mana={me.mana} maxMana={me.maxMana} />
+
+    <div class="hero-block reverse">
+      <div class="hero-meta right">
+        <span>You</span>
+        <span>Deck {me.deck.length}</span>
+      </div>
+      <HeroPortrait
+        label="You"
+        side="you"
+        health={me.health}
+        armor={me.armor}
+        hit={hitHero === 'player'}
+      />
+    </div>
+
+    <button class="end-turn" on:click={onEndTurn} disabled={!myTurn}>
+      {myTurn ? 'End Turn' : 'Waiting'}
+    </button>
+  </section>
+
+  <section class="hand" style:transform={`scale(${handScale.toFixed(3)})`}>
+    {#each me.hand as card, i (i + card.id)}
+      <CardPreview
+        {card}
+        playable={myTurn && canPlayCard(state, 'player', i)}
+        drawn={drawnIndex === i}
+        on:click={() => onHandCard(i)}
+        on:keydown={(e) => e.key === 'Enter' && onHandCard(i)}
+      />
+    {/each}
+  </section>
+
+  {#each floats as float (float.id)}
+    <FloatingNumber text={float.text} color={float.color} x={float.x} y={float.y} />
+  {/each}
+
+  <TurnBanner text={banner} />
+  <Chronicle lines={state.log} />
 
   {#if state.winner}
     <div class="overlay">
       <div class="result">
-        <h2>
-          {state.winner === 'player' ? 'You win' : state.winner === 'ai' ? 'You lose' : 'Draw'}
-        </h2>
+        <h2>{state.winner === 'player' ? 'Victory' : state.winner === 'ai' ? 'Defeat' : 'Draw'}</h2>
         <button on:click={restart}>Play again</button>
       </div>
     </div>
@@ -245,226 +334,221 @@
 </main>
 
 <style>
-  :global(body) {
-    margin: 0;
-    background: #0f0f23;
-    color: #e5e7eb;
-    font-family: system-ui, sans-serif;
-  }
-
-  main {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 16px;
-  }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
-  }
-
-  .board-area { min-width: 0; }
-
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; }
-    .turn-log { order: 2; }
-  }
-
-  header {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-  .deck-name { font-size: 15px; font-weight: 600; }
-  .tagline { color: #8b8bb0; font-size: 12px; }
-  .tagline a, a.tagline { color: #a5b4fc; }
-
+  /* The board is height-locked to the viewport with a floor, so the hand is
+     never below the fold on a 900px screen and short screens scroll instead
+     of clipping. Row heights sum to 824px. */
   .table {
-    background: #16162e;
-    border: 1px solid #2a2a4a;
-    border-radius: 12px;
-    padding: 12px;
-  }
-
-  .side { display: flex; flex-direction: column; gap: 8px; }
-
-  .hero-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .hero {
+    position: relative;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
+    /* border-box so the 10px padding sits inside the height, and 55px because
+       the nav is 54px tall plus a 1px bottom border. */
+    box-sizing: border-box;
+    height: calc(100vh - 55px);
+    min-height: 824px;
+    /* 12px, not 10: the hand cards' stat gems overhang the card frame. */
+    padding-bottom: 12px;
+    background: radial-gradient(120% 90% at 50% -10%, #2a1c11 0%, #150e08 45%, var(--ink) 100%);
+  }
+
+  .vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(60% 45% at 50% 50%, rgba(255, 196, 110, .09), transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    min-width: 110px;
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: 2px solid #3f3f6b;
-    background: #1e1e3c;
-    color: inherit;
-    font-family: inherit;
+    gap: 20px;
   }
 
-  .hero.enemy.targetable {
-    border-color: #f87171;
-    cursor: crosshair;
-    box-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
-  }
+  .hero-row.foe { padding: 16px 28px 0; grid-template-columns: 1fr auto 1fr; }
+  .hero-row.you { padding: 6px 28px 0; }
 
-  .hero-label { font-size: 11px; color: #9ca3cf; }
-  .hp { font-size: 22px; font-weight: bold; color: #f87171; }
-  .hp small { font-size: 12px; color: #6b7280; font-weight: normal; }
+  .hero-row.foe > .hero-block { grid-column: 2; }
+  .hero-row.foe > .deck-pile { grid-column: 3; justify-self: end; }
+  .hero-row.you > .hero-block { grid-column: 2; }
+  .hero-row.you > .end-turn { grid-column: 3; justify-self: end; }
 
-  .meta {
+  .foe-hand {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 2px;
     display: flex;
-    gap: 12px;
-    font-size: 12px;
-    color: #9ca3cf;
+    justify-content: center;
+    pointer-events: none;
   }
-  .meta .mana { color: #a5b4fc; font-weight: 600; }
 
-  .board {
+  .foe-card {
+    width: 32px;
+    height: 46px;
+    border-radius: 5px;
+    border: 1px solid #7a5c30;
+    background: linear-gradient(180deg, #4a3620, #241810);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, .5);
+  }
+
+  .hero-block { display: flex; align-items: center; gap: 14px; }
+  .hero-block.reverse { flex-direction: row; }
+
+  .hero-meta {
     display: flex;
-    gap: 8px;
-    min-height: 108px;
-    align-items: center;
-    padding: 4px;
-    background: #12122a;
-    border-radius: 8px;
-    overflow-x: auto;
+    flex-direction: column;
+    gap: 3px;
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
   }
+  .hero-meta.right { text-align: right; }
 
-  .divider {
-    height: 28px;
+  .deck-pile {
+    position: relative;
+    width: 46px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 6px 0;
-    border-top: 1px dashed #2a2a4a;
-    font-size: 12px;
+    border-radius: 6px;
+    border: 1px solid #7a5c30;
+    background: linear-gradient(180deg, #4a3620, #241810);
+    box-shadow: 4px 4px 0 -1px #2c1f12, 8px 8px 0 -2px #241810, 0 10px 18px rgba(0, 0, 0, .6);
+    overflow: hidden;
   }
-  .thinking { color: #fbbf24; }
-  .prompt { color: #6ee7b7; }
 
-  .empty { color: #3f3f6b; font-size: 12px; margin: 0 8px; }
+  .deck-count {
+    position: absolute;
+    font-family: var(--display);
+    font-size: 13px;
+    color: #f0dcae;
+  }
+
+  .board {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    min-height: 142px;
+    padding: 6px 28px;
+  }
+
+  .empty {
+    font-family: var(--display);
+    font-size: 12px;
+    letter-spacing: .24em;
+    text-transform: uppercase;
+    color: #4a3a26;
+  }
+
+  .centre {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 32px;
+    padding: 0 28px;
+  }
+
+  .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #6b512f, transparent); }
+
+  .phase {
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: .3em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #8a7050;
+  }
 
   .end-turn {
-    margin-left: auto;
-    padding: 10px 18px;
-    border-radius: 8px;
-    border: none;
-    background: #4f46e5;
-    color: white;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  .end-turn:disabled { background: #2a2a4a; color: #6b7280; cursor: default; }
-
-  .hand {
-    display: flex;
-    gap: 4px;
-    padding: 8px 4px 4px;
-    overflow-x: auto;
-    min-height: 176px;
-  }
-
-  /* CardPreview renders at a fixed 180x244; shrink it so the board and hand
-     share one screen. min-width:0 stops the flex item floring at that width. */
-  .hand-slot {
-    flex: 0 0 132px;
-    min-width: 0;
-    height: 172px;
-    opacity: 0.5;
-    transition: opacity 0.12s, transform 0.12s;
-  }
-  .hand-slot :global(.card) {
-    transform: scale(0.72);
-    transform-origin: top left;
-  }
-  .hand-slot.playable { opacity: 1; }
-  .hand-slot.playable:hover { transform: translateY(-6px); }
-
-  .turn-log {
-    background: #16162e;
-    border: 1px solid #2a2a4a;
-    border-radius: 12px;
-    padding: 12px;
-    position: sticky;
-    top: 16px;
-  }
-
-  .turn-log h2 {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6b7280;
-    margin: 0 0 10px;
-  }
-
-  .log-scroll {
-    max-height: calc(100vh - 140px);
-    overflow-y: auto;
-    scroll-behavior: smooth;
-  }
-
-  .turn { margin-bottom: 12px; }
-
-  .turn-head {
-    font-size: 11px;
+    padding: 13px 26px;
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    background: linear-gradient(180deg, #2a2118, #1a1410);
+    color: var(--text-faint);
+    font-family: var(--display);
     font-weight: 700;
-    color: #a5b4fc;
-    text-transform: capitalize;
-    margin: 0 0 4px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid #2a2a4a;
+    font-size: 11.5px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    cursor: default;
+    transition: all .18s ease;
   }
 
-  .turn ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  .end-turn:not(:disabled) {
+    border-color: #e3bf72;
+    background: linear-gradient(180deg, #b98a34, #7a5620);
+    color: #1a1207;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5),
+      0 0 18px rgba(224, 190, 118, .25);
   }
 
-  .turn li {
-    font-size: 11px;
-    line-height: 1.45;
-    color: #9ca3cf;
-    padding: 1px 0 1px 8px;
-    border-left: 2px solid #2a2a4a;
+  /* Cards keep an 8px gap and never overlap; the row scales instead. */
+  .hand {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 8px;
+    height: 170px;
+    flex: 0 0 170px;
+    padding-top: 2px;
+    transform-origin: bottom center;
+    transition: transform .2s ease;
   }
 
   .overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
-    background: rgba(15, 15, 35, 0.85);
+    z-index: 70;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: rgba(11, 8, 5, .86);
+    backdrop-filter: blur(3px);
   }
 
   .result {
-    background: #1e1e3c;
-    border: 1px solid #3f3f6b;
-    border-radius: 12px;
-    padding: 32px 48px;
+    padding: 44px 66px;
     text-align: center;
-  }
-  .result h2 { margin: 0 0 16px; font-size: 28px; }
-  .result button {
-    padding: 10px 24px;
+    border: 1px solid #7a5c30;
     border-radius: 8px;
-    border: none;
-    background: #4f46e5;
-    color: white;
-    font-size: 15px;
+    background: linear-gradient(180deg, #241809, var(--ink-2));
+    box-shadow: 0 30px 70px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 224, 160, .2);
+  }
+
+  .result h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: var(--gold-bright);
+    text-shadow: 0 0 30px rgba(240, 214, 138, .4);
+  }
+
+  .result button {
+    margin-top: 22px;
+    padding: 11px 30px;
+    border: 1px solid #e3bf72;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #b98a34, #7a5620);
+    color: #1a1207;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
     cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5);
   }
 </style>

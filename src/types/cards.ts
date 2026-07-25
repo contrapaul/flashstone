@@ -1,34 +1,41 @@
 // ──────────────────────────────────────────────────────────────
-// CARD SCHEMA & VALIDATION RULES v0.1
-// Designed for: Flashcard import, early-Hearthstone pacing, 
+// CARD SCHEMA & VALIDATION RULES v0.2
+// Designed for: Flashcard import, early-Hearthstone pacing,
 // deterministic fallbacks, rarity-weighted drafting
+//
+// v0.2 adds the keywords and actions the visual overhaul needs:
+//   Keyword 'Stealth'; Action 'Freeze' and 'Silence'.
+// card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
 export type CardType = 'Minion' | 'Spell' | 'HeroPower';
 export type Rarity = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
-export type Trigger = 
-  | 'Battlecry' 
-  | 'Deathrattle' 
-  | 'StartOfTurn' 
-  | 'EndOfTurn' 
-  | 'OnAttack' 
+export type Keyword = 'Taunt' | 'Charge' | 'DivineShield' | 'Windfury' | 'Stealth';
+export type Trigger =
+  | 'Battlecry'
+  | 'Deathrattle'
+  | 'StartOfTurn'
+  | 'EndOfTurn'
+  | 'OnAttack'
   | 'Passive';
-export type Action = 
-  | 'DealDamage' 
-  | 'DrawCard' 
-  | 'BuffAttack' 
-  | 'BuffHealth' 
-  | 'Heal' 
-  | 'SummonToken' 
+export type Action =
+  | 'DealDamage'
+  | 'DrawCard'
+  | 'BuffAttack'
+  | 'BuffHealth'
+  | 'Heal'
+  | 'SummonToken'
   | 'Destroy'
   | 'GainKeyword'
-  | 'GainMana';
-export type Target = 
-  | 'Self' 
-  | 'EnemyMinion' 
-  | 'FriendlyMinion' 
-  | 'Hero' 
-  | 'RandomEnemy' 
+  | 'GainMana'
+  | 'Freeze'
+  | 'Silence';
+export type Target =
+  | 'Self'
+  | 'EnemyMinion'
+  | 'FriendlyMinion'
+  | 'Hero'
+  | 'RandomEnemy'
   | 'AllEnemies';
 
 export interface Effect {
@@ -45,21 +52,20 @@ export interface Card {
   cost: number; // Mana to play (0-10)
   type: CardType;
   rarity: Rarity;
-  
+
   // Minion-only fields (undefined for Spells/HeroPowers)
   attack?: number; // 1-9
   health?: number; // 1-9
-  
-  keywords: string[]; // ['Taunt', 'Charge', 'DivineShield', 'Windfury']
+
+  keywords: Keyword[];
   effects: Effect[]; // Structured effect array (parsed or manual)
   description: string; // Human-readable UI text (auto-generated from effects or raw input)
-  
+
   art?: { type: 'css' | 'image'; value: string }; // CSS class/hash or R2 URL
   tags?: string[]; // Flashcard metadata, used for rarity weighting & filtering
-  
+
   // Import/Mapping metadata (stripped before match sync)
   _rawFront?: string;
   _rawBack?: string;
   _importSource?: 'csv' | 'md' | 'anki' | 'manual';
 }
-

@@ -1,4 +1,4 @@
-import type { Card, Rarity } from '../../types/cards';
+import type { Card, Keyword, Rarity } from '../../types/cards';
 import { RARITY_WEIGHTS } from '../../utils/rarity';
 import { createRng, type Rng } from '../engine/rng';
 import type { RawRow } from './csvParser';
@@ -29,7 +29,7 @@ export type ImportSource = 'csv' | 'md' | 'anki' | 'manual';
 const RARITIES = Object.keys(RARITY_WEIGHTS) as Rarity[];
 
 /** Rarer cards earn better keywords. Commons stay vanilla. */
-const RARITY_KEYWORDS: Record<Rarity, string[]> = {
+const RARITY_KEYWORDS: Record<Rarity, Keyword[]> = {
   Common: [],
   Uncommon: ['Taunt'],
   Rare: ['Taunt', 'Charge'],
@@ -126,7 +126,7 @@ function deriveStats(rng: Rng, cost: number, rarity: Rarity) {
   return { attack, health };
 }
 
-function keywordsFor(rng: Rng, rarity: Rarity): string[] {
+function keywordsFor(rng: Rng, rarity: Rarity): Keyword[] {
   const pool = RARITY_KEYWORDS[rarity];
   if (pool.length === 0) return [];
   if (rng.next() > KEYWORD_CHANCE[rarity]) return [];

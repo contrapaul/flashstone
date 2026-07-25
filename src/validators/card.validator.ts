@@ -2,7 +2,19 @@ import { z } from 'zod';
 
 const EffectSchema = z.object({
   trigger: z.enum(['Battlecry', 'Deathrattle', 'StartOfTurn', 'EndOfTurn', 'OnAttack', 'Passive']),
-  action: z.enum(['DealDamage', 'DrawCard', 'BuffAttack', 'BuffHealth', 'Heal', 'SummonToken', 'Destroy', 'GainKeyword', 'GainMana']),
+  action: z.enum([
+    'DealDamage',
+    'DrawCard',
+    'BuffAttack',
+    'BuffHealth',
+    'Heal',
+    'SummonToken',
+    'Destroy',
+    'GainKeyword',
+    'GainMana',
+    'Freeze',
+    'Silence'
+  ]),
   target: z.enum(['Self', 'EnemyMinion', 'FriendlyMinion', 'Hero', 'RandomEnemy', 'AllEnemies']).optional(),
   value: z.number().int().min(0).max(99).optional(),
   condition: z.string().nullable().optional()
@@ -16,7 +28,7 @@ export const CardSchema = z.object({
   rarity: z.enum(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']),
   attack: z.number().int().min(1).max(9).optional(),
   health: z.number().int().min(1).max(9).optional(),
-  keywords: z.array(z.enum(['Taunt', 'Charge', 'DivineShield', 'Windfury'])).default([]),
+  keywords: z.array(z.enum(['Taunt', 'Charge', 'DivineShield', 'Windfury', 'Stealth'])).default([]),
   effects: z.array(EffectSchema).max(3),
   description: z.string().min(1).max(200),
   art: z.object({ type: z.enum(['css', 'image']), value: z.string() }).optional(),

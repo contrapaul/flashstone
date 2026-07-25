@@ -1,149 +1,244 @@
 <script lang="ts">
   import type { Card } from '../../types/cards';
+  import { RARITY_COLOR, artFor, sigil } from '../../utils/art';
 
   export let card: Card;
+  /** Dimmed and non-interactive when false. */
+  export let playable = true;
+  /** Set true for the card that just arrived in hand to play the draw arc. */
+  export let drawn = false;
 
   $: isMinion = card.type === 'Minion';
 </script>
 
-<div class="card {card.rarity.toLowerCase()}">
+<div
+  class="card"
+  class:playable
+  class:drawn
+  style:--art={artFor(card.name)}
+  style:--rarity={RARITY_COLOR[card.rarity]}
+  on:click
+  on:keydown
+  role="button"
+  tabindex="0"
+>
+  <div class="bevel" aria-hidden="true"></div>
+
   <div class="cost">{card.cost}</div>
-  <div class="name">{card.name}</div>
 
-  {#if card.art}
-    {#if card.art.type === 'image'}
-      <div class="art-image" style="background-image: url({card.art.value})"></div>
-    {:else}
-      <div class="art-css {card.art.value}"></div>
-    {/if}
-  {:else}
-    <div class="art-placeholder">?</div>
-  {/if}
+  <div class="art"><span class="sigil">{sigil(card.name)}</span></div>
 
-  <div class="description">{card.description}</div>
+  <div class="plate"><span>{card.name}</span></div>
 
-  {#if card.keywords.length > 0}
-    <div class="keywords">
-      {#each card.keywords as keyword}
-        <span class="keyword">{keyword}</span>
-      {/each}
-    </div>
-  {/if}
+  <div class="rules">
+    <span>{card.description}</span>
+    <div class="gem" aria-hidden="true"></div>
+  </div>
+
+  <div class="foot"></div>
 
   {#if isMinion}
-    <div class="stats">
-      <span class="attack">{card.attack}</span>
-      <span class="health">{card.health}</span>
-    </div>
+    <div class="attack"><span>{card.attack}</span></div>
+    <div class="health">{card.health}</div>
+  {:else}
+    <div class="type">{card.type}</div>
   {/if}
-
-  <div class="rarity-badge">{card.rarity}</div>
 </div>
 
 <style>
   .card {
-    width: 160px;
-    height: 240px;
-    border: 2px solid #555;
-    border-radius: 8px;
-    background: #1a1a2e;
-    color: #eee;
     position: relative;
-    padding: 8px;
+    box-sizing: border-box;
+    width: 134px;
+    height: 168px;
     display: flex;
     flex-direction: column;
-    font-family: sans-serif;
+    padding: 0 0 8px;
+    border-radius: 13px;
+    border: 2px solid #5a4429;
+    background: linear-gradient(180deg, #5a422a 0%, #332415 12%, #241810 100%);
+    box-shadow: 0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
+    opacity: .62;
+    cursor: default;
+    transition: transform .16s cubic-bezier(.2, 1, .3, 1), box-shadow .16s ease;
+  }
+
+  .card.playable {
+    opacity: 1;
     cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s;
+    border-color: var(--frame-lit);
+    box-shadow: 0 0 20px rgba(224, 190, 118, .35), 0 14px 26px rgba(0, 0, 0, .6),
+      inset 0 1px 0 rgba(255, 232, 180, .28);
   }
 
-  .card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+  .card.playable:hover {
+    transform: translateY(-22px) scale(1.1);
+    box-shadow: 0 30px 50px rgba(0, 0, 0, .75), 0 0 34px rgba(240, 214, 138, .4);
+    z-index: 200;
   }
 
-  .card.legendary { border-color: #ff8c00; }
-  .card.epic { border-color: #a855f7; }
-  .card.rare { border-color: #3b82f6; }
-  .card.uncommon { border-color: #22c55e; }
+  .card.drawn { animation: fs-draw .42s cubic-bezier(.2, .9, .3, 1); }
+
+  .bevel {
+    position: absolute;
+    inset: 5px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 232, 180, .14);
+    pointer-events: none;
+  }
 
   .cost {
     position: absolute;
-    top: -6px;
-    left: -6px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: #4f46e5;
+    top: -7px;
+    left: -7px;
+    z-index: 3;
+    width: 38px;
+    height: 42px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: bold;
-    font-size: 14px;
-    border: 2px solid #818cf8;
+    clip-path: polygon(50% 0, 100% 26%, 100% 74%, 50% 100%, 0 74%, 0 26%);
+    background: linear-gradient(160deg, var(--mana-lit), #1f4d94 60%, #3f86d8);
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 19px;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, .7);
   }
 
-  .name {
-    font-size: 12px;
-    font-weight: bold;
-    text-align: center;
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .art-image, .art-css, .art-placeholder {
-    flex: 1;
-    background: #0f0f23;
-    border-radius: 4px;
-    margin: 4px 0;
-    min-height: 60px;
-  }
-
-  .art-image { background-size: cover; background-position: center; }
-  .art-placeholder { display: flex; align-items: center; justify-content: center; font-size: 24px; color: #333; }
-
-  .description {
-    font-size: 10px;
-    line-height: 1.3;
-    flex-shrink: 0;
-    max-height: 48px;
-    overflow: hidden;
-  }
-
-  .keywords {
+  .art {
+    margin: 8px 8px 0;
+    height: 58px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 2px;
-    margin-top: 4px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 230, 180, .22);
+    background: var(--art);
+    box-shadow: inset 0 -14px 24px rgba(0, 0, 0, .4);
   }
 
-  .keyword {
-    font-size: 9px;
-    background: #333;
-    padding: 1px 4px;
+  .sigil {
+    font-family: var(--display);
+    font-size: 44px;
+    font-weight: 700;
+    color: rgba(255, 246, 224, .3);
+    text-shadow: 0 3px 10px rgba(0, 0, 0, .55);
+  }
+
+  .plate {
+    position: relative;
+    z-index: 2;
+    margin: -13px 8px 0;
+    min-height: 26px;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #8a6c3c;
     border-radius: 3px;
+    background: linear-gradient(180deg, #4a3620, #2a1d10);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 228, 170, .22);
   }
 
-  .stats {
-    position: absolute;
-    bottom: 6px;
-    right: 8px;
-    display: flex;
-    gap: 6px;
-    font-weight: bold;
-    font-size: 14px;
-  }
-
-  .attack { color: #fbbf24; }
-  .health { color: #34d399; }
-
-  .rarity-badge {
-    position: absolute;
-    bottom: 6px;
-    left: 8px;
+  .plate span {
+    max-height: 44px;
+    padding: 0 6px;
+    overflow: hidden;
+    font-family: var(--display);
     font-size: 9px;
-    color: #666;
+    font-weight: 600;
+    letter-spacing: .04em;
+    line-height: 1.15;
+    text-align: center;
+    text-transform: uppercase;
+    text-wrap: pretty;
+    color: #f2e2bd;
+  }
+
+  .rules {
+    position: relative;
+    flex: 1;
+    margin: 6px 9px 0;
+    padding: 7px 8px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--parchment), #cfbe98);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), inset 0 -6px 12px rgba(120, 95, 55, .25);
+  }
+
+  .rules span {
+    font-family: var(--body);
+    font-size: 11px;
+    line-height: 1.28;
+    text-align: center;
+    text-wrap: pretty;
+    color: var(--parchment-ink);
+  }
+
+  .gem {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 11px;
+    height: 11px;
+    margin-left: -5.5px;
+    transform: rotate(45deg);
+    border-radius: 2px;
+    border: 1px solid rgba(255, 240, 210, .7);
+    background: linear-gradient(135deg, var(--rarity), rgba(0, 0, 0, .45));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--rarity) 60%, transparent);
+  }
+
+  .foot { height: 26px; }
+
+  .attack,
+  .health {
+    position: absolute;
+    bottom: -6px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 17px;
+    color: #fff6e6;
+    text-shadow: 0 2px 3px rgba(0, 0, 0, .65);
+  }
+
+  .attack {
+    left: -6px;
+    transform: rotate(45deg);
+    border-radius: 6px;
+    border: 2px solid #f6dd93;
+    background: linear-gradient(135deg, var(--attack), #a9741a);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .6), inset 0 1px 4px rgba(255, 232, 170, .6);
+  }
+
+  .attack span { transform: rotate(-45deg); }
+
+  .health {
+    right: -6px;
+    border-radius: 50% 50% 50% 50% / 42% 42% 58% 58%;
+    border: 2px solid #f0a08c;
+    background: radial-gradient(circle at 35% 28%, var(--blood), var(--blood-deep) 70%);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .6), inset 0 2px 5px rgba(255, 190, 170, .5);
+  }
+
+  .type {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: var(--display);
+    font-size: 8px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--gold);
   }
 </style>
