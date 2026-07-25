@@ -199,62 +199,109 @@
     padding: 20px 16px 60px;
   }
 
-  h1 { font-size: 24px; margin: 0 0 6px; }
-  h2 { font-size: 16px; margin: 0 0 6px; }
+  h1 {
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+    margin: 0 0 8px;
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 8px;
+  }
 
   .lead, .hint {
-    color: #9ca3cf;
-    font-size: 13px;
-    line-height: 1.5;
-    margin: 0 0 16px;
+    font-family: var(--body);
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0 0 18px;
     max-width: 70ch;
   }
-  .hint { font-size: 12px; }
+  .hint { font-size: 13px; }
 
   .file input {
-    font-size: 13px;
-    color: #9ca3cf;
+    font-family: var(--body);
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  /* The native control is a stark OS button against the dark frame. */
+  .file input::file-selector-button {
+    margin-right: 12px;
+    padding: 9px 18px;
+    border: 1px solid var(--frame);
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--panel), var(--ink-2));
+    color: var(--gold);
+    font-family: var(--display);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .file input::file-selector-button:hover {
+    border-color: var(--frame-lit);
+    color: var(--gold-bright);
   }
 
   .error {
-    color: #f87171;
-    font-size: 13px;
-    background: #2a1620;
-    border: 1px solid #7f1d1d;
-    border-radius: 8px;
-    padding: 10px 12px;
+    font-family: var(--body);
+    color: var(--blood);
+    font-size: 14px;
+    background: rgba(141, 31, 22, 0.16);
+    border: 1px solid var(--blood-deep);
+    border-radius: 4px;
+    padding: 11px 13px;
   }
 
   section {
-    margin-top: 28px;
-    border-top: 1px solid #2a2a4a;
-    padding-top: 18px;
+    margin-top: 30px;
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
   }
 
   .fields {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 12px;
+    gap: 14px;
   }
 
   label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
-    color: #9ca3cf;
+    gap: 5px;
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
   }
 
-  .req { color: #f87171; }
+  .req { color: var(--blood); }
 
   select {
-    background: #1e1e3c;
-    color: #e5e7eb;
-    border: 1px solid #3f3f6b;
-    border-radius: 6px;
-    padding: 7px 8px;
-    font-size: 13px;
+    background: var(--ink-2);
+    color: var(--text);
+    border: 1px solid var(--frame);
+    border-radius: 3px;
+    padding: 8px;
+    font-family: var(--body);
+    font-size: 14px;
+    letter-spacing: 0;
+    text-transform: none;
   }
+  select:focus { outline: none; border-color: var(--frame-lit); }
 
   .preview-head {
     display: flex;
@@ -262,29 +309,46 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
   }
 
   .actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
   }
 
-  .count { font-size: 12px; color: #9ca3cf; }
-  .bad { color: #f87171; }
+  .count {
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .bad { color: var(--blood); }
 
   button {
-    padding: 9px 18px;
-    border-radius: 8px;
-    border: none;
-    background: #4f46e5;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 600;
+    padding: 10px 22px;
+    border: 1px solid #8a6c3c;
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--gold), #9c7c3c);
+    color: #2a1d10;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
     cursor: pointer;
   }
-  button:disabled { background: #2a2a4a; color: #6b7280; cursor: default; }
+  button:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  }
+  button:disabled {
+    background: var(--ink-2);
+    border-color: var(--rule);
+    color: var(--text-faint);
+    cursor: default;
+  }
 
   .grid {
     display: flex;

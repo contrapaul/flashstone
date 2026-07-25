@@ -31,7 +31,7 @@
     },
     {
       href: '/decks',
-      title: 'Decks',
+      title: 'Collection',
       blurb: 'Build a deck from your collection, or auto-build one.'
     },
     {
@@ -68,69 +68,95 @@
 
 <style>
   main {
-    max-width: 760px;
+    position: relative;
+    min-height: calc(100vh - 55px);
+    box-sizing: border-box;
+    max-width: 780px;
     margin: 0 auto;
-    padding: 56px 16px 60px;
+    padding: 72px 16px 60px;
   }
 
-  .hero { text-align: center; margin-bottom: 36px; }
+  .hero { text-align: center; margin-bottom: 44px; }
 
   h1 {
-    font-size: 44px;
+    font-family: var(--display);
+    font-size: 58px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
     margin: 0;
-    letter-spacing: -0.01em;
+    color: var(--gold-bright);
+    text-shadow: 0 0 34px rgba(232, 197, 106, 0.32);
   }
 
   .tagline {
-    color: #9ca3cf;
-    font-size: 15px;
-    margin: 8px 0 0;
+    font-family: var(--body);
+    font-size: 17px;
+    font-style: italic;
+    color: var(--text-dim);
+    margin: 10px 0 0;
   }
 
   .status {
-    font-size: 12px;
-    color: #6b7280;
-    margin: 14px 0 0;
+    font-family: var(--display);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 18px 0 0;
     min-height: 16px;
   }
-  .status.playable { color: #6ee7b7; }
+  .status.playable { color: var(--good); }
 
   .menu {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 14px;
   }
 
   @media (max-width: 620px) {
     .menu { grid-template-columns: 1fr; }
+    h1 { font-size: 40px; }
   }
 
   a {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 18px 20px;
-    border-radius: 10px;
-    background: #16162e;
-    border: 1px solid #2a2a4a;
-    text-decoration: none;
+    gap: 6px;
+    padding: 20px 22px;
+    border: 1px solid var(--frame);
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--panel), var(--ink-2));
     color: inherit;
-    transition: border-color 0.12s, transform 0.12s, background 0.12s;
+    box-shadow: inset 0 1px 0 rgba(240, 214, 138, 0.06);
+    transition: border-color 0.14s, transform 0.14s, box-shadow 0.14s;
   }
 
   a:hover {
-    border-color: #4f46e5;
-    background: #1a1a38;
+    border-color: var(--frame-lit);
     transform: translateY(-2px);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(240, 214, 138, 0.12);
   }
 
   a.primary {
-    background: #2b2596;
-    border-color: #4f46e5;
+    background: linear-gradient(180deg, #4a3620, #2a1d10);
+    border-color: #8a6c3c;
   }
-  a.primary:hover { background: #352ec0; }
+  a.primary .title { color: var(--gold-bright); }
 
-  .title { font-size: 17px; font-weight: 600; }
-  .blurb { font-size: 12px; color: #9ca3cf; line-height: 1.4; }
-  a.primary .blurb { color: #c7d2fe; }
+  .title {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .blurb {
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text-dim);
+  }
 </style>

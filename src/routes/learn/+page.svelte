@@ -94,65 +94,102 @@
 
 <style>
   main {
-    max-width: 720px;
+    max-width: 740px;
     margin: 0 auto;
-    padding: 28px 16px 70px;
-    line-height: 1.6;
+    padding: 40px 16px 80px;
+    line-height: 1.65;
   }
 
-  h1 { font-size: 26px; margin: 0 0 8px; }
-  h2 { font-size: 15px; margin: 0 0 8px; color: #a5b4fc; }
+  h1 {
+    font-family: var(--display);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+    margin: 0 0 10px;
+  }
 
-  .lead { color: #9ca3cf; font-size: 14px; margin: 0; }
+  h2 {
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 10px;
+  }
+
+  .lead {
+    font-family: var(--body);
+    font-size: 16px;
+    font-style: italic;
+    color: var(--text-dim);
+    margin: 0;
+  }
 
   section {
-    margin-top: 26px;
-    border-top: 1px solid #2a2a4a;
-    padding-top: 18px;
+    margin-top: 30px;
+    border-top: 1px solid var(--rule);
+    padding-top: 20px;
   }
 
-  p, li, dd { font-size: 13px; color: #cbd5f5; }
+  p, li, dd {
+    font-family: var(--body);
+    font-size: 15px;
+    color: var(--text);
+  }
   p { margin: 0 0 10px; }
 
   ul { margin: 0; padding-left: 20px; }
-  li { margin-bottom: 6px; }
+  li { margin-bottom: 7px; }
 
   dl { margin: 0; }
   dl > div {
     display: flex;
-    gap: 10px;
-    margin-bottom: 6px;
+    gap: 12px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
   }
   dt {
-    font-size: 13px;
-    font-weight: 700;
-    color: #fbbf24;
-    flex: 0 0 110px;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--attack);
+    flex: 0 0 120px;
+    padding-top: 3px;
   }
   dd { margin: 0; flex: 1; min-width: 200px; }
 
-  strong { color: #e5e7eb; }
+  strong { color: var(--gold-bright); font-weight: 600; }
 
   .cta-row {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     flex-wrap: wrap;
-    margin-top: 30px;
+    margin-top: 36px;
   }
 
   .cta {
-    padding: 10px 20px;
-    background: #4f46e5;
-    color: #fff;
-    border-radius: 8px;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 600;
+    padding: 11px 24px;
+    border: 1px solid #8a6c3c;
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--gold), #9c7c3c);
+    color: #2a1d10;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
   }
+  .cta:hover { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
+
   .cta.ghost {
-    background: #1e1e3c;
-    color: #cbd5f5;
-    border: 1px solid #3f3f6b;
+    background: linear-gradient(180deg, var(--panel), var(--ink-2));
+    border-color: var(--frame);
+    color: var(--gold);
   }
+  .cta.ghost:hover { border-color: var(--frame-lit); color: var(--gold-bright); }
 </style>
