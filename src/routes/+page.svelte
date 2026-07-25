@@ -68,11 +68,11 @@
   }
 </script>
 
-<svelte:head><title>Study &amp; Strike</title></svelte:head>
+<svelte:head><title>Flashstone</title></svelte:head>
 
 <main>
   <header>
-    <h1>Study &amp; Strike</h1>
+    <h1>Flashstone</h1>
     <p class="tagline">Import flashcards. Build decks. Play.</p>
   </header>
 

@@ -42,8 +42,9 @@ before `check` on a fresh clone or `tsconfig.json` fails to resolve its `extends
 
 ## 3. What this project is
 
-A Hearthstone-style card game whose **decks are generated from flashcards**. Package name
-is still `study-strike` — rename to `flashstone` if you want.
+A Hearthstone-style card game whose **decks are generated from flashcards**. Branded
+**Flashstone** throughout (it was called "Study & Strike" during initial development in
+the `make` repo — that name should not reappear).
 
 **It is playable right now** against a scripted AI: `npm run dev` → http://localhost:5173.
 
