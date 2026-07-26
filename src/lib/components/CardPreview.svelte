@@ -29,11 +29,13 @@
 
   <div class="art"><span class="sigil">{sigil(card.name)}</span></div>
 
-  <div class="plate"><span>{card.name}</span></div>
+  <div class="plate">
+    <span>{card.name}</span>
+    <div class="gem" aria-hidden="true"></div>
+  </div>
 
   <div class="rules">
     <span>{card.description}</span>
-    <div class="gem" aria-hidden="true"></div>
   </div>
 
   <div class="foot"></div>
@@ -123,7 +125,10 @@
 
   .art {
     margin: 8px 8px 0;
-    height: 44px;
+    /* Grows to fill the space the nameplate no longer occupies now that the
+       plate is docked to the description box instead of sitting right below
+       the art. */
+    height: 50px;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -142,12 +147,18 @@
     text-shadow: 0 3px 10px rgba(0, 0, 0, .55);
   }
 
-  /* Half the height of before and pulled in less far, so it reads as a tight
-     nameplate rather than a band that eats into the art above it. */
+  /*
+   * Docked to the top of the description box rather than sitting in flow
+   * under the art: its bottom edge sits flush on the same line as the rules
+   * panel's top (both anchor to the card's centre line), so the two read as
+   * one joined header-and-body unit. Everything above it is art's to use.
+   */
   .plate {
-    position: relative;
+    position: absolute;
     z-index: 2;
-    margin: -7px 8px 0;
+    left: 9px;
+    right: 9px;
+    bottom: 50%;
     min-height: 13px;
     padding: 1px 0;
     display: flex;
@@ -215,6 +226,8 @@
     overflow: hidden;
   }
 
+  /* Rarity marker. Pokes up out of the plate into the art above it — it
+     moved here with the plate, off the top of the description panel. */
   .gem {
     position: absolute;
     top: -6px;
