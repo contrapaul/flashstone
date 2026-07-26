@@ -24,26 +24,10 @@
         : 'No cards imported yet — you can still try the demo deck.';
 
   const menu = [
-    {
-      href: '/play',
-      title: 'Play',
-      blurb: 'Take on the AI with your deck.'
-    },
-    {
-      href: '/decks',
-      title: 'Collection',
-      blurb: 'Build a deck from your collection, or auto-build one.'
-    },
-    {
-      href: '/import',
-      title: 'Import',
-      blurb: 'Turn a CSV or Markdown flashcard export into cards.'
-    },
-    {
-      href: '/learn',
-      title: 'Learn to play',
-      blurb: 'The rules, the keywords, and how your cards are made.'
-    }
+    { href: '/play', title: 'Play' },
+    { href: '/decks', title: 'Collection' },
+    { href: '/import', title: 'Import' },
+    { href: '/learn', title: 'Learn to play' }
   ];
 </script>
 
@@ -60,7 +44,6 @@
     {#each menu as item}
       <a href={item.href} class:primary={item.title === 'Play'}>
         <span class="title">{item.title}</span>
-        <span class="blurb">{item.blurb}</span>
       </a>
     {/each}
   </nav>
@@ -109,21 +92,22 @@
   .status.playable { color: var(--good); }
 
   .menu {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 420px;
+    margin: 0 auto;
   }
 
   @media (max-width: 620px) {
-    .menu { grid-template-columns: 1fr; }
     h1 { font-size: 40px; }
   }
 
   a {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 20px 22px;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 24px;
     border: 1px solid var(--frame);
     border-radius: 4px;
     background: linear-gradient(180deg, var(--panel), var(--ink-2));
@@ -138,6 +122,8 @@
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(240, 214, 138, 0.12);
   }
 
+  a:hover .title { color: var(--gold-bright); }
+
   a.primary {
     background: linear-gradient(180deg, #4a3620, #2a1d10);
     border-color: #8a6c3c;
@@ -146,17 +132,18 @@
 
   .title {
     font-family: var(--display);
-    font-size: 13px;
+    font-size: 22px;
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.2em;
+    /* The tracking is on the right of each glyph; nudge back to stay centred. */
+    text-indent: 0.2em;
     text-transform: uppercase;
+    text-align: center;
     color: var(--gold);
+    transition: color 0.14s;
   }
 
-  .blurb {
-    font-family: var(--body);
-    font-size: 14px;
-    line-height: 1.45;
-    color: var(--text-dim);
+  @media (max-width: 620px) {
+    .title { font-size: 18px; }
   }
 </style>
