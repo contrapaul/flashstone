@@ -9,12 +9,19 @@
   export let drawn = false;
 
   $: isMinion = card.type === 'Minion';
+
+  // Flashcard answers vary from two words to a paragraph, so the type steps
+  // down as the text grows rather than overflowing the frame.
+  $: descStep = card.description.length > 132 ? 'xs' : card.description.length > 76 ? 'sm' : 'md';
+  $: titleStep = card.name.length > 42 ? 'xs' : card.name.length > 28 ? 'sm' : 'md';
 </script>
 
 <div
   class="card"
   class:playable
   class:drawn
+  class:desc-sm={descStep === 'sm'}
+  class:desc-xs={descStep === 'xs'}
   style:--art={artFor(card.name)}
   style:--rarity={RARITY_COLOR[card.rarity]}
   on:click
@@ -29,10 +36,10 @@
 
   <div class="art"><span class="sigil">{sigil(card.name)}</span></div>
 
-  <div class="plate"><span>{card.name}</span></div>
+  <div class="plate"><span class={titleStep}>{card.name}</span></div>
 
   <div class="rules">
-    <span>{card.description}</span>
+    <span class={descStep}>{card.description}</span>
     <div class="gem" aria-hidden="true"></div>
   </div>
 
@@ -52,6 +59,10 @@
     box-sizing: border-box;
     width: 134px;
     height: 168px;
+    /* Keep the intrinsic size wherever the card is laid out. As a flex item it
+       was being squashed to ~91px, which wrapped the text far more than the
+       type scale assumes. */
+    flex: none;
     display: flex;
     flex-direction: column;
     padding: 0 0 8px;
@@ -117,9 +128,17 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, .7);
   }
 
+  /* The art yields to the words. On a flashcard the answer is the point, so a
+     long one takes the space rather than being cut off. */
+  .card.desc-sm .art { height: 40px; }
+  .card.desc-sm .sigil { font-size: 30px; }
+  .card.desc-xs .art { height: 22px; }
+  .card.desc-xs .sigil { font-size: 17px; }
+
   .art {
     margin: 8px 8px 0;
     height: 58px;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -153,11 +172,8 @@
   }
 
   .plate span {
-    max-height: 44px;
     padding: 0 6px;
-    overflow: hidden;
     font-family: var(--display);
-    font-size: 9px;
     font-weight: 600;
     letter-spacing: .04em;
     line-height: 1.15;
@@ -165,29 +181,50 @@
     text-transform: uppercase;
     text-wrap: pretty;
     color: #f2e2bd;
+    /* Never taller than four lines, and never spilling past the plate. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
   }
+
+  .plate span.md { font-size: 9px; }
+  .plate span.sm { font-size: 8px; letter-spacing: .02em; }
+  .plate span.xs { font-size: 7px; letter-spacing: 0; }
 
   .rules {
     position: relative;
     flex: 1;
+    min-height: 0;
     margin: 6px 9px 0;
-    padding: 7px 8px 6px;
+    /* Extra bottom padding keeps the text clear of the stat gems, which sit
+       over the lower corners of this panel. */
+    padding: 6px 7px 11px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 4px;
     background: linear-gradient(180deg, var(--parchment), #cfbe98);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), inset 0 -6px 12px rgba(120, 95, 55, .25);
+    overflow: hidden;
   }
 
   .rules span {
+    width: 100%;
     font-family: var(--body);
-    font-size: 11px;
-    line-height: 1.28;
     text-align: center;
     text-wrap: pretty;
     color: var(--parchment-ink);
+    /* Clamped so a long answer can never escape the card frame. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
+
+  .rules span.md { font-size: 10px; line-height: 1.26; -webkit-line-clamp: 4; line-clamp: 4; }
+  .rules span.sm { font-size: 9px; line-height: 1.22; -webkit-line-clamp: 5; line-clamp: 5; }
+  .rules span.xs { font-size: 8px; line-height: 1.18; -webkit-line-clamp: 9; line-clamp: 9; }
 
   .gem {
     position: absolute;
@@ -205,12 +242,14 @@
 
   .foot { height: 26px; }
 
+  /* Smaller shapes so they encroach less on the rules panel — the numerals
+     stay at 17px and simply sit closer to the edges. */
   .attack,
   .health {
     position: absolute;
-    bottom: -6px;
-    width: 32px;
-    height: 32px;
+    bottom: -5px;
+    width: 27px;
+    height: 27px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -222,7 +261,7 @@
   }
 
   .attack {
-    left: -6px;
+    left: -5px;
     transform: rotate(45deg);
     border-radius: 6px;
     border: 2px solid #f6dd93;
@@ -233,7 +272,7 @@
   .attack span { transform: rotate(-45deg); }
 
   .health {
-    right: -6px;
+    right: -5px;
     border-radius: 50% 50% 50% 50% / 42% 42% 58% 58%;
     border: 2px solid #f0a08c;
     background: radial-gradient(circle at 35% 28%, var(--blood), var(--blood-deep) 70%);
