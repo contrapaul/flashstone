@@ -16,29 +16,16 @@
 
   let front = '';
   let back = '';
-  let nameCol = '';
-  let costCol = '';
-  let attackCol = '';
-  let healthCol = '';
-  let rarityCol = '';
 
   // Common header names across Anki, Quizlet and hand-rolled sheets.
-  const FRONT_HINTS = ['front', 'question', 'term', 'prompt', 'q'];
-  const BACK_HINTS = ['back', 'answer', 'definition', 'a'];
+  const FRONT_HINTS = ['front', 'question', 'term', 'prompt', 'title', 'name', 'q'];
+  const BACK_HINTS = ['back', 'answer', 'definition', 'description', 'text', 'a'];
 
-  $: mapping = {
-    front,
-    back,
-    name: nameCol || undefined,
-    cost: costCol || undefined,
-    attack: attackCol || undefined,
-    health: healthCol || undefined,
-    rarity: rarityCol || undefined
-  } satisfies FieldMapping;
-
+  $: mapping = { front, back } satisfies FieldMapping;
   $: ready = Boolean(front && back && rows.length > 0);
   $: cards = ready ? mapRowsToCards(rows, mapping, source) : [];
   $: invalid = cards.filter((c) => !CardSchema.safeParse(c).success).length;
+  $: skipped = ready ? rows.length - cards.length : 0;
 
   function guess(hints: string[], exclude?: string): string {
     const match = headers.find(
@@ -61,17 +48,26 @@
       const parsed = source === 'md' ? parseMD(text) : parseCSV(text);
 
       if (parsed.length === 0) {
-        error = 'No rows found. A CSV needs a header row plus at least one card.';
+        error = `Nothing readable in ${file.name}. It looks empty.`;
+        rows = [];
+        headers = [];
+        return;
+      }
+
+      headers = [...new Set(parsed.flatMap((r) => Object.keys(r)))];
+
+      if (headers.length < 2) {
+        error =
+          `Only one column was found in ${file.name}. Flashstone needs two: ` +
+          `a question and an answer. Check the file is comma, semicolon or tab separated.`;
         rows = [];
         headers = [];
         return;
       }
 
       rows = parsed;
-      headers = [...new Set(parsed.flatMap((r) => Object.keys(r)))];
-      front = guess(FRONT_HINTS) || headers[0] || '';
-      back = guess(BACK_HINTS, front) || headers[1] || '';
-      nameCol = costCol = attackCol = healthCol = rarityCol = '';
+      front = guess(FRONT_HINTS) || headers[0];
+      back = guess(BACK_HINTS, front) || headers.find((h) => h !== front) || headers[1];
     } catch (e) {
       error = `Could not read that file: ${e instanceof Error ? e.message : 'unknown error'}`;
       rows = [];
@@ -113,57 +109,22 @@
 
   {#if headers.length > 0}
     <section class="mapping">
-      <h2>Match your columns</h2>
+      <h2>Columns</h2>
       <p class="hint">
-        {rows.length} row{rows.length === 1 ? '' : 's'} found in {fileName}. Only question
-        and answer are required — supply the rest to hand-tune cards.
+        {rows.length} row{rows.length === 1 ? '' : 's'} in {fileName}. These were matched
+        automatically — change them only if they landed the wrong way round.
       </p>
 
       <div class="fields">
         <label>
-          Question <span class="req">*</span>
+          Question
           <select bind:value={front}>
             {#each headers as h}<option value={h}>{h}</option>{/each}
           </select>
         </label>
         <label>
-          Answer <span class="req">*</span>
+          Answer
           <select bind:value={back}>
-            {#each headers as h}<option value={h}>{h}</option>{/each}
-          </select>
-        </label>
-        <label>
-          Card name
-          <select bind:value={nameCol}>
-            <option value="">Use the question</option>
-            {#each headers as h}<option value={h}>{h}</option>{/each}
-          </select>
-        </label>
-        <label>
-          Mana cost
-          <select bind:value={costCol}>
-            <option value="">Derive it</option>
-            {#each headers as h}<option value={h}>{h}</option>{/each}
-          </select>
-        </label>
-        <label>
-          Attack
-          <select bind:value={attackCol}>
-            <option value="">Derive it</option>
-            {#each headers as h}<option value={h}>{h}</option>{/each}
-          </select>
-        </label>
-        <label>
-          Health
-          <select bind:value={healthCol}>
-            <option value="">Derive it</option>
-            {#each headers as h}<option value={h}>{h}</option>{/each}
-          </select>
-        </label>
-        <label>
-          Rarity
-          <select bind:value={rarityCol}>
-            <option value="">Derive it</option>
             {#each headers as h}<option value={h}>{h}</option>{/each}
           </select>
         </label>
@@ -178,6 +139,7 @@
         <div class="actions">
           <span class="count">
             {cards.length} cards
+            {#if skipped > 0}<span class="muted">· {skipped} empty skipped</span>{/if}
             {#if invalid > 0}<span class="bad">· {invalid} invalid</span>{/if}
           </span>
           <button on:click={save} disabled={invalid > 0}>Save collection</button>
@@ -292,8 +254,6 @@
     color: var(--text-dim);
   }
 
-  .req { color: var(--blood); }
-
   select {
     background: var(--ink-2);
     color: var(--text);
@@ -330,6 +290,7 @@
     color: var(--text-dim);
   }
   .bad { color: var(--blood); }
+  .muted { color: var(--text-faint); }
 
   button {
     padding: 10px 22px;

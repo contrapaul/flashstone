@@ -93,64 +93,42 @@ describe('determinism', () => {
   });
 });
 
-describe('explicit columns win over derivation', () => {
-  const mapping: FieldMapping = {
-    front: 'Front',
-    back: 'Back',
-    name: 'Name',
-    cost: 'Cost',
-    attack: 'Atk',
-    health: 'Hp',
-    rarity: 'Rarity'
-  };
-
-  it('uses the supplied values', () => {
-    const [card] = mapRowsToCards(
+describe('rows that are not cards', () => {
+  it('skips rows whose chosen columns are both empty', () => {
+    const cards = mapRowsToCards(
       [
-        {
-          Front: 'q',
-          Back: 'a',
-          Name: 'Hand Tuned',
-          Cost: '4',
-          Atk: '5',
-          Hp: '2',
-          Rarity: 'legendary'
-        }
+        { Front: 'Real question?', Back: 'Real answer' },
+        { Front: '', Back: '' },
+        { Front: '   ', Back: '\t' },
+        { Front: 'Another?', Back: 'Yes' }
       ],
-      mapping
+      PLAIN
     );
-    expect(card.name).toBe('Hand Tuned');
-    // Snaps to a real template rather than inventing a 4-cost 5/2 Legendary.
+    expect(cards).toHaveLength(2);
+    expect(cards.map((c) => c.name)).toEqual(['Real question?', 'Another?']);
+  });
+
+  it('keeps a row that has only one side filled', () => {
+    const cards = mapRowsToCards(
+      [
+        { Front: 'Question with no answer?', Back: '' },
+        { Front: '', Back: 'Answer with no question' }
+      ],
+      PLAIN
+    );
+    expect(cards).toHaveLength(2);
+    for (const card of cards) expect(() => CardSchema.parse(card)).not.toThrow();
+  });
+
+  it('ignores columns it was not pointed at', () => {
+    const [card] = mapRowsToCards(
+      [{ Front: 'q', Back: 'a', Cost: '9', Rarity: 'legendary', Junk: 'x' }],
+      PLAIN
+    );
+    // Mechanics come from the template alone — a stray Cost column is inert.
     const template = templateById(card.templateId!)!;
-    expect(template).toBeDefined();
     expect(card.cost).toBe(template.cost);
-    expect(card.attack).toBe(template.attack);
-    expect(card.health).toBe(template.health);
-    expect(card.cost).toBe(4);
-    expect(card.rarity).toBe('Legendary');
-  });
-
-  it('honours the columns it can read and ignores the rest', () => {
-    const [card] = mapRowsToCards(
-      [{ Front: 'q', Back: 'a', Name: '', Cost: '3', Atk: 'abc', Hp: '', Rarity: 'nonsense' }],
-      mapping
-    );
-    expect(card.name).toBe('q');
-    expect(card.cost).toBe(3);
-    expect(card.templateId).toBeTruthy();
-    expect(() => CardSchema.parse(card)).not.toThrow();
-  });
-
-  it('lands on a real template even for absurd values', () => {
-    const [card] = mapRowsToCards(
-      [{ Front: 'q', Back: 'a', Name: 'Huge', Cost: '99', Atk: '99', Hp: '-5', Rarity: '' }],
-      mapping
-    );
-    const template = templateById(card.templateId!);
-    expect(template).toBeDefined();
-    expect(card.cost).toBe(template!.cost);
-    expect(card.cost).toBeLessThanOrEqual(10);
-    expect(() => CardSchema.parse(card)).not.toThrow();
+    expect(card.rarity).toBe(template.rarity);
   });
 });
 
