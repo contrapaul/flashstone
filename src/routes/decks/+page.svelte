@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import CardPreview from '$lib/components/CardPreview.svelte';
   import type { Rarity } from '../../types/cards';
   import {
     DECK_SIZE,
@@ -17,7 +18,8 @@
     removeCards,
     templateCount,
     type Collection,
-    type Deck
+    type Deck,
+    type TemplateGroup
   } from '$lib/decks/deck';
   import { loadCollection, loadDeck, saveCollection, saveDeck } from '$lib/decks/storage';
 
@@ -28,7 +30,6 @@
   let search = '';
   let costFilter = 'all';
   let rarityFilter: Rarity | 'all' = 'all';
-  let expanded: string | null = null;
   let selected = new Set<string>();
 
   const RARITIES: Rarity[] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
@@ -42,7 +43,7 @@
   $: groups = collection ? groupByTemplate(deck, collection) : [];
 
   // Filters apply to the flashcards inside a template, so searching narrows
-  // which versions you see without hiding the card itself.
+  // which versions count without hiding the card itself.
   $: visible = groups
     .map((group) => {
       const term = search.trim().toLowerCase();
@@ -91,9 +92,49 @@
     saved = true;
   }
 
-  function toggleExpand(templateId: string) {
-    expanded = expanded === templateId ? null : templateId;
+  /** Clicking a tile adds its default flashcard — the first, alphabetically. */
+  function tileClick(group: TemplateGroup) {
+    if (!collection) return;
+    const preferred = group.cards[0];
+    if (!canAdd(deck, collection, preferred.id)) return;
+    add(preferred.id);
   }
+
+  // ── Choosing a specific flashcard ─────────────────────────────
+  // A template can have many flashcards bound to it. Clicking a tile adds the
+  // default one; this popover is where you pick a different one instead, or
+  // select versions to delete from the library.
+
+  let popover: { group: TemplateGroup; rect: DOMRect } | null = null;
+  let popoverEl: HTMLElement | undefined;
+
+  function openPopover(event: MouseEvent, group: TemplateGroup) {
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    popover = popover?.group.templateId === group.templateId ? null : { group, rect };
+  }
+
+  function closePopover() {
+    popover = null;
+  }
+
+  function onWindowPointerDown(event: PointerEvent) {
+    if (!popover || !popoverEl) return;
+    if (!popoverEl.contains(event.target as Node)) closePopover();
+  }
+
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') closePopover();
+  }
+
+  const POPOVER_WIDTH = 260;
+
+  $: popoverPos = popover
+    ? {
+        left: Math.min(Math.max(popover.rect.left, 10), window.innerWidth - POPOVER_WIDTH - 10),
+        top: Math.min(popover.rect.bottom + 6, window.innerHeight - 220)
+      }
+    : null;
 
   function toggleSelect(id: string) {
     const next = new Set(selected);
@@ -115,10 +156,13 @@
     saveDeck(deck);
     selected = new Set();
     saved = true;
+    closePopover();
   }
 </script>
 
-<svelte:head><title>Decks — Flashstone</title></svelte:head>
+<svelte:head><title>Collection — Flashstone</title></svelte:head>
+
+<svelte:window on:pointerdown={onWindowPointerDown} on:keydown={onWindowKeydown} />
 
 <main>
   {#if !collection}
@@ -129,45 +173,15 @@
     </div>
   {:else}
     <header>
-      <div>
-        <h1>Deck builder</h1>
-        <p class="sub">
-          {collection.cards.length} flashcards across {distinct} cards. Max {MAX_COPIES} copies
-          of a card, whichever flashcards you pick.
-        </p>
-      </div>
-      <div class="controls">
-        {#if selected.size > 0}
-          <button class="danger" on:click={deleteSelected}>Delete {selected.size}</button>
-        {/if}
-        <button class="ghost" on:click={build}>Auto-build</button>
-        <button class="ghost" on:click={clear} disabled={deck.cardIds.length === 0}>
-          Clear
-        </button>
-        <button on:click={persist} disabled={problems.length > 0}>
-          {saved ? 'Saved' : 'Save deck'}
-        </button>
-      </div>
+      <h1>Collection</h1>
+      <p class="sub">
+        {collection.cards.length} flashcards across {distinct} cards. Max {MAX_COPIES} copies
+        of a card, whichever flashcards you pick.
+      </p>
     </header>
 
-    {#if capacity < DECK_SIZE}
-      <p class="warn">
-        Your collection can only field {capacity} cards. Import at least
-        {Math.ceil(DECK_SIZE / MAX_COPIES)} flashcards to build a full deck.
-      </p>
-    {:else if problems.length > 0}
-      <p class="warn">{problems.join(' ')}</p>
-    {:else}
-      <p class="ok">Deck is legal and ready to play.</p>
-    {/if}
-
-    <div class="columns">
-      <section class="pool">
-        <div class="col-head">
-          <h2>Collection</h2>
-          <span class="tally">{visible.length} shown</span>
-        </div>
-
+    <div class="layout">
+      <section class="browser">
         <div class="filters">
           <input placeholder="Search question or answer…" bind:value={search} />
           <select bind:value={costFilter} aria-label="Filter by cost">
@@ -180,78 +194,63 @@
             <option value="all">Any rarity</option>
             {#each RARITIES as rarity}<option value={rarity}>{rarity}</option>{/each}
           </select>
+          <span class="shown">{visible.length} shown</span>
         </div>
 
-        <ul>
+        <div class="grid">
           {#each visible as group (group.templateId)}
-            {@const card = group.sample}
-            <li>
-              <div class="row group" class:maxed={group.inDeck >= MAX_COPIES}>
-                <button
-                  class="pick"
-                  disabled={!canAdd(deck, collection, group.cards[0].id)}
-                  on:click={() => add(group.cards[0].id)}
-                  title="Add {group.cards[0].name}"
-                >
-                  <span class="cost">{card.cost}</span>
-                  <span class="stat big">{card.attack}/{card.health}</span>
-                  <span class="rarity {card.rarity.toLowerCase()}">{card.rarity[0]}</span>
-                  {#if card.keywords.length > 0}
-                    <span class="kw">{card.keywords.join(' ')}</span>
-                  {/if}
-                  <span class="name">{group.cards[0].name}</span>
-                </button>
+            {@const preferred = group.cards[0]}
+            {@const maxed = group.inDeck >= MAX_COPIES}
+            <div class="tile">
+              <button
+                class="tile-btn"
+                disabled={maxed}
+                on:click={() => tileClick(group)}
+                title={maxed ? `${preferred.name} — already at ${MAX_COPIES} copies` : `Add ${preferred.name}`}
+              >
+                <CardPreview card={preferred} playable={true} />
+              </button>
 
+              {#if group.inDeck > 0}
+                <span class="badge" class:max={maxed}>{maxed ? 'MAX' : group.inDeck}</span>
+              {/if}
+
+              {#if group.cards.length > 1}
                 <button
-                  class="expand"
-                  on:click={() => toggleExpand(group.templateId)}
-                  title="Choose which flashcard to use"
+                  class="versions-btn"
+                  on:click={(e) => openPopover(e, group)}
+                  title="{group.cards.length} flashcards use this card"
                 >
                   {group.cards.length}
-                  {expanded === group.templateId ? '▾' : '▸'}
                 </button>
-
-                {#if group.inDeck > 0}<span class="have">{group.inDeck}</span>{/if}
-              </div>
-
-              {#if expanded === group.templateId}
-                <ul class="versions">
-                  {#each group.cards as version (version.id)}
-                    <li>
-                      <label class="version">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(version.id)}
-                          on:change={() => toggleSelect(version.id)}
-                        />
-                        <button
-                          class="version-add"
-                          disabled={!canAdd(deck, collection, version.id)}
-                          on:click={() => add(version.id)}
-                        >
-                          <span class="v-name">{version.name}</span>
-                          <span class="v-answer">{version.description}</span>
-                        </button>
-                      </label>
-                    </li>
-                  {/each}
-                </ul>
               {/if}
-            </li>
+            </div>
           {:else}
-            <li class="none">No cards match those filters.</li>
+            <p class="none">No cards match those filters.</p>
           {/each}
-        </ul>
+        </div>
       </section>
 
-      <section class="deck">
+      <section class="deck-panel">
         <div class="col-head">
           <h2>Deck</h2>
           <span class="tally" class:full={deck.cardIds.length === DECK_SIZE}>
             {deck.cardIds.length}/{DECK_SIZE}
           </span>
         </div>
-        <ul>
+
+        {#if capacity < DECK_SIZE}
+          <p class="warn">
+            Collection can field {capacity}. Import {Math.ceil(DECK_SIZE / MAX_COPIES)}+ cards
+            for a full deck.
+          </p>
+        {:else if problems.length > 0}
+          <p class="warn">{problems.join(' ')}</p>
+        {:else}
+          <p class="ok">Legal — ready to play.</p>
+        {/if}
+
+        <ul class="deck-list">
           {#each entries as entry (entry.card.id)}
             <li>
               <button class="row" on:click={() => remove(entry.card.id)} title="Remove one">
@@ -262,28 +261,62 @@
               </button>
             </li>
           {:else}
-            <li class="none">Empty. Click cards to add them, or hit Auto-build.</li>
+            <li class="none">Empty. Click cards to add them, or Auto-build.</li>
           {/each}
         </ul>
+
+        <div class="deck-actions">
+          {#if selected.size > 0}
+            <button class="danger" on:click={deleteSelected}>Delete {selected.size}</button>
+          {/if}
+          <button class="ghost" on:click={build}>Auto-build</button>
+          <button class="ghost" on:click={clear} disabled={deck.cardIds.length === 0}>
+            Clear
+          </button>
+          <button on:click={persist} disabled={problems.length > 0}>
+            {saved ? 'Saved' : 'Save deck'}
+          </button>
+        </div>
       </section>
     </div>
+
+    {#if popover && popoverPos && collection}
+      <div class="popover" bind:this={popoverEl} style:left={`${popoverPos.left}px`} style:top={`${popoverPos.top}px`}>
+        <div class="popover-head">{popover.group.cards.length} flashcards use this card</div>
+        <ul class="versions">
+          {#each popover.group.cards as version (version.id)}
+            <li>
+              <label class="version">
+                <input
+                  type="checkbox"
+                  checked={selected.has(version.id)}
+                  on:change={() => toggleSelect(version.id)}
+                />
+                <button
+                  class="version-add"
+                  disabled={!canAdd(deck, collection, version.id)}
+                  on:click={() => add(version.id)}
+                >
+                  <span class="v-name">{version.name}</span>
+                  <span class="v-answer">{version.description}</span>
+                </button>
+              </label>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
   {/if}
 </main>
 
 <style>
   main {
-    max-width: 1100px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 20px 16px 60px;
   }
 
-  header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
+  header { margin-bottom: 16px; }
 
   h1 {
     font-family: var(--display);
@@ -311,8 +344,6 @@
     font-size: 14px;
     margin: 6px 0 0;
   }
-
-  .controls { display: flex; gap: 10px; }
 
   button {
     padding: 9px 18px;
@@ -342,13 +373,18 @@
     color: var(--text-faint);
     cursor: default;
   }
+  button.danger {
+    background: linear-gradient(180deg, var(--blood), var(--blood-deep));
+    border-color: var(--blood-deep);
+    color: #f7e3df;
+  }
 
   .warn, .ok {
     font-family: var(--body);
-    font-size: 14px;
+    font-size: 13px;
     border-radius: 4px;
-    padding: 10px 13px;
-    margin: 18px 0 0;
+    padding: 8px 11px;
+    margin: 0 0 12px;
   }
   .warn {
     background: rgba(240, 184, 64, 0.08);
@@ -361,18 +397,20 @@
     color: var(--good);
   }
 
-  .columns {
+  /* Wide browsing grid on the left, a narrow deck list on the right — the
+     Hearthstone layout, in place of two equal, mostly-empty text columns. */
+  .layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) 300px;
     gap: 18px;
-    margin-top: 20px;
+    align-items: start;
   }
 
-  @media (max-width: 780px) {
-    .columns { grid-template-columns: 1fr; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
   }
 
-  section {
+  .browser {
     background: linear-gradient(180deg, var(--panel), var(--ink-2));
     border: 1px solid var(--frame);
     border-radius: 4px;
@@ -380,27 +418,150 @@
     box-shadow: inset 0 1px 0 rgba(240, 214, 138, 0.06);
   }
 
+  .filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .filters input {
+    flex: 1 1 200px;
+    background: var(--ink);
+    border: 1px solid var(--frame);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-family: var(--body);
+    font-size: 13px;
+  }
+  .filters input:focus { outline: none; border-color: var(--frame-lit); }
+  .filters select {
+    background: var(--ink);
+    border: 1px solid var(--frame);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 7px 8px;
+    font-family: var(--body);
+    font-size: 13px;
+  }
+  .shown {
+    margin-left: auto;
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  /* The actual cards, at native size — this is the point: you can read a
+     card's cost, stats, keywords and text at a glance, the way a physical
+     collection binder or Hearthstone's set browser reads. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 134px);
+    justify-content: start;
+    gap: 14px 10px;
+    max-height: 74vh;
+    overflow-y: auto;
+    padding: 4px 2px 4px 4px;
+  }
+
+  .tile {
+    position: relative;
+    width: 134px;
+  }
+
+  .tile-btn {
+    display: block;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+  .tile-btn:disabled { cursor: default; }
+  .tile-btn:disabled :global(.card) { opacity: 0.5; }
+
+  /* A grid of dozens of cards all mid-swirl reads as noise; the glow that
+     marks a playable card in-hand stays, the motion doesn't. */
+  .tile :global(.card.playable) { animation: none; }
+
+  .badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    z-index: 5;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    border: 1px solid #2f6b42;
+    background: var(--good);
+    color: #0b1f13;
+    font-family: var(--display);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .badge.max { background: var(--blood); border-color: var(--blood-deep); color: #2a0d09; }
+
+  /* The card's own art already fills every corner — cost top-left, attack
+     bottom-left, health bottom-right, and the in-deck badge takes top-right.
+     The only clear spot left is a tab on the right edge, at the card's
+     vertical centre, poking out the same way the stat gems do. */
+  .versions-btn {
+    position: absolute;
+    top: 50%;
+    right: -6px;
+    transform: translateY(-50%);
+    z-index: 5;
+    min-width: 20px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--frame);
+    border-radius: 8px;
+    background: rgba(11, 8, 5, 0.9);
+    color: var(--gold);
+    font-family: var(--display);
+    font-size: 9px;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  }
+  .versions-btn:hover { border-color: var(--frame-lit); color: var(--gold-bright); }
+
+  .none {
+    grid-column: 1 / -1;
+    font-family: var(--body);
+    color: var(--text-faint);
+    font-size: 13px;
+    padding: 20px 4px;
+  }
+
+  .deck-panel {
+    background: linear-gradient(180deg, var(--panel), var(--ink-2));
+    border: 1px solid var(--frame);
+    border-radius: 4px;
+    padding: 14px;
+    box-shadow: inset 0 1px 0 rgba(240, 214, 138, 0.06);
+    position: sticky;
+    top: 16px;
+  }
+
   .col-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--rule);
   }
-
-  input {
-    background: var(--ink);
-    border: 1px solid var(--frame);
-    border-radius: 3px;
-    color: var(--text);
-    padding: 6px 9px;
-    font-family: var(--body);
-    font-size: 13px;
-    max-width: 170px;
-  }
-  input:focus { outline: none; border-color: var(--frame-lit); }
 
   .tally {
     font-family: var(--display);
@@ -410,103 +571,93 @@
   }
   .tally.full { color: var(--good); }
 
-  ul {
+  .deck-list {
     list-style: none;
-    margin: 0;
+    margin: 0 0 12px;
     padding: 0;
-    max-height: 60vh;
+    max-height: 56vh;
     overflow-y: auto;
   }
 
   .row {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     width: 100%;
     background: rgba(11, 8, 5, 0.55);
     border: 1px solid transparent;
     border-radius: 3px;
-    padding: 7px 9px;
+    padding: 7px 8px;
     margin-bottom: 4px;
     font-family: var(--body);
-    font-size: 14px;
+    font-size: 13px;
     text-align: left;
     color: var(--text);
   }
   .row:hover { border-color: var(--frame-lit); background: rgba(74, 54, 32, 0.35); }
-  .row.maxed { opacity: 0.45; }
 
-  .filters {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-  }
-  .filters input { flex: 1 1 150px; max-width: none; }
-  .filters select {
-    background: var(--ink);
-    border: 1px solid var(--frame);
-    border-radius: 3px;
-    color: var(--text);
-    padding: 6px 8px;
-    font-family: var(--body);
-    font-size: 13px;
-  }
-
-  /* A template row: one game card, however many flashcards wear it. */
-  .row.group { padding: 0; gap: 0; }
-
-  .pick,
-  .expand,
-  .version-add {
-    background: none;
-    border: none;
-    font-family: var(--body);
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
-    text-transform: none;
-    letter-spacing: 0;
-    font-weight: 400;
-  }
-
-  .pick {
-    flex: 1;
+  .cost {
+    flex: 0 0 20px;
+    height: 20px;
+    background: linear-gradient(180deg, var(--mana-lit), var(--mana));
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 7px 9px;
-    font-size: 14px;
-    min-width: 0;
-  }
-  .pick:disabled { cursor: default; }
-
-  .stat.big {
+    justify-content: center;
     font-family: var(--display);
     font-weight: 700;
-    color: var(--text);
-    flex: 0 0 auto;
+    font-size: 10px;
+    color: #06121f;
   }
 
-  .expand {
-    flex: 0 0 auto;
-    padding: 7px 10px;
-    border-left: 1px solid var(--rule);
+  .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stat { color: var(--text-dim); font-variant-numeric: tabular-nums; font-size: 11px; }
+  .count { color: var(--attack); font-weight: 700; }
+
+  .deck-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .deck-actions button { flex: 1 1 auto; }
+
+  /* The version picker — a small anchored panel, not a row that pushes the
+     grid around every time you open one. */
+  .popover {
+    position: fixed;
+    z-index: 300;
+    width: 260px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: linear-gradient(180deg, var(--panel), var(--ink-2));
+    border: 1px solid var(--frame-lit);
+    border-radius: 6px;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+    padding: 8px;
+  }
+
+  .popover-head {
     font-family: var(--display);
-    font-size: 11px;
-    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 2px 4px 8px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 6px;
   }
-  .expand:hover { color: var(--gold-bright); }
-
-  .row.group .have { padding-right: 9px; }
 
   .versions {
     list-style: none;
-    margin: 2px 0 8px 20px;
-    padding: 0 0 0 10px;
-    border-left: 1px solid var(--rule);
-    max-height: none;
-    overflow: visible;
+    margin: 0;
+    padding: 0;
   }
 
   .version {
@@ -522,86 +673,34 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
-    padding: 2px 6px;
+    padding: 4px 6px;
+    border: none;
     border-radius: 3px;
+    background: none;
     min-width: 0;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
   }
   .version-add:hover:not(:disabled) { background: rgba(74, 54, 32, 0.4); }
   .version-add:disabled { opacity: 0.45; cursor: default; }
 
   .v-name {
+    font-family: var(--body);
     font-size: 13px;
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .v-answer {
-    font-size: 11px;
-    color: var(--text-faint);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  button.danger {
-    background: linear-gradient(180deg, var(--blood), var(--blood-deep));
-    border-color: var(--blood-deep);
-    color: #f7e3df;
-  }
-
-  .cost {
-    flex: 0 0 22px;
-    height: 22px;
-    background: linear-gradient(180deg, var(--mana-lit), var(--mana));
-    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--display);
-    font-weight: 700;
-    font-size: 11px;
-    color: #06121f;
-  }
-
-  .name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .kw {
-    font-family: var(--display);
-    font-size: 8.5px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    background: rgba(107, 79, 46, 0.5);
-    border: 1px solid var(--frame);
-    color: var(--gold);
-    padding: 1px 5px;
-    border-radius: 2px;
-  }
-
-  .stat { color: var(--text-dim); font-variant-numeric: tabular-nums; }
-  .count { color: var(--attack); font-weight: 700; }
-  .have { color: var(--good); font-weight: 700; }
-
-  .rarity {
-    font-family: var(--display);
-    font-weight: 700;
-    font-size: 10px;
-  }
-  .rarity.common { color: #b9ac93; }
-  .rarity.uncommon { color: #5fbf6a; }
-  .rarity.rare { color: #4a8fe0; }
-  .rarity.epic { color: #a457e8; }
-  .rarity.legendary { color: #f0a020; }
-
-  .none {
     font-family: var(--body);
+    font-size: 11px;
     color: var(--text-faint);
-    font-size: 13px;
-    padding: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .empty-state { text-align: center; padding: 80px 20px; }
