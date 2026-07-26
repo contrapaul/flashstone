@@ -142,12 +142,14 @@
     text-shadow: 0 3px 10px rgba(0, 0, 0, .55);
   }
 
+  /* Half the height of before and pulled in less far, so it reads as a tight
+     nameplate rather than a band that eats into the art above it. */
   .plate {
     position: relative;
     z-index: 2;
-    margin: -13px 8px 0;
-    min-height: 26px;
-    padding: 2px 0;
+    margin: -7px 8px 0;
+    min-height: 13px;
+    padding: 1px 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -158,7 +160,8 @@
   }
 
   .plate span {
-    padding: 0 6px;
+    width: 100%;
+    padding: 0 5px;
     font-family: var(--display);
     font-size: 8px;
     font-weight: 600;
@@ -166,14 +169,12 @@
     line-height: 1.15;
     text-align: center;
     text-transform: uppercase;
-    text-wrap: pretty;
     color: #f2e2bd;
-    /* Three lines holds the 50-character maximum without reaching the panel. */
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    /* One line only — the tighter plate has no room for more, so a long
+       title truncates instead of pushing the box taller. */
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /*

@@ -31,10 +31,11 @@
     gap: 3px;
   }
 
+  /* 20% down from the original 12x17. */
   .pip {
     position: relative;
-    width: 12px;
-    height: 17px;
+    width: 9.6px;
+    height: 13.6px;
     clip-path: polygon(50% 0, 100% 30%, 100% 72%, 50% 100%, 0 72%, 0 30%);
     background: linear-gradient(160deg, #2a2620, #15120d);
     border: 1px solid #33291c;
