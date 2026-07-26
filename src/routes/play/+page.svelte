@@ -152,13 +152,47 @@
 
   // ── Player actions ───────────────────────────────────────────
 
-  function onHandCard(index: number) {
-    if (swallowClick) return;
+  /**
+   * A card is never played by clicking it. Tapping picks it up; it then rides
+   * the pointer until you click again to place it, so you can change your mind
+   * about where — or whether — it lands.
+   */
+  function pickUp(index: number) {
     if (!myTurn || !canPlayCard(state, 'player', index)) return;
-    playCard(state, 'player', index);
+    const card = me.hand[index];
+    if (!card) return;
+    drag = { kind: 'card', handIndex: index, card, slot: me.board.length };
+    holding = true;
+  }
+
+  function playHeld(handIndex: number, slot: number) {
+    drag = null;
+    holding = false;
+    if (!canPlayCard(state, 'player', handIndex)) return;
+    playCard(state, 'player', handIndex, slot);
     selectedId = null;
     state = state;
     drain();
+  }
+
+  /** Placing a held card: onto your row it plays, anywhere else it goes back. */
+  function placeHeld(x: number, y: number) {
+    const held = drag;
+    if (!held || held.kind !== 'card') return;
+    if (!overMyBoard(y)) {
+      drag = null;
+      holding = false;
+      return;
+    }
+    playHeld(held.handIndex, slotAt(x));
+  }
+
+  function onCardKey(event: KeyboardEvent, index: number) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    // Keyboard has no pointer to aim with, so a held card lands on the end.
+    if (holding && drag?.kind === 'card') playHeld(drag.handIndex, me.board.length);
+    else pickUp(index);
   }
 
   function onMyMinion(instanceId: string) {
@@ -234,6 +268,8 @@
   let drag: Drag | null = null;
   let press: Press | null = null;
   let pointer = { x: 0, y: 0 };
+  /** A card picked up by tapping, riding the pointer until it is placed. */
+  let holding = false;
   /** A completed drag must not also fire the element's click. */
   let swallowClick = false;
 
@@ -251,6 +287,8 @@
   }
 
   function onCardPointerDown(event: PointerEvent, index: number) {
+    // Already carrying one: this press places it, handled at the window.
+    if (holding) return;
     if (!myTurn || !canPlayCard(state, 'player', index)) return;
     press = {
       id: event.pointerId,
@@ -319,6 +357,13 @@
   }
 
   function onPointerMove(event: PointerEvent) {
+    // A held card follows the pointer with no button down.
+    if (holding && drag?.kind === 'card') {
+      pointer = { x: event.clientX, y: event.clientY };
+      drag = { ...drag, slot: slotAt(event.clientX) };
+      return;
+    }
+
     if (!press || event.pointerId !== press.id) return;
     pointer = { x: event.clientX, y: event.clientY };
 
@@ -353,13 +398,20 @@
   }
 
   function onPointerUp(event: PointerEvent) {
+    if (holding) return; // placement happens on the next press, not this release
     if (!press || event.pointerId !== press.id) return;
+
     const finished = drag;
+    const tapped = press;
     press = null;
     drag = null;
 
-    // No travel: leave it alone and let the click handler treat it as a tap.
-    if (!finished) return;
+    // No travel: a tap. Cards are picked up rather than played; minions fall
+    // through to their click handler and become the selected attacker.
+    if (!finished) {
+      if (tapped.kind === 'card') pickUp(tapped.handIndex);
+      return;
+    }
 
     swallowClick = true;
     setTimeout(() => (swallowClick = false), 0);
@@ -380,7 +432,13 @@
 
   function onPointerCancel() {
     press = null;
-    drag = null;
+    if (!holding) drag = null;
+  }
+
+  /** Any press while carrying a card is the decision of where to put it. */
+  function onWindowPointerDown(event: PointerEvent) {
+    if (!holding) return;
+    placeHeld(event.clientX, event.clientY);
   }
 
   function targetCentre(target: TargetRef): { x: number; y: number } {
@@ -415,6 +473,7 @@
 
 <svelte:window
   on:pointermove={onPointerMove}
+  on:pointerdown={onWindowPointerDown}
   on:pointerup={onPointerUp}
   on:pointercancel={onPointerCancel}
 />
@@ -525,8 +584,7 @@
           {card}
           playable={myTurn && canPlayCard(state, 'player', i)}
           drawn={drawnIndex === i}
-          on:click={() => onHandCard(i)}
-          on:keydown={(e) => e.key === 'Enter' && onHandCard(i)}
+          on:keydown={(e) => onCardKey(e, i)}
           on:pointerdown={(e) => onCardPointerDown(e, i)}
         />
       </div>
