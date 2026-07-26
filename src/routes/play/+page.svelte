@@ -14,7 +14,7 @@
   import { playAiTurn } from '$lib/engine/ai';
   import { attack, canPlayCard, createMatch, endTurn, playCard } from '$lib/engine/engine';
   import { EVENT_BEAT, type GameEvent } from '$lib/engine/events';
-  import { canAttack, legalTargets } from '$lib/engine/state';
+  import { canAttack, legalTargets, type MinionInstance } from '$lib/engine/state';
   import type { Card } from '../../types/cards';
 
   // Both sides play the same list, so imported cards show up on each board.
@@ -94,6 +94,9 @@
     if (!state.events) state.events = [];
     draining = true;
     while (state.events.length > 0) {
+      // Note where everything stands before applying the next cue, so a numeral
+      // for something that dies mid-exchange still has a place to appear.
+      rememberPositions();
       const event = state.events.shift() as GameEvent;
       await play(event);
       await sleep(EVENT_BEAT[event.type] * 0.6);
@@ -114,14 +117,15 @@
         setTimeout(() => (attackingId = null), 520);
         break;
       case 'damage':
-        pushFloat(`-${event.amount}`, '#ff8a6a');
+        // Over whatever took the hit, not whatever dealt it.
+        pushFloat(`-${event.amount}`, '#ff8a6a', pointFor(event.target));
         if (event.target.kind === 'hero') {
           hitHero = event.target.owner;
           setTimeout(() => (hitHero = null), 520);
         }
         break;
       case 'shield':
-        pushFloat('Shield', '#f6dd93');
+        pushFloat('Shield', '#f6dd93', pointFor({ kind: 'minion', instanceId: event.instanceId }));
         break;
       case 'death':
         dyingIds = new Set(dyingIds).add(event.instanceId);
@@ -144,9 +148,9 @@
     }
   }
 
-  function pushFloat(text: string, color: string) {
+  function pushFloat(text: string, color: string, at: { x: number; y: number }) {
     const id = ++floatSeq;
-    floats = [...floats, { id, text, color, x: 50, y: 46 }];
+    floats = [...floats, { id, text, color, x: at.x, y: at.y }];
     setTimeout(() => (floats = floats.filter((f) => f.id !== id)), 900);
   }
 
@@ -186,6 +190,51 @@
     }
     playHeld(held.handIndex, slotAt(x));
   }
+
+  // ── Inspecting a minion ──────────────────────────────────────
+  // A minion on the board shows its stats but not its text, so hovering brings
+  // up the full card. Works for either side's board.
+
+  let inspect: { minion: MinionInstance; rect: DOMRect } | null = null;
+
+  function onMinionEnter(event: PointerEvent, minion: MinionInstance) {
+    // Not while carrying a card or aiming an attack — it would only be in the way.
+    if (drag || holding) return;
+    inspect = { minion, rect: (event.currentTarget as HTMLElement).getBoundingClientRect() };
+  }
+
+  function onMinionLeave() {
+    inspect = null;
+  }
+
+  /** The minion as it stands now, so buffs and damage show, not the printed card. */
+  function inspectCard(minion: MinionInstance): Card {
+    return {
+      ...minion.card,
+      attack: minion.attack,
+      health: minion.health,
+      keywords: [...minion.keywords] as Card['keywords']
+    };
+  }
+
+  const CARD_W = 134;
+  const CARD_H = 168;
+
+  $: inspectPos = inspect
+    ? (() => {
+        const pad = 10;
+        const left = Math.max(
+          pad,
+          Math.min(
+            inspect.rect.left + inspect.rect.width / 2 - CARD_W / 2,
+            window.innerWidth - CARD_W - pad
+          )
+        );
+        // Prefer above the minion; drop below when there is no room.
+        const above = inspect.rect.top - CARD_H - 12;
+        return { left, top: above >= pad ? above : inspect.rect.bottom + 12 };
+      })()
+    : null;
 
   function onCardKey(event: KeyboardEvent, index: number) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -276,6 +325,48 @@
   let myBoardEl: HTMLElement | undefined;
   let foeBoardEl: HTMLElement | undefined;
   let foeHeroEl: HTMLElement | undefined;
+  let myHeroEl: HTMLElement | undefined;
+
+  /**
+   * Where each minion last stood. State is already final when cues replay, so a
+   * minion that died in the exchange is gone from the board by the time its
+   * damage number is due — this keeps its last position to fire the numeral at.
+   */
+  const lastSeen = new Map<string, { x: number; y: number }>();
+
+  function rememberPositions() {
+    for (const [board, list] of [
+      [myBoardEl, me.board],
+      [foeBoardEl, foe.board]
+    ] as const) {
+      const els = minionEls(board);
+      list.forEach((minion, i) => {
+        if (els[i]) lastSeen.set(minion.instanceId, centreOf(els[i]));
+      });
+    }
+  }
+
+  /** Viewport point of whatever a cue refers to, for placing a floating numeral. */
+  function pointFor(
+    ref: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: 'player' | 'ai' }
+  ): { x: number; y: number } {
+    if (ref.kind === 'hero') {
+      const el = ref.owner === 'player' ? myHeroEl : foeHeroEl;
+      if (el) return centreOf(el);
+    } else {
+      for (const [board, list] of [
+        [myBoardEl, me.board],
+        [foeBoardEl, foe.board]
+      ] as const) {
+        const index = list.findIndex((m) => m.instanceId === ref.instanceId);
+        const el = minionEls(board)[index];
+        if (index >= 0 && el) return centreOf(el);
+      }
+      const remembered = lastSeen.get(ref.instanceId);
+      if (remembered) return remembered;
+    }
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  }
 
   function minionEls(board: HTMLElement | undefined): HTMLElement[] {
     return board ? (Array.from(board.querySelectorAll('.minion')) as HTMLElement[]) : [];
@@ -522,6 +613,8 @@
         attacking={attackingId === minion.instanceId ? 'down' : null}
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId })}
+        on:pointerenter={(e) => onMinionEnter(e, minion)}
+        on:pointerleave={onMinionLeave}
       />
     {/each}
   </section>
@@ -547,6 +640,8 @@
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onMyMinion(minion.instanceId)}
         on:pointerdown={(e) => onMinionPointerDown(e, minion.instanceId)}
+        on:pointerenter={(e) => onMinionEnter(e, minion)}
+        on:pointerleave={onMinionLeave}
       />
     {/each}
     {#if drag?.kind === 'card' && drag.slot >= me.board.length}
@@ -558,7 +653,7 @@
   <section class="hero-row you">
     <ManaTray mana={me.mana} maxMana={me.maxMana} />
 
-    <div class="hero-block reverse">
+    <div class="hero-block reverse" bind:this={myHeroEl}>
       <div class="hero-meta right">
         <span>You</span>
         <span>Deck {me.deck.length}</span>
@@ -600,6 +695,17 @@
       aria-hidden="true"
     >
       <CardPreview card={drag.card} playable />
+    </div>
+  {/if}
+
+  {#if inspect && inspectPos}
+    <div
+      class="inspect"
+      style:left={`${inspectPos.left}px`}
+      style:top={`${inspectPos.top}px`}
+      aria-hidden="true"
+    >
+      <CardPreview card={inspectCard(inspect.minion)} playable />
     </div>
   {/if}
 
@@ -755,6 +861,21 @@
     border: 1px dashed rgba(126, 214, 140, .55);
     background: rgba(126, 214, 140, .08);
     animation: fs-summon .18s ease;
+  }
+
+  /* The full card raised while hovering a minion. Fades only — a transform
+     here would change its measured size and throw off the placement maths. */
+  .inspect {
+    position: fixed;
+    z-index: 370;
+    pointer-events: none;
+    filter: drop-shadow(0 16px 28px rgba(0, 0, 0, .75));
+    animation: fs-inspect .12s ease-out;
+  }
+
+  @keyframes fs-inspect {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .ghost {

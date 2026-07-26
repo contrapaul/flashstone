@@ -38,7 +38,8 @@
   style:--art={artFor(minion.card.name)}
   on:click
   on:pointerdown
-  title={minion.card.description}
+  on:pointerenter
+  on:pointerleave
 >
   {#if minion.divineShield}
     <span class="halo" aria-hidden="true"></span>
