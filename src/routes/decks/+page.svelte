@@ -473,12 +473,24 @@
     width: 134px;
   }
 
+  /*
+   * This wraps a CardPreview and has no text of its own, but it is a literal
+   * <button>, and the page's generic button rule sets font-weight,
+   * letter-spacing and text-transform — all CSS-inherited properties.
+   * CardPreview's description text never sets any of the three (it only
+   * needed to, on every other page, because nothing wrapping it did either),
+   * so without resetting them here they leak straight through: bold,
+   * letter-spaced, upper-cased card text, only inside this grid.
+   */
   .tile-btn {
     display: block;
     padding: 0;
     border: none;
     background: none;
     cursor: pointer;
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
   }
   .tile-btn:disabled { cursor: default; }
   .tile-btn:disabled :global(.card) { opacity: 0.5; }
