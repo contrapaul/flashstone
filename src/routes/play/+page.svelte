@@ -28,7 +28,15 @@
   let summoningId: string | null = null;
   let attackingId: string | null = null;
   let dyingIds = new Set<string>();
-  let drawnIndex: number | null = null;
+  /*
+   * Keyed by the card object itself, not its hand index. A single shared
+   * "drawnIndex" number meant every draw's own un-cancelled timeout blindly
+   * nulled whatever the CURRENT value was — so the opening hand's rapid
+   * back-to-back draws stomped on each other's glow. A Set survives that:
+   * each card's own entry is added and removed independently, the same way
+   * dyingIds already works above.
+   */
+  let drawnCards = new Set<Card>();
   let hitHero: 'player' | 'ai' | null = null;
   let banner: string | null = null;
   let floats: { id: number; text: string; color: string; x: number; y: number }[] = [];
@@ -137,8 +145,14 @@
         break;
       case 'draw':
         if (event.owner === 'player') {
-          drawnIndex = state.players.player.hand.length - 1;
-          setTimeout(() => (drawnIndex = null), EVENT_BEAT.draw);
+          const hand = state.players.player.hand;
+          const card = hand[hand.length - 1];
+          drawnCards = new Set(drawnCards).add(card);
+          setTimeout(() => {
+            const next = new Set(drawnCards);
+            next.delete(card);
+            drawnCards = next;
+          }, EVENT_BEAT.draw);
         }
         break;
       case 'turn':
@@ -287,6 +301,7 @@
     selectedId = null;
     aiThinking = false;
     dyingIds = new Set();
+    drawnCards = new Set();
     floats = [];
     banner = 'Your Turn';
     setTimeout(() => (banner = null), 1400);
@@ -673,12 +688,12 @@
   </section>
 
   <section class="hand" style:transform={`scale(${handScale.toFixed(3)})`}>
-    {#each me.hand as card, i (i + card.id)}
+    {#each me.hand as card, i (card)}
       <div class="hand-slot" class:lifted={drag?.kind === 'card' && drag.handIndex === i}>
         <CardPreview
           {card}
           playable={myTurn && canPlayCard(state, 'player', i)}
-          drawn={drawnIndex === i}
+          drawn={drawnCards.has(card)}
           on:keydown={(e) => onCardKey(e, i)}
           on:pointerdown={(e) => onCardPointerDown(e, i)}
         />

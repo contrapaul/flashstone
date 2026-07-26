@@ -177,7 +177,15 @@ export const DEMO_CARDS: Card[] = [
   }
 ];
 
-/** Two copies of each card, in a fixed order — createMatch shuffles. */
+/**
+ * Two copies of each card, in a fixed order — createMatch shuffles.
+ *
+ * Each copy is its own object, not two references to the same one: hand and
+ * board code (and the UI's per-card animation state) key off card identity,
+ * and two hand slots sharing a reference are indistinguishable to a Map, a
+ * Set, or a keyed {#each} — Svelte would treat drawing/removing one as
+ * happening to both.
+ */
 export function buildDemoDeck(): Card[] {
-  return DEMO_CARDS.flatMap((card) => [card, card]);
+  return DEMO_CARDS.flatMap((card) => [{ ...card }, { ...card }]);
 }
