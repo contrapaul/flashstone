@@ -42,6 +42,7 @@ const ROWS: Row[] = [
   [1, 1, 4, 'Rare', 'Taunt'],
   [1, 2, 1, 'Rare', 'Charge'],
   [1, 1, 1, 'Rare', 'DivineShield'],
+  [1, 1, 1, 'Rare', 'DivineShield', 'Taunt'],
   [1, 1, 2, 'Epic', 'Stealth'],
   [1, 3, 2, 'Epic'],
   [1, 2, 3, 'Legendary', 'DivineShield'],
