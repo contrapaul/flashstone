@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Rarity } from '../../types/cards';
 import { CardSchema } from '../../validators/card.validator';
 import { RARITY_WEIGHTS } from '../../utils/rarity';
+import { hashText } from '../../utils/art';
 import { TEMPLATES, nearestTemplate, templateById, templateForHash } from './templates';
 
 const RARITIES = Object.keys(RARITY_WEIGHTS) as Rarity[];
@@ -104,6 +105,36 @@ describe('binding a hash to a template', () => {
       Array.from({ length: 4000 }, (_, i) => templateForHash(i * 2654435761).id)
     );
     expect(seen.size).toBeGreaterThan(TEMPLATES.length / 2);
+  });
+
+  // Genuinely varied text (different real words, different lengths) reaches
+  // every template fine even with a naive `hash % pool.length`. The gap only
+  // showed up on *sequentially numbered* text — "Word 1", "Word 2", ... — a
+  // real pattern for vocabulary lists and numbered flashcard sets, not just a
+  // synthetic worst case. Confirmed directly: sweeping 50,000 rows shaped
+  // like "Question 0? Answer 0", "Question 1? Answer 1", ... through the old
+  // `pool[hash % pool.length]` reached only 5 of the 10 Legendary templates,
+  // each at roughly double the expected rate — modulo by an even pool length
+  // preserves the input's low-bit parity, and that family of near-identical,
+  // incrementing-suffix strings correlates in exactly that bit under FNV-1a.
+  // `(hash >>> 16)` sidesteps it. This reproduces that exact input shape
+  // rather than random text, so a regression here would mean this specific,
+  // real pattern again.
+  it('reaches every template, even from sequentially numbered flashcard text', () => {
+    const unreached = new Map<string, number>();
+    for (const rarity of RARITIES) {
+      const pool = TEMPLATES.filter((t) => t.rarity === rarity);
+      const seen = new Set<string>();
+      for (let i = 0; i < 50_000 && seen.size < pool.length; i++) {
+        const t = templateForHash(hashText(`Question ${i}? Answer ${i}`));
+        if (t.rarity === rarity) seen.add(t.id);
+      }
+      const missing = pool.filter((t) => !seen.has(t.id));
+      if (missing.length > 0) unreached.set(rarity, missing.length);
+    }
+    expect(unreached, `unreachable templates by rarity: ${JSON.stringify([...unreached])}`).toEqual(
+      new Map()
+    );
   });
 });
 

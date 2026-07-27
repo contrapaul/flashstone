@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Card } from '../../types/cards';
+  import type { Card, Keyword } from '../../types/cards';
   import { RARITY_COLOR, artFor, sigil } from '../../utils/art';
 
   export let card: Card;
@@ -9,6 +9,17 @@
   export let drawn = false;
 
   $: isMinion = card.type === 'Minion';
+
+  /** Board/hand abbreviations spell keywords solid; the card face reads them out. */
+  const KEYWORD_LABEL: Record<Keyword, string> = {
+    Taunt: 'Taunt',
+    Charge: 'Charge',
+    DivineShield: 'Divine Shield',
+    Windfury: 'Windfury',
+    Stealth: 'Stealth'
+  };
+
+  $: keywordLine = card.keywords.map((k) => `${KEYWORD_LABEL[k]}.`).join(' ');
 </script>
 
 <div
@@ -35,7 +46,10 @@
   </div>
 
   <div class="rules">
-    <span>{card.description}</span>
+    <span class="desc" class:with-keywords={card.keywords.length > 0}>{card.description}</span>
+    {#if card.keywords.length > 0}
+      <span class="keywords">{keywordLine}</span>
+    {/if}
   </div>
 
   <div class="foot"></div>
@@ -202,15 +216,17 @@
     bottom: 9px;
     padding: 6px 7px 9px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
     border-radius: 4px;
     background: linear-gradient(180deg, var(--parchment), #cfbe98);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), inset 0 -6px 12px rgba(120, 95, 55, .25);
     overflow: hidden;
   }
 
-  .rules span {
+  .rules .desc {
     width: 100%;
     font-family: var(--body);
     font-size: 9px;
@@ -218,12 +234,38 @@
     text-align: center;
     text-wrap: pretty;
     color: var(--parchment-ink);
-    /* Five lines is what the locked panel holds; the rest ellipsises. */
+    /* Five lines is what the locked panel holds with nothing else in it; the
+       rest ellipsises. A keyword line below eats into that budget. */
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 5;
     line-clamp: 5;
     overflow: hidden;
+  }
+
+  .rules .desc.with-keywords {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+
+  /* Taunt, Divine Shield and the like — the only thing an imported flashcard
+     ever needs to state beyond its own answer, since imports never carry
+     structured effects. Bold is the entire signal.
+     7.5px, not 9px: the one template with two keywords reads "Divine Shield.
+     Windfury." — measured at 115px against 98px available at 9px bold, wide
+     enough to ellipsis away "Windfury" entirely. 7.5px fits it with room. */
+  .rules .keywords {
+    flex: 0 0 auto;
+    width: 100%;
+    font-family: var(--body);
+    font-size: 7.5px;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+    color: var(--parchment-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Rarity marker. Pokes up out of the plate into the art above it — it
