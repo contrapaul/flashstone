@@ -58,7 +58,7 @@
     cursor: crosshair;
     background: linear-gradient(160deg, #ff9e86, #c0392b 55%, #ffb9a4);
     box-shadow: 0 0 26px rgba(226, 96, 74, .7);
-    animation: fs-ready 1.6s ease-in-out infinite;
+    animation: fs-target 1.6s ease-in-out infinite;
   }
 
   .portrait {

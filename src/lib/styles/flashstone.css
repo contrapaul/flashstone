@@ -157,11 +157,19 @@ a:hover { color: var(--gold-bright); }
 
 @keyframes fs-ready {
   0%, 100% {
-    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 1px rgba(126,214,140,.5), 0 0 14px rgba(126,214,140,.35);
+    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 2px rgba(170,255,190,.9),
+      0 0 20px rgba(126,214,140,.9), 0 0 44px rgba(126,214,140,.5);
   }
   50% {
-    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 1px rgba(126,214,140,.85), 0 0 26px rgba(126,214,140,.6);
+    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 3px rgba(210,255,220,1),
+      0 0 34px rgba(150,255,170,1), 0 0 72px rgba(126,214,140,.8);
   }
+}
+
+/* The hero portrait's attack ring pulses in blood, not spell-green. */
+@keyframes fs-target {
+  0%, 100% { box-shadow: 0 0 24px rgba(226, 96, 74, .7), 0 0 44px rgba(226, 96, 74, .35); }
+  50% { box-shadow: 0 0 36px rgba(255, 140, 118, .95), 0 0 76px rgba(226, 96, 74, .6); }
 }
 
 /*
@@ -175,24 +183,29 @@ a:hover { color: var(--gold-bright); }
  */
 @keyframes fs-spell {
   0% {
-    filter: drop-shadow(0 0 7px rgba(126, 214, 140, .75))
-      drop-shadow(5px 0 15px rgba(150, 255, 170, .75));
+    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .95))
+      drop-shadow(0 0 16px rgba(126, 214, 140, .95))
+      drop-shadow(9px 0 28px rgba(150, 255, 170, .9));
   }
   25% {
-    filter: drop-shadow(0 0 8px rgba(126, 214, 140, .8))
-      drop-shadow(0 5px 15px rgba(150, 255, 170, .75));
+    filter: drop-shadow(0 0 5px rgba(205, 255, 215, 1))
+      drop-shadow(0 0 18px rgba(126, 214, 140, 1))
+      drop-shadow(0 9px 28px rgba(150, 255, 170, .9));
   }
   50% {
-    filter: drop-shadow(0 0 7px rgba(126, 214, 140, .75))
-      drop-shadow(-5px 0 15px rgba(150, 255, 170, .75));
+    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .95))
+      drop-shadow(0 0 16px rgba(126, 214, 140, .95))
+      drop-shadow(-9px 0 28px rgba(150, 255, 170, .9));
   }
   75% {
-    filter: drop-shadow(0 0 8px rgba(126, 214, 140, .8))
-      drop-shadow(0 -5px 15px rgba(150, 255, 170, .75));
+    filter: drop-shadow(0 0 5px rgba(205, 255, 215, 1))
+      drop-shadow(0 0 18px rgba(126, 214, 140, 1))
+      drop-shadow(0 -9px 28px rgba(150, 255, 170, .9));
   }
   100% {
-    filter: drop-shadow(0 0 7px rgba(126, 214, 140, .75))
-      drop-shadow(5px 0 15px rgba(150, 255, 170, .75));
+    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .95))
+      drop-shadow(0 0 16px rgba(126, 214, 140, .95))
+      drop-shadow(9px 0 28px rgba(150, 255, 170, .9));
   }
 }
 
