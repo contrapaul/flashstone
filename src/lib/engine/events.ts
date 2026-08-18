@@ -11,7 +11,13 @@ import type { PlayerId } from './state';
 export type GameEvent =
   | { type: 'draw'; owner: PlayerId }
   | { type: 'summon'; owner: PlayerId; instanceId: string }
-  | { type: 'attack'; owner: PlayerId; instanceId: string }
+  /** `target` is where the attacker lunges to; the UI measures the arc from it. */
+  | {
+      type: 'attack';
+      owner: PlayerId;
+      instanceId: string;
+      target: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: PlayerId };
+    }
   | { type: 'damage'; target: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: PlayerId }; amount: number }
   | { type: 'shield'; instanceId: string }
   | { type: 'death'; owner: PlayerId; instanceId: string }

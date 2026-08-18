@@ -116,16 +116,16 @@ a:hover { color: var(--gold-bright); }
   100% { transform: none; opacity: 1; }
 }
 
-@keyframes fs-lunge-up {
-  0% { transform: none; }
-  45% { transform: translateY(-46px) scale(1.1); }
-  100% { transform: none; }
-}
+/* The attack lunge is measured in JS — see `lunge()` on the play route. A
+   keyframe cannot express it, because the arc depends on where the target is. */
 
-@keyframes fs-lunge-down {
-  0% { transform: none; }
-  45% { transform: translateY(46px) scale(1.1); }
-  100% { transform: none; }
+/* A heavy hit on a hero: a short judder of the whole table. */
+@keyframes fs-quake {
+  0%, 100% { transform: none; }
+  20% { transform: translate(-7px, 4px); }
+  45% { transform: translate(6px, -3px); }
+  70% { transform: translate(-4px, 2px); }
+  88% { transform: translate(2px, -1px); }
 }
 
 @keyframes fs-shatter {
@@ -157,12 +157,12 @@ a:hover { color: var(--gold-bright); }
 
 @keyframes fs-ready {
   0%, 100% {
-    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 2px rgba(170,255,190,.9),
-      0 0 20px rgba(126,214,140,.9), 0 0 44px rgba(126,214,140,.5);
+    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 1px rgba(170,255,190,.85),
+      0 0 14px rgba(126,214,140,.7), 0 0 28px rgba(126,214,140,.35);
   }
   50% {
-    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 3px rgba(210,255,220,1),
-      0 0 34px rgba(150,255,170,1), 0 0 72px rgba(126,214,140,.8);
+    box-shadow: 0 10px 20px rgba(0,0,0,.55), 0 0 0 2px rgba(210,255,220,.95),
+      0 0 22px rgba(150,255,170,.85), 0 0 44px rgba(126,214,140,.5);
   }
 }
 
@@ -183,29 +183,29 @@ a:hover { color: var(--gold-bright); }
  */
 @keyframes fs-spell {
   0% {
-    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .95))
-      drop-shadow(0 0 16px rgba(126, 214, 140, .95))
-      drop-shadow(9px 0 28px rgba(150, 255, 170, .9));
+    filter: drop-shadow(0 0 3px rgba(205, 255, 215, .8))
+      drop-shadow(0 0 10px rgba(126, 214, 140, .75))
+      drop-shadow(6px 0 18px rgba(150, 255, 170, .7));
   }
   25% {
-    filter: drop-shadow(0 0 5px rgba(205, 255, 215, 1))
-      drop-shadow(0 0 18px rgba(126, 214, 140, 1))
-      drop-shadow(0 9px 28px rgba(150, 255, 170, .9));
+    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .85))
+      drop-shadow(0 0 12px rgba(126, 214, 140, .8))
+      drop-shadow(0 6px 18px rgba(150, 255, 170, .7));
   }
   50% {
-    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .95))
-      drop-shadow(0 0 16px rgba(126, 214, 140, .95))
-      drop-shadow(-9px 0 28px rgba(150, 255, 170, .9));
+    filter: drop-shadow(0 0 3px rgba(205, 255, 215, .8))
+      drop-shadow(0 0 10px rgba(126, 214, 140, .75))
+      drop-shadow(-6px 0 18px rgba(150, 255, 170, .7));
   }
   75% {
-    filter: drop-shadow(0 0 5px rgba(205, 255, 215, 1))
-      drop-shadow(0 0 18px rgba(126, 214, 140, 1))
-      drop-shadow(0 -9px 28px rgba(150, 255, 170, .9));
+    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .85))
+      drop-shadow(0 0 12px rgba(126, 214, 140, .8))
+      drop-shadow(0 -6px 18px rgba(150, 255, 170, .7));
   }
   100% {
-    filter: drop-shadow(0 0 4px rgba(205, 255, 215, .95))
-      drop-shadow(0 0 16px rgba(126, 214, 140, .95))
-      drop-shadow(9px 0 28px rgba(150, 255, 170, .9));
+    filter: drop-shadow(0 0 3px rgba(205, 255, 215, .8))
+      drop-shadow(0 0 10px rgba(126, 214, 140, .75))
+      drop-shadow(6px 0 18px rgba(150, 255, 170, .7));
   }
 }
 

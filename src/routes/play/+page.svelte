@@ -26,8 +26,10 @@
 
   // ── Presentation-only state, driven by the engine's event queue ──
   let summoningId: string | null = null;
-  let attackingId: string | null = null;
   let dyingIds = new Set<string>();
+  /** Minions mid-judder from a heavy hit, and the whole table when the hero takes one. */
+  let struckIds = new Set<string>();
+  let quaking = false;
   /*
    * Keyed by the card object itself, not its hand index. A single shared
    * "drawnIndex" number meant every draw's own un-cancelled timeout blindly
@@ -66,6 +68,18 @@
 
   $: me = state.players.player;
   $: foe = state.players.ai;
+  /*
+   * A card lands in hand the moment the engine draws it — and the start-of-turn
+   * draw runs inside `playAiTurn`'s `endTurn`, before a single one of the AI's
+   * cues has been drained. Rendering the raw hand therefore showed the new card
+   * sitting there through the rest of the opponent's turn, only for it to blink
+   * out and fly in when its own draw cue finally played. Cards whose cue is
+   * still queued are held back, so a draw is first seen on its own animation.
+   */
+  $: pendingDraws = (state.events ?? []).filter(
+    (e) => e.type === 'draw' && e.owner === 'player'
+  ).length;
+  $: visibleHand = me.hand.slice(0, me.hand.length - pendingDraws);
   $: myTurn = state.current === 'player' && !state.winner && !aiThinking && !draining;
   // The attacker is whichever minion you tapped or are currently dragging from,
   // so targets light up the same way for both gestures.
@@ -87,7 +101,10 @@
 
   // The hand never overlaps: it scales down as it grows, so no card can cover
   // a neighbour's cost crystal or stat gems. HAND_LIMIT is 10.
-  $: handScale = Math.min(1, Math.min(handWidth - 90, 1260) / (Math.max(1, me.hand.length) * 146));
+  $: handScale = Math.min(
+    1,
+    Math.min(handWidth - 90, 1260) / (Math.max(1, visibleHand.length) * 146)
+  );
 
   // ── Event playback ───────────────────────────────────────────
   // The engine appends cues to state.events as it mutates. We drain them on a
@@ -106,6 +123,9 @@
       // for something that dies mid-exchange still has a place to appear.
       rememberPositions();
       const event = state.events.shift() as GameEvent;
+      // Publish the shortened queue before the cue plays, so a held-back card
+      // renders in the same frame that its fly-in class is applied.
+      state = state;
       await play(event);
       await sleep(EVENT_BEAT[event.type] * 0.6);
       state = state;
@@ -121,12 +141,12 @@
         setTimeout(() => (summoningId = null), EVENT_BEAT.summon);
         break;
       case 'attack':
-        attackingId = event.instanceId;
-        setTimeout(() => (attackingId = null), 520);
+        await lunge(event);
         break;
       case 'damage':
         // Over whatever took the hit, not whatever dealt it.
         pushFloat(`-${event.amount}`, '#ff8a6a', pointFor(event.target));
+        if (event.amount >= HEAVY_HIT) judder(event.target);
         if (event.target.kind === 'hero') {
           hitHero = event.target.owner;
           setTimeout(() => (hitHero = null), 520);
@@ -146,7 +166,13 @@
       case 'draw':
         if (event.owner === 'player') {
           const hand = state.players.player.hand;
-          const card = hand[hand.length - 1];
+          // The oldest queued draw, not the newest card in hand: with several
+          // cues waiting — the opening deal — the later ones are still held
+          // back, and marking the last card would glow one nobody can see yet.
+          const stillQueued = state.events.filter(
+            (e) => e.type === 'draw' && e.owner === 'player'
+          ).length;
+          const card = hand[hand.length - 1 - stillQueued];
           drawnCards = new Set(drawnCards).add(card);
           setTimeout(() => {
             const next = new Set(drawnCards);
@@ -160,6 +186,88 @@
         setTimeout(() => (banner = null), EVENT_BEAT.turn);
         break;
     }
+  }
+
+  /*
+   * The attack lunge. A keyframe can't express this: the arc depends on where
+   * the target actually is, so it is measured at play time and handed to the
+   * Web Animations API. Lift and wind up away from the target, accelerate along
+   * an upward bow, stop at its face, hold for a beat, then drop home.
+   *
+   * Resolves at impact rather than at landing, so the damage cue queued behind
+   * it lands with the smack instead of after the recoil.
+   */
+  const LUNGE_MS = 560;
+  const IMPACT_AT = 0.62;
+
+  async function lunge(event: Extract<GameEvent, { type: 'attack' }>) {
+    const el = minionElFor(event.instanceId);
+    if (!el || typeof el.animate !== 'function') return;
+    // The stylesheet's reduced-motion block only reaches CSS animations, and
+    // this one is scripted — so it has to opt out on its own.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const from = centreOf(el);
+    const to = pointFor(event.target);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    // Stop at the target's face rather than landing on top of it.
+    const reach = Math.max(0, dist - 52) / dist;
+    const hitX = dx * reach;
+    const hitY = dy * reach;
+    // Wind up away from the target; bow the flight upward whichever way it travels.
+    const backX = (-dx / dist) * 12;
+    const backY = (-dy / dist) * 12;
+    const arc = Math.min(70, dist * 0.4);
+    const tilt = Math.max(-16, Math.min(16, (dx / dist) * 16));
+    const impact = `translate(${hitX}px, ${hitY}px) scale(1.04) rotate(${tilt * 0.5}deg)`;
+
+    // Over everything else on the board for the duration of the flight.
+    el.style.zIndex = '300';
+    const anim = el.animate(
+      [
+        { offset: 0, transform: 'none', easing: 'ease-out' },
+        {
+          offset: 0.34,
+          transform: `translate(${backX}px, ${backY - 34}px) scale(1.1) rotate(${tilt * 0.3}deg)`,
+          easing: 'ease-in'
+        },
+        {
+          offset: 0.5,
+          transform: `translate(${hitX * 0.5}px, ${hitY * 0.5 - arc}px) scale(1.12) rotate(${tilt}deg)`,
+          easing: 'ease-in'
+        },
+        { offset: IMPACT_AT, transform: impact, easing: 'ease-out' },
+        // Hit stop: a beat of nothing at the point of contact.
+        { offset: 0.7, transform: impact },
+        { offset: 1, transform: 'none' }
+      ],
+      { duration: LUNGE_MS }
+    );
+    anim.finished.then(() => (el.style.zIndex = '')).catch(() => (el.style.zIndex = ''));
+    await sleep(LUNGE_MS * IMPACT_AT);
+  }
+
+  /** A 7+ hit lands hard: the struck card judders, or the table does for a hero. */
+  const HEAVY_HIT = 7;
+  const JUDDER_MS = 360;
+
+  function judder(
+    target: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: 'player' | 'ai' }
+  ) {
+    if (target.kind === 'hero') {
+      quaking = true;
+      setTimeout(() => (quaking = false), JUDDER_MS);
+      return;
+    }
+    const id = target.instanceId;
+    struckIds = new Set(struckIds).add(id);
+    setTimeout(() => {
+      const next = new Set(struckIds);
+      next.delete(id);
+      struckIds = next;
+    }, JUDDER_MS);
   }
 
   function pushFloat(text: string, color: string, at: { x: number; y: number }) {
@@ -301,10 +409,15 @@
     selectedId = null;
     aiThinking = false;
     dyingIds = new Set();
+    struckIds = new Set();
+    quaking = false;
     drawnCards = new Set();
     floats = [];
-    banner = 'Your Turn';
-    setTimeout(() => (banner = null), 1400);
+    // createMatch queues the opening deal — three cards, then the first turn's
+    // own draw. Nothing drained it, so those cues sat until the player's first
+    // action replayed them all at once; now the deal plays out on entry and its
+    // own 'turn' cue raises the banner when the hand is actually dealt.
+    drain();
   }
 
   // ── Dragging ─────────────────────────────────────────────────
@@ -369,18 +482,24 @@
       const el = ref.owner === 'player' ? myHeroEl : foeHeroEl;
       if (el) return centreOf(el);
     } else {
-      for (const [board, list] of [
-        [myBoardEl, me.board],
-        [foeBoardEl, foe.board]
-      ] as const) {
-        const index = list.findIndex((m) => m.instanceId === ref.instanceId);
-        const el = minionEls(board)[index];
-        if (index >= 0 && el) return centreOf(el);
-      }
+      const el = minionElFor(ref.instanceId);
+      if (el) return centreOf(el);
       const remembered = lastSeen.get(ref.instanceId);
       if (remembered) return remembered;
     }
     return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  }
+
+  function minionElFor(instanceId: string): HTMLElement | null {
+    for (const [board, list] of [
+      [myBoardEl, me.board],
+      [foeBoardEl, foe.board]
+    ] as const) {
+      const index = list.findIndex((m) => m.instanceId === instanceId);
+      const el = minionEls(board)[index];
+      if (index >= 0 && el) return el;
+    }
+    return null;
   }
 
   function minionEls(board: HTMLElement | undefined): HTMLElement[] {
@@ -584,7 +703,7 @@
   on:pointercancel={onPointerCancel}
 />
 
-<main class="table">
+<main class="table" class:quaking>
   <div class="vignette" aria-hidden="true"></div>
 
   <!-- Opponent -->
@@ -625,7 +744,7 @@
         {minion}
         targetable={targetableIds.has(minion.instanceId)}
         summoning={summoningId === minion.instanceId}
-        attacking={attackingId === minion.instanceId ? 'down' : null}
+        struck={struckIds.has(minion.instanceId)}
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId })}
         on:pointerenter={(e) => onMinionEnter(e, minion)}
@@ -651,7 +770,7 @@
         selected={selectedId === minion.instanceId ||
           (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
         summoning={summoningId === minion.instanceId}
-        attacking={attackingId === minion.instanceId ? 'up' : null}
+        struck={struckIds.has(minion.instanceId)}
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onMyMinion(minion.instanceId)}
         on:pointerdown={(e) => onMinionPointerDown(e, minion.instanceId)}
@@ -688,7 +807,7 @@
   </section>
 
   <section class="hand" style:transform={`scale(${handScale.toFixed(3)})`}>
-    {#each me.hand as card, i (card)}
+    {#each visibleHand as card, i (card)}
       <div class="hand-slot" class:lifted={drag?.kind === 'card' && drag.handIndex === i}>
         <CardPreview
           {card}
@@ -938,6 +1057,9 @@
   }
 
   .table { user-select: none; }
+
+  /* A hero taking 7+ shakes the table, not just the portrait. */
+  .table.quaking { animation: fs-quake .36s ease-out; }
 
   .centre {
     position: relative;

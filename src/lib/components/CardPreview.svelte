@@ -88,7 +88,7 @@
     opacity: 1;
     cursor: pointer;
     border-color: var(--good);
-    box-shadow: 0 0 0 1px rgba(205, 255, 215, .8), inset 0 0 22px rgba(126, 214, 140, .45),
+    box-shadow: 0 0 0 1px rgba(205, 255, 215, .55), inset 0 0 16px rgba(126, 214, 140, .3),
       0 0 20px rgba(224, 190, 118, .35), 0 14px 26px rgba(0, 0, 0, .6),
       inset 0 1px 0 rgba(255, 232, 180, .28);
     /* A spell circling the card. The animation keeps one even halo lit at all

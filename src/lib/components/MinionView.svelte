@@ -11,8 +11,8 @@
   export let targetable = false;
   /** Playing its summon-in animation. */
   export let summoning = false;
-  /** Mid-lunge; direction depends on which side of the board it's on. */
-  export let attacking: 'up' | 'down' | null = null;
+  /** Judders on a heavy hit. */
+  export let struck = false;
   /** Dying — plays the shatter, then the parent removes it. */
   export let dying = false;
 
@@ -33,8 +33,7 @@
   class:stealth
   class:frozen={minion.frozen}
   class:silenced={minion.silenced}
-  class:lunge-up={attacking === 'up'}
-  class:lunge-down={attacking === 'down'}
+  class:struck
   style:--art={artFor(minion.card.name)}
   on:click
   on:pointerdown
@@ -122,8 +121,7 @@
   }
 
   .minion.summoning { animation: fs-summon .48s cubic-bezier(.2, 1.3, .4, 1); }
-  .minion.lunge-up { animation: fs-lunge-up .46s cubic-bezier(.4, 0, .2, 1); }
-  .minion.lunge-down { animation: fs-lunge-down .46s cubic-bezier(.4, 0, .2, 1); }
+  .minion.struck { animation: fs-shake .34s ease-out; }
   .minion.dying { animation: fs-shatter .4s ease-in forwards; }
 
   .halo {

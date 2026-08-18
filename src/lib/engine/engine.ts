@@ -241,7 +241,15 @@ export function attack(
   if (!chosen) return false;
 
   attacker.attacksThisTurn++;
-  emit(state, { type: 'attack', owner: id, instanceId: attacker.instanceId });
+  emit(state, {
+    type: 'attack',
+    owner: id,
+    instanceId: attacker.instanceId,
+    target:
+      chosen.kind === 'hero'
+        ? { kind: 'hero', owner: defenderId }
+        : { kind: 'minion', instanceId: chosen.minion.instanceId }
+  });
   for (const effect of attacker.card.effects) {
     if (effect.trigger === 'OnAttack') resolveEffect(state, id, attacker, effect);
   }
