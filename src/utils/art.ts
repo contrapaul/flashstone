@@ -1,8 +1,18 @@
-// Deterministic card art. The same flashcard always yields the same frame,
-// because everything here is a pure function of the card's own text.
+// Card art.
 //
-// Keep this hash in sync with the one used for stat derivation in
-// fieldMapper.ts — a card's art and its stats should come from the same seed.
+// Two layers, in order of preference:
+//
+//  1. **Drawn art** — a file under `static/art/`. Dropping a file in is the
+//     entire act of adding art: the manifests below are built from the
+//     filesystem at build time, so there is no registry to update. See
+//     `static/art/README.md` for the sizes and formats to draw to.
+//  2. **Generated art** — the deterministic CSS gradient below, used whenever
+//     there is no file. It means every card renders from day one, and it never
+//     goes away: art arriving is always an upgrade, never a prerequisite.
+//
+// The generated layer is a pure function of the card's own text. Keep its hash
+// in sync with the one used for stat derivation in fieldMapper.ts — a card's
+// art and its stats should come from the same seed.
 
 import type { Rarity } from '../types/cards';
 
@@ -61,4 +71,56 @@ export function cardTitle(front: string): string {
       ''
     );
   return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+
+// ── Drawn art ─────────────────────────────────────────────────
+
+/**
+ * Filenames only — the modules are never imported, so the images are not pulled
+ * into the JS bundle. They are already served from `static/` at their own URL;
+ * all we need from Vite is which ones exist.
+ */
+const CARD_ART = import.meta.glob('/static/art/cards/*.{webp,png}');
+const BACK_ART = import.meta.glob('/static/art/backs/*.{webp,png}');
+const UI_ART = import.meta.glob('/static/art/ui/*.{webp,png,svg}');
+
+/** `/static/art/cards/foo.webp` → `foo`. */
+function indexByStem(modules: Record<string, unknown>): Map<string, string> {
+  const byStem = new Map<string, string>();
+  for (const path of Object.keys(modules)) {
+    const file = path.slice(path.lastIndexOf('/') + 1);
+    const stem = file.slice(0, file.lastIndexOf('.'));
+    // `static/` is the web root at runtime, so strip it from the served URL.
+    byStem.set(stem, path.replace('/static', ''));
+  }
+  return byStem;
+}
+
+const CARD_ART_BY_ID = indexByStem(CARD_ART);
+const BACK_ART_BY_ID = indexByStem(BACK_ART);
+const UI_ART_BY_NAME = indexByStem(UI_ART);
+
+/** The drawn illustration for a card, or null to fall back to `artFor`. */
+export function artUrlFor(cardId: string): string | null {
+  return CARD_ART_BY_ID.get(cardId) ?? null;
+}
+
+/** The drawn face of a card back, or null for the generated one. */
+export function backUrlFor(backId: string): string | null {
+  return BACK_ART_BY_ID.get(backId) ?? null;
+}
+
+/**
+ * A drawn UI element — `deathrattle`, `health-gem`, `mana-crystal` and the rest.
+ * Null means the element keeps the CSS shape it is drawn with today.
+ * `static/art/README.md` lists every name and its required size.
+ */
+export function uiArtUrl(name: string): string | null {
+  return UI_ART_BY_NAME.get(name) ?? null;
+}
+
+/** Every card back that has art, for the shop. Always includes 'default'. */
+export function availableBackIds(): string[] {
+  return ['default', ...[...BACK_ART_BY_ID.keys()].filter((id) => id !== 'default').sort()];
 }

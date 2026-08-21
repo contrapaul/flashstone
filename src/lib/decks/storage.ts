@@ -1,7 +1,9 @@
 import { browser } from '$app/environment';
-import type { Collection, Deck } from './deck';
+import type { Owned } from '../collection/owned';
+import type { Deck } from './deck';
 
-// All state is client-side by design; there is no server or D1 behind this.
+// Client-side storage. From Phase 3 the server is the source of truth for a
+// signed-in player; this remains the store for signed-out practice.
 const COLLECTION_KEY = 'flashstone.collection';
 const DECK_KEY = 'flashstone.deck';
 
@@ -25,14 +27,18 @@ function write(key: string, value: unknown): void {
   }
 }
 
-export function loadCollection(): Collection | null {
-  const collection = read<Collection>(COLLECTION_KEY);
-  if (!collection || !Array.isArray(collection.cards)) return null;
-  return collection;
+export function loadCollection(): Owned | null {
+  const owned = read<Owned>(COLLECTION_KEY);
+  // Guards against the pre-v0.3 shape, which stored `{ name, cards: Card[] }`.
+  // Anything that isn't a plain id → counts map is discarded rather than
+  // half-read; the caller falls back to the starter collection.
+  if (!owned || typeof owned !== 'object' || Array.isArray(owned)) return null;
+  if ('cards' in owned) return null;
+  return owned;
 }
 
-export function saveCollection(collection: Collection): void {
-  write(COLLECTION_KEY, collection);
+export function saveCollection(owned: Owned): void {
+  write(COLLECTION_KEY, owned);
 }
 
 export function loadDeck(): Deck | null {

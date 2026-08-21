@@ -1,12 +1,18 @@
 <script lang="ts">
   import type { Card, Keyword } from '../../types/cards';
-  import { RARITY_COLOR, artFor, sigil } from '../../utils/art';
+  import { RARITY_COLOR, artFor, artUrlFor, sigil, uiArtUrl } from '../../utils/art';
 
   export let card: Card;
   /** Dimmed and non-interactive when false. */
   export let playable = true;
   /** Set true for the card that just arrived in hand to play the draw arc. */
   export let drawn = false;
+  /**
+   * The gold (foil) variant. A variant, not a separate card — same art, same
+   * stats, same text; a gold frame and a shimmer over the top. See
+   * docs/plan/DECISIONS.md §10.
+   */
+  export let gold = false;
 
   $: isMinion = card.type === 'Minion';
 
@@ -20,14 +26,29 @@
   };
 
   $: keywordLine = card.keywords.map((k) => `${KEYWORD_LABEL[k]}.`).join(' ');
+
+  // Drawn art when there is a file for this card, the generated gradient when
+  // there is not — so every card renders whether or not its art exists yet.
+  $: drawnArt = artUrlFor(card.id);
+
+  /** A drawn UI element, as a CSS background value, or 'none' to keep the CSS shape. */
+  const ui = (name: string) => {
+    const url = uiArtUrl(name);
+    return url ? `url("${url}")` : 'none';
+  };
 </script>
 
 <div
   class="card"
   class:playable
   class:drawn
-  style:--art={artFor(card.name)}
+  class:gold
+  style:--art={drawnArt ? `url("${drawnArt}") center / cover no-repeat` : artFor(card.name)}
   style:--rarity={RARITY_COLOR[card.rarity]}
+  style:--ui-cost={ui('cost-crystal')}
+  style:--ui-attack={ui('attack-gem')}
+  style:--ui-health={ui('health-gem')}
+  style:--ui-rarity={ui('rarity-gem')}
   on:click
   on:keydown
   on:pointerdown
@@ -35,10 +56,13 @@
   tabindex="0"
 >
   <div class="bevel" aria-hidden="true"></div>
+  {#if gold}<div class="foil" aria-hidden="true"></div>{/if}
 
   <div class="cost">{card.cost}</div>
 
-  <div class="art"><span class="sigil">{sigil(card.name)}</span></div>
+  <div class="art">
+    {#if !drawnArt}<span class="sigil">{sigil(card.name)}</span>{/if}
+  </div>
 
   <div class="plate">
     <span>{card.name}</span>
@@ -96,25 +120,72 @@
     animation: fs-spell 3.4s linear infinite;
   }
 
-  /* Every card lifts on hover — unplayable ones too, so you can always read
-     a card's text without having the mana to cast it. The zoom is large on
-     purpose: at native size the description type is too small to read across a
-     classroom projector, and the hand row is itself scaled down as it fills.
-     Growing from the bottom edge keeps the card's grip where the pointer left
-     it and sends the expansion up into the empty board, not off-screen. */
+  /* A lift, not a zoom.
+     This used to be scale(1.75), justified by the description type being
+     unreadable at native size. That justification is gone twice over: the face
+     now carries only short game text, and clicking a card opens it centred at
+     2.5x with its definition beside it. A hover big enough to cover its
+     neighbours' cost crystals and stat gems was buying nothing.
+     Growing from the bottom edge still keeps the card's grip under the pointer
+     and sends what expansion there is up into the board, not off-screen. */
   .card:hover {
     transform-origin: bottom center;
-    transform: translateY(-18px) scale(1.75);
-    box-shadow: 0 30px 50px rgba(0, 0, 0, .75), 0 0 26px rgba(240, 214, 138, .22);
+    transform: translateY(-10px) scale(1.12);
+    box-shadow: 0 24px 40px rgba(0, 0, 0, .7), 0 0 20px rgba(240, 214, 138, .2);
     opacity: 1;
     z-index: 200;
   }
 
   .card.playable:hover {
-    box-shadow: 0 30px 50px rgba(0, 0, 0, .75), 0 0 34px rgba(240, 214, 138, .4);
+    box-shadow: 0 24px 40px rgba(0, 0, 0, .7), 0 0 28px rgba(240, 214, 138, .4);
+  }
+
+  /* Hover is a pointer affordance. On a touch screen it sticks after a tap,
+     leaving a card raised with nothing to dismiss it. */
+  @media (hover: none) {
+    .card:hover { transform: none; z-index: auto; }
   }
 
   .card.drawn { animation: fs-draw .42s cubic-bezier(.2, .9, .3, 1); }
+
+  /* Gold variant. Deliberately a frame-and-sheen treatment rather than separate
+     art: one gold frame and one shimmer serve all 155 cards. */
+  .card.gold {
+    border-color: #f5cf5e;
+    box-shadow: 0 0 0 1px rgba(255, 226, 140, .7), 0 0 22px rgba(245, 207, 94, .45),
+      0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 240, 200, .4);
+  }
+
+  .foil {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    border-radius: 13px;
+    overflow: hidden;
+    pointer-events: none;
+    /* A narrow highlight band sweeping across the face. Kept low-contrast so
+       the rules panel stays readable underneath it. */
+    background: linear-gradient(
+      108deg,
+      transparent 38%,
+      rgba(255, 245, 205, .34) 47%,
+      rgba(255, 255, 255, .5) 50%,
+      rgba(255, 245, 205, .34) 53%,
+      transparent 62%
+    );
+    background-size: 260% 100%;
+    animation: fs-foil 3.6s ease-in-out infinite;
+    mix-blend-mode: screen;
+  }
+
+  @keyframes fs-foil {
+    0%, 100% { background-position: 130% 0; }
+    50% { background-position: -30% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .foil { animation: none; background-position: 50% 0; }
+  }
 
   .bevel {
     position: absolute;
@@ -135,7 +206,10 @@
     align-items: center;
     justify-content: center;
     clip-path: polygon(50% 0, 100% 26%, 100% 74%, 50% 100%, 0 74%, 0 26%);
-    background: linear-gradient(160deg, var(--mana-lit), #1f4d94 60%, #3f86d8);
+    /* A drawn crystal replaces the gradient AND the clip below when one exists;
+       with no file, --ui-cost is `none` and this is exactly the shape it was. */
+    background: var(--ui-cost, none) center / contain no-repeat,
+      linear-gradient(160deg, var(--mana-lit), #1f4d94 60%, #3f86d8);
     font-family: var(--display);
     font-weight: 700;
     font-size: 19px;
@@ -286,7 +360,8 @@
     transform: rotate(45deg);
     border-radius: 2px;
     border: 1px solid rgba(255, 240, 210, .7);
-    background: linear-gradient(135deg, var(--rarity), rgba(0, 0, 0, .45));
+    background: var(--ui-rarity, none) center / contain no-repeat,
+      linear-gradient(135deg, var(--rarity), rgba(0, 0, 0, .45));
     box-shadow: 0 0 8px color-mix(in srgb, var(--rarity) 60%, transparent);
   }
 
@@ -315,7 +390,8 @@
     transform: rotate(45deg);
     border-radius: 6px;
     border: 2px solid #f6dd93;
-    background: linear-gradient(135deg, var(--attack), #a9741a);
+    background: var(--ui-attack, none) center / contain no-repeat,
+      linear-gradient(135deg, var(--attack), #a9741a);
     box-shadow: 0 3px 8px rgba(0, 0, 0, .6), inset 0 1px 4px rgba(255, 232, 170, .6);
   }
 
@@ -325,7 +401,8 @@
     right: -4px;
     border-radius: 50% 50% 50% 50% / 42% 42% 58% 58%;
     border: 2px solid #f0a08c;
-    background: radial-gradient(circle at 35% 28%, var(--blood), var(--blood-deep) 70%);
+    background: var(--ui-health, none) center / contain no-repeat,
+      radial-gradient(circle at 35% 28%, var(--blood), var(--blood-deep) 70%);
     box-shadow: 0 3px 8px rgba(0, 0, 0, .6), inset 0 2px 5px rgba(255, 190, 170, .5);
   }
 

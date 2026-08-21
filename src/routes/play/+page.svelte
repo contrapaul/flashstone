@@ -8,18 +8,23 @@
   import TurnBanner from '$lib/components/TurnBanner.svelte';
   import FloatingNumber from '$lib/components/FloatingNumber.svelte';
   import Chronicle from '$lib/components/Chronicle.svelte';
-  import { buildDemoDeck } from '$lib/data/demoDeck';
+  import CardInspector from '$lib/components/CardInspector.svelte';
+  import { settings } from '$lib/settings';
+  import { buildAiDeck } from '$lib/data/aiDeck';
+  import { starterDeck } from '$lib/data/starter';
   import { isLegal, resolveDeck } from '$lib/decks/deck';
-  import { loadCollection, loadDeck } from '$lib/decks/storage';
+  import { loadPlayer } from '$lib/collection/sync';
   import { playAiTurn } from '$lib/engine/ai';
   import { attack, canPlayCard, createMatch, endTurn, playCard } from '$lib/engine/engine';
   import { EVENT_BEAT, type GameEvent } from '$lib/engine/events';
   import { canAttack, legalTargets, type MinionInstance } from '$lib/engine/state';
   import type { Card } from '../../types/cards';
 
-  // Both sides play the same list, so imported cards show up on each board.
-  let deckCards: Card[] = buildDemoDeck();
-  let deckName = 'Demo deck';
+  // The starter deck is the fallback, so a first visit is playable with no
+  // collection saved. The opponent always plays its own list — see aiDeck.ts.
+  let deckCards: Card[] = resolveDeck(starterDeck());
+  let deckName = 'Starter deck';
+  const aiCards: Card[] = buildAiDeck();
   let state = createMatch(deckCards, deckCards, Date.now() % 100000);
   let selectedId: string | null = null;
   let aiThinking = false;
@@ -45,17 +50,25 @@
   let floatSeq = 0;
   let draining = false;
   let handWidth = 1440;
+  let handHeight = 900;
 
   onMount(() => {
-    const collection = loadCollection();
-    const saved = loadDeck();
-    if (collection && saved && isLegal(saved, collection)) {
-      deckCards = resolveDeck(saved, collection);
-      deckName = saved.name;
-    }
     restart();
     onResize();
     window.addEventListener('resize', onResize);
+
+    // The saved deck arrives asynchronously when signed in. The match has
+    // already started on the starter deck by then, so it is applied to the
+    // *next* one rather than swapped in mid-hand.
+    void loadPlayer().then((player) => {
+      if (player.deck && isLegal(player.deck, player.owned)) {
+        deckCards = resolveDeck(player.deck);
+        deckName = player.deck.name;
+        // Nothing has happened yet on turn 1, so restarting is invisible and
+        // means the player's real deck is what they actually play.
+        if (state.turnNumber <= 1 && me.board.length === 0) restart();
+      }
+    });
   });
 
   onDestroy(() => {
@@ -64,7 +77,23 @@
 
   function onResize() {
     handWidth = window.innerWidth;
+    handHeight = window.innerHeight;
   }
+
+  /**
+   * How much the table has to shrink to fit.
+   *
+   * The layout is designed at 824px of board height (the row heights sum to
+   * that) below a 55px nav. An iPad in landscape offers 713, so it needs about
+   * 0.87. Floored at 0.7 — below that the type stops being readable and it is
+   * better to lose a little of the board than all of the text.
+   */
+  const DESIGN_HEIGHT = 824;
+  $: fit = Math.max(0.7, Math.min(1, (handHeight - 55) / DESIGN_HEIGHT));
+
+  /** The side rail only earns its place where there is margin going spare. */
+  const RAIL_MIN_WIDTH = 1500;
+  $: railed = handWidth >= RAIL_MIN_WIDTH;
 
   $: me = state.players.player;
   $: foe = state.players.ai;
@@ -103,7 +132,7 @@
   // a neighbour's cost crystal or stat gems. HAND_LIMIT is 10.
   $: handScale = Math.min(
     1,
-    Math.min(handWidth - 90, 1260) / (Math.max(1, visibleHand.length) * 146)
+    Math.min(handWidth / fit - 90, 1260) / (Math.max(1, visibleHand.length) * 146)
   );
 
   // ── Event playback ───────────────────────────────────────────
@@ -277,56 +306,32 @@
   }
 
   // ── Player actions ───────────────────────────────────────────
+  //
+  // **Dragging a card onto your row is the only way to play it.** There is no
+  // click-to-play and no keyboard equivalent: playing costs mana and cannot be
+  // undone, so it takes a deliberate gesture. Every other interaction with a
+  // card — tap, Enter, Space — opens it for reading instead.
+  //
+  // This removed a pick-up-and-carry mode, where a tap lifted a card onto the
+  // pointer until a second click placed it. Once tapping opened the inspector
+  // the only thing still reaching it was the Enter key, and playing a card by
+  // pressing Enter is exactly the accident the drag-only rule exists to prevent.
 
-  /**
-   * A card is never played by clicking it. Tapping picks it up; it then rides
-   * the pointer until you click again to place it, so you can change your mind
-   * about where — or whether — it lands.
-   */
-  function pickUp(index: number) {
-    if (!myTurn || !canPlayCard(state, 'player', index)) return;
-    const card = me.hand[index];
-    if (!card) return;
-    drag = { kind: 'card', handIndex: index, card, slot: me.board.length };
-    holding = true;
+  // ── Inspecting ───────────────────────────────────────────────
+  // Clicking any card or minion opens it centred and enlarged, with its
+  // definition beside it. This replaced a hover overlay that floated a
+  // full-size card next to a minion: two ways to enlarge a card is one too
+  // many, and the hover version was unreachable by touch.
+
+  let inspected: Card | null = null;
+
+  function openInspector(card: Card) {
+    if (drag) return;
+    inspected = card;
   }
 
-  function playHeld(handIndex: number, slot: number) {
-    drag = null;
-    holding = false;
-    if (!canPlayCard(state, 'player', handIndex)) return;
-    playCard(state, 'player', handIndex, slot);
-    selectedId = null;
-    state = state;
-    drain();
-  }
-
-  /** Placing a held card: onto your row it plays, anywhere else it goes back. */
-  function placeHeld(x: number, y: number) {
-    const held = drag;
-    if (!held || held.kind !== 'card') return;
-    if (!overMyBoard(y)) {
-      drag = null;
-      holding = false;
-      return;
-    }
-    playHeld(held.handIndex, slotAt(x));
-  }
-
-  // ── Inspecting a minion ──────────────────────────────────────
-  // A minion on the board shows its stats but not its text, so hovering brings
-  // up the full card. Works for either side's board.
-
-  let inspect: { minion: MinionInstance; rect: DOMRect } | null = null;
-
-  function onMinionEnter(event: PointerEvent, minion: MinionInstance) {
-    // Not while carrying a card or aiming an attack — it would only be in the way.
-    if (drag || holding) return;
-    inspect = { minion, rect: (event.currentTarget as HTMLElement).getBoundingClientRect() };
-  }
-
-  function onMinionLeave() {
-    inspect = null;
+  function closeInspector() {
+    inspected = null;
   }
 
   /** The minion as it stands now, so buffs and damage show, not the printed card. */
@@ -339,39 +344,40 @@
     };
   }
 
-  const CARD_W = 134;
-  const CARD_H = 168;
-
-  $: inspectPos = inspect
-    ? (() => {
-        const pad = 10;
-        const left = Math.max(
-          pad,
-          Math.min(
-            inspect.rect.left + inspect.rect.width / 2 - CARD_W / 2,
-            window.innerWidth - CARD_W - pad
-          )
-        );
-        // Prefer above the minion; drop below when there is no room.
-        const above = inspect.rect.top - CARD_H - 12;
-        return { left, top: above >= pad ? above : inspect.rect.bottom + 12 };
-      })()
-    : null;
-
+  /** Enter or Space opens the card, the same as tapping it. It never plays it. */
   function onCardKey(event: KeyboardEvent, index: number) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    // Keyboard has no pointer to aim with, so a held card lands on the end.
-    if (holding && drag?.kind === 'card') playHeld(drag.handIndex, me.board.length);
-    else pickUp(index);
+    const card = me.hand[index];
+    if (card) openInspector(card);
   }
 
   function onMyMinion(instanceId: string) {
     if (swallowClick) return;
-    if (!myTurn) return;
     const minion = me.board.find((m) => m.instanceId === instanceId);
-    if (!minion || !canAttack(minion)) return;
-    selectedId = selectedId === instanceId ? null : instanceId;
+    if (!minion) return;
+    // A minion that can swing is an attacker first — selecting it is the
+    // gesture that matters mid-turn. One that cannot is only ever there to be
+    // read, so it opens instead of doing nothing.
+    if (myTurn && canAttack(minion)) {
+      selectedId = selectedId === instanceId ? null : instanceId;
+      return;
+    }
+    openInspector(inspectCard(minion));
+  }
+
+  /**
+   * An enemy minion is a target while an attacker is picked, and a card to read
+   * otherwise — so tapping the enemy board mid-turn never wastes an attack, and
+   * outside an attack it is still the way to see what a minion does.
+   */
+  function onEnemyMinionClick(minion: MinionInstance) {
+    if (swallowClick) return;
+    if (myTurn && activeAttacker) {
+      onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId });
+      return;
+    }
+    openInspector(inspectCard(minion));
   }
 
   function onEnemyTarget(target: { kind: 'minion'; instanceId: string } | { kind: 'hero' }) {
@@ -405,7 +411,7 @@
   }
 
   function restart() {
-    state = createMatch(deckCards, deckCards, Date.now() % 100000);
+    state = createMatch(deckCards, aiCards, Date.now() % 100000);
     selectedId = null;
     aiThinking = false;
     dyingIds = new Set();
@@ -445,8 +451,6 @@
   let drag: Drag | null = null;
   let press: Press | null = null;
   let pointer = { x: 0, y: 0 };
-  /** A card picked up by tapping, riding the pointer until it is placed. */
-  let holding = false;
   /** A completed drag must not also fire the element's click. */
   let swallowClick = false;
 
@@ -512,9 +516,9 @@
   }
 
   function onCardPointerDown(event: PointerEvent, index: number) {
-    // Already carrying one: this press places it, handled at the window.
-    if (holding) return;
-    if (!myTurn || !canPlayCard(state, 'player', index)) return;
+    // Note there is no playability check here. A card you cannot afford must
+    // still open when tapped — reading a card is never gated on casting it.
+    // onPointerUp only starts a drag for a card that is actually playable.
     press = {
       id: event.pointerId,
       x: event.clientX,
@@ -582,13 +586,6 @@
   }
 
   function onPointerMove(event: PointerEvent) {
-    // A held card follows the pointer with no button down.
-    if (holding && drag?.kind === 'card') {
-      pointer = { x: event.clientX, y: event.clientY };
-      drag = { ...drag, slot: slotAt(event.clientX) };
-      return;
-    }
-
     if (!press || event.pointerId !== press.id) return;
     pointer = { x: event.clientX, y: event.clientY };
 
@@ -598,7 +595,8 @@
 
       if (press.kind === 'card') {
         const card = me.hand[press.handIndex];
-        if (!card) return;
+        // Unplayable cards read but do not lift.
+        if (!card || !myTurn || !canPlayCard(state, 'player', press.handIndex)) return;
         drag = { kind: 'card', handIndex: press.handIndex, card, slot: me.board.length };
       } else {
         const { instanceId } = press;
@@ -623,7 +621,6 @@
   }
 
   function onPointerUp(event: PointerEvent) {
-    if (holding) return; // placement happens on the next press, not this release
     if (!press || event.pointerId !== press.id) return;
 
     const finished = drag;
@@ -631,10 +628,13 @@
     press = null;
     drag = null;
 
-    // No travel: a tap. Cards are picked up rather than played; minions fall
-    // through to their click handler and become the selected attacker.
+    // No travel: a tap. A tapped card is opened for reading — dragging is the
+    // only way to play one, so a tap can never be a misfire that spends mana.
+    // The keyboard path (Enter) still picks up and places, so the game stays
+    // playable without a pointer. Minions fall through to their click handler
+    // and become the selected attacker.
     if (!finished) {
-      if (tapped.kind === 'card') pickUp(tapped.handIndex);
+      if (tapped.kind === 'card') openInspector(me.hand[tapped.handIndex]);
       return;
     }
 
@@ -657,13 +657,7 @@
 
   function onPointerCancel() {
     press = null;
-    if (!holding) drag = null;
-  }
-
-  /** Any press while carrying a card is the decision of where to put it. */
-  function onWindowPointerDown(event: PointerEvent) {
-    if (!holding) return;
-    placeHeld(event.clientX, event.clientY);
+    drag = null;
   }
 
   function targetCentre(target: TargetRef): { x: number; y: number } {
@@ -698,19 +692,24 @@
 
 <svelte:window
   on:pointermove={onPointerMove}
-  on:pointerdown={onWindowPointerDown}
   on:pointerup={onPointerUp}
   on:pointercancel={onPointerCancel}
 />
 
-<main class="table" class:quaking>
+<main class="table" class:quaking style:--fit={fit.toFixed(3)}>
   <div class="vignette" aria-hidden="true"></div>
 
   <!-- Opponent -->
   <section class="hero-row foe">
     <div class="foe-hand" aria-hidden="true">
       {#each foe.hand as _, i}
-        <span class="foe-card" style:transform={`rotate(${i * 3 - 6}deg)`} style:margin-left={i ? '-11px' : '0'}></span>
+        <span
+          class="foe-card"
+          style:transform={`rotate(${(i - (foe.hand.length - 1) / 2) * 3.2}deg)`}
+          style:margin-left={i ? '-58px' : '0'}
+        >
+          <CardBack backId="default" hue={266} mark="F" />
+        </span>
       {/each}
     </div>
 
@@ -746,9 +745,7 @@
         summoning={summoningId === minion.instanceId}
         struck={struckIds.has(minion.instanceId)}
         dying={dyingIds.has(minion.instanceId)}
-        on:click={() => onEnemyTarget({ kind: 'minion', instanceId: minion.instanceId })}
-        on:pointerenter={(e) => onMinionEnter(e, minion)}
-        on:pointerleave={onMinionLeave}
+        on:click={() => onEnemyMinionClick(minion)}
       />
     {/each}
   </section>
@@ -774,8 +771,6 @@
         dying={dyingIds.has(minion.instanceId)}
         on:click={() => onMyMinion(minion.instanceId)}
         on:pointerdown={(e) => onMinionPointerDown(e, minion.instanceId)}
-        on:pointerenter={(e) => onMinionEnter(e, minion)}
-        on:pointerleave={onMinionLeave}
       />
     {/each}
     {#if drag?.kind === 'card' && drag.slot >= me.board.length}
@@ -832,16 +827,6 @@
     </div>
   {/if}
 
-  {#if inspect && inspectPos}
-    <div
-      class="inspect"
-      style:left={`${inspectPos.left}px`}
-      style:top={`${inspectPos.top}px`}
-      aria-hidden="true"
-    >
-      <CardPreview card={inspectCard(inspect.minion)} playable />
-    </div>
-  {/if}
 
   {#if aim}
     <svg class="aim" aria-hidden="true">
@@ -860,8 +845,14 @@
     <FloatingNumber text={float.text} color={float.color} x={float.x} y={float.y} />
   {/each}
 
+  <CardInspector
+    card={inspected}
+    showDefinition={$settings.definitionsInGame}
+    on:close={closeInspector}
+  />
+
   <TurnBanner text={banner} />
-  <Chronicle lines={state.log} />
+  <Chronicle lines={state.log} rail={railed} />
 
   {#if state.winner}
     <div class="overlay">
@@ -874,22 +865,43 @@
 </main>
 
 <style>
-  /* The board is height-locked to the viewport with a floor, so the hand is
-     never below the fold on a 900px screen and short screens scroll instead
-     of clipping. Row heights sum to 824px. */
+  /*
+   * The board fits the viewport. It used to be `min-height: 824px`, with fixed
+   * pixel row heights summing to 824 — which is taller than an iPad in
+   * landscape has to give (1024x768, minus the 55px nav, leaves 713), so the
+   * board was clipped or the page scrolled. That was the real bug behind
+   * "size the play area for iPads".
+   *
+   * Rows are now proportional, and the whole table scales down below the height
+   * it wants rather than overflowing. `--fit` is set from JS: it is the ratio
+   * of the available height to the 824px the layout is designed at, clamped so
+   * it never grows past 1 and never shrinks past legibility.
+   */
   .table {
     position: relative;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    /* border-box so the 10px padding sits inside the height, and 55px because
+    /* border-box so the padding sits inside the height, and 55px because
        the nav is 54px tall plus a 1px bottom border. */
     box-sizing: border-box;
     height: calc(100vh - 55px);
-    min-height: 824px;
     /* 12px, not 10: the hand cards' stat gems overhang the card frame. */
     padding-bottom: 12px;
+    overflow: hidden;
     background: radial-gradient(120% 90% at 50% -10%, #2a1c11 0%, #150e08 45%, var(--ink) 100%);
+  }
+
+  /*
+   * Scaling the contents rather than the .table itself: the background must
+   * still paint the full viewport, and a transform on the scroll container
+   * would take the fixed-position drag layers with it.
+   */
+  .table > :global(.hero-row),
+  .table > :global(.board),
+  .table > :global(.centre),
+  .table > :global(.hand) {
+    zoom: var(--fit, 1);
   }
 
   .vignette {
@@ -907,7 +919,12 @@
     gap: 20px;
   }
 
-  .hero-row.foe { padding: 16px 28px 0; grid-template-columns: 1fr auto 1fr; }
+  .hero-row.foe {
+    padding: 16px 28px 0;
+    grid-template-columns: 1fr auto 1fr;
+    /* The fan hangs above this row; .table clips it to the viewport edge. */
+    overflow: visible;
+  }
   .hero-row.you { padding: 6px 28px 0; }
 
   .hero-row.foe > .hero-block { grid-column: 2; }
@@ -915,24 +932,38 @@
   .hero-row.you > .hero-block { grid-column: 2; }
   .hero-row.you > .end-turn { grid-column: 3; justify-self: end; }
 
+  /*
+   * The opponent's hand, at the same size as yours.
+   *
+   * It used to be a row of 32x46 stubs. Full-size backs are 134x168 and would
+   * land straight on top of the opponent's board, so the fan hangs off the top
+   * edge the way a real hand held across the table does: -132px shows the
+   * bottom ~36px of each back, which is enough to read the count at a glance
+   * and leaves the board row untouched.
+   */
   .foe-hand {
     position: absolute;
     left: 0;
     right: 0;
-    top: 2px;
+    top: -132px;
+    height: 168px;
     display: flex;
     justify-content: center;
+    align-items: flex-start;
     pointer-events: none;
   }
 
   .foe-card {
-    width: 32px;
-    height: 46px;
-    border-radius: 5px;
-    border: 1px solid #7a5c30;
-    background: linear-gradient(180deg, #4a3620, #241810);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, .5);
+    flex: none;
+    width: 134px;
+    height: 168px;
+    transform-origin: bottom center;
+    filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .55));
   }
+
+  /* CardBack's own transform-origin is for the scaled deck pile; in the fan the
+     backs are unscaled and each one is rotated by its wrapper instead. */
+  .foe-card :global(.back) { transform-origin: bottom center; }
 
   .hero-block { display: flex; align-items: center; gap: 14px; }
   .hero-block.reverse { flex-direction: row; }
@@ -980,6 +1011,14 @@
     padding: 6px 28px;
   }
 
+  /* Below the height the layout is designed at, the rows give up their padding
+     before the scale factor has to do the work. */
+  @media (max-height: 800px) {
+    .board { min-height: 128px; padding: 2px 20px; }
+    .hero-row.foe { padding: 8px 20px 0; }
+    .hero-row.you { padding: 2px 20px 0; }
+  }
+
   /* Your row lights up as a drop zone while a card is in the air. */
   .board.drop-open {
     background: linear-gradient(180deg, transparent, rgba(126, 214, 140, .07), transparent);
@@ -997,20 +1036,6 @@
     animation: fs-summon .18s ease;
   }
 
-  /* The full card raised while hovering a minion. Fades only — a transform
-     here would change its measured size and throw off the placement maths. */
-  .inspect {
-    position: fixed;
-    z-index: 370;
-    pointer-events: none;
-    filter: drop-shadow(0 16px 28px rgba(0, 0, 0, .75));
-    animation: fs-inspect .12s ease-out;
-  }
-
-  @keyframes fs-inspect {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
 
   .ghost {
     position: fixed;

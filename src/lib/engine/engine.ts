@@ -181,6 +181,11 @@ export function playCard(
   if (card.type === 'Minion') summoned = summon(state, id, card, slot);
 
   // Battlecry-triggered effects fire on play, for minions and spells alike.
+  //
+  // This is the whole of a spell's behaviour, which makes it a convention every
+  // spell must honour: **a spell's effects must be tagged `Battlecry`**, or the
+  // card does nothing when cast. Nothing here enforces it — the card set does,
+  // in the generator, guarded by a test in slCards.test.ts.
   for (const effect of card.effects) {
     if (effect.trigger === 'Battlecry') resolveEffect(state, id, summoned, effect);
   }
@@ -471,9 +476,10 @@ function resolveEffect(
         break;
 
       case 'GainKeyword': {
-        // The schema has no keyword field, so `condition` carries the name.
+        // v0.3 gave Effect a real `keyword` field. Older cards carried it on
+        // `condition`, so that is still read as a fallback.
         if (target.kind !== 'minion') break;
-        const keyword = effect.condition ?? 'Taunt';
+        const keyword = effect.keyword ?? effect.condition ?? 'Taunt';
         if (!target.minion.keywords.includes(keyword)) {
           target.minion.keywords.push(keyword);
           if (keyword === 'DivineShield') target.minion.divineShield = true;

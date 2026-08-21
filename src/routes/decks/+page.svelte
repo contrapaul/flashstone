@@ -1,73 +1,84 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import CardPreview from '$lib/components/CardPreview.svelte';
-  import type { Rarity } from '../../types/cards';
+  import CardInspector from '$lib/components/CardInspector.svelte';
+  import type { Card, Rarity } from '../../types/cards';
+  import { ALL_CARDS } from '$lib/data/cards';
+  import { ownedCount, isGold, type Owned } from '$lib/collection/owned';
   import {
     DECK_SIZE,
     MAX_COPIES,
     addCard,
+    allowedCopies,
     autoBuild,
     canAdd,
+    copyLimitFor,
+    countOf,
     deckEntries,
     deckProblems,
+    distinctCount,
     emptyDeck,
-    groupByTemplate,
     maxDeckSize,
     pruneDeck,
     removeCard,
-    removeCards,
-    templateCount,
-    type Collection,
-    type Deck,
-    type TemplateGroup
+    type Deck
   } from '$lib/decks/deck';
-  import { loadCollection, loadDeck, saveCollection, saveDeck } from '$lib/decks/storage';
+  import { cacheOwned, loadPlayer, savePlayerDeck } from '$lib/collection/sync';
 
-  let collection: Collection | null = null;
+  let owned: Owned = {};
   let deck: Deck = emptyDeck();
   let saved = false;
+  let deckId: string | null = null;
+  let signedIn = false;
+  let saveError: string | null = null;
 
   let search = '';
   let costFilter = 'all';
   let rarityFilter: Rarity | 'all' = 'all';
-  let selected = new Set<string>();
+  let sectionFilter = 'all';
+  let ownedOnly = false;
 
   const RARITIES: Rarity[] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 
-  onMount(() => {
-    collection = loadCollection();
-    const stored = loadDeck();
-    if (stored) deck = stored;
+  /** Every syllabus section in the set, in syllabus order. */
+  const SECTIONS = [...new Set(ALL_CARDS.flatMap((c) => c.sections ?? []))].sort();
+
+  onMount(async () => {
+    const player = await loadPlayer();
+    owned = player.owned;
+    deckId = player.deckId;
+    signedIn = player.signedIn;
+    // A saved deck can outlive a card leaving the set, or copies being spent.
+    if (player.deck) deck = pruneDeck(player.deck, owned);
+    // Keep an offline copy, so signing out does not empty the shelves.
+    cacheOwned(owned);
   });
 
-  $: groups = collection ? groupByTemplate(deck, collection) : [];
+  // The whole set is browsable, not just what you own — seeing the cards you are
+  // missing is half the point of a collection.
+  $: visible = ALL_CARDS.filter((card) => {
+    const term = search.trim().toLowerCase();
+    if (
+      term &&
+      !card.name.toLowerCase().includes(term) &&
+      !(card.definition ?? '').toLowerCase().includes(term)
+    ) {
+      return false;
+    }
+    if (costFilter !== 'all' && card.cost !== Number(costFilter)) return false;
+    if (rarityFilter !== 'all' && card.rarity !== rarityFilter) return false;
+    if (sectionFilter !== 'all' && !(card.sections ?? []).includes(sectionFilter)) return false;
+    if (ownedOnly && ownedCount(owned, card.id) === 0) return false;
+    return true;
+  });
 
-  // Filters apply to the flashcards inside a template, so searching narrows
-  // which versions count without hiding the card itself.
-  $: visible = groups
-    .map((group) => {
-      const term = search.trim().toLowerCase();
-      const cards = term
-        ? group.cards.filter(
-            (c) =>
-              c.name.toLowerCase().includes(term) ||
-              c.description.toLowerCase().includes(term)
-          )
-        : group.cards;
-      return { ...group, cards };
-    })
-    .filter((group) => group.cards.length > 0)
-    .filter((group) => costFilter === 'all' || group.sample.cost === Number(costFilter))
-    .filter((group) => rarityFilter === 'all' || group.sample.rarity === rarityFilter);
-
-  $: entries = collection ? deckEntries(deck, collection) : [];
-  $: problems = collection ? deckProblems(deck, collection) : [];
-  $: capacity = collection ? maxDeckSize(collection) : 0;
-  $: distinct = collection ? templateCount(collection) : 0;
+  $: entries = deckEntries(deck);
+  $: problems = deckProblems(deck, owned);
+  $: capacity = maxDeckSize(owned);
+  $: distinct = distinctCount(owned);
 
   function add(id: string) {
-    if (!collection) return;
-    deck = addCard(deck, collection, id);
+    deck = addCard(deck, owned, id);
     saved = false;
   }
 
@@ -77,8 +88,7 @@
   }
 
   function build() {
-    if (!collection) return;
-    deck = autoBuild(collection);
+    deck = autoBuild(owned);
     saved = false;
   }
 
@@ -87,226 +97,170 @@
     saved = false;
   }
 
-  function persist() {
-    saveDeck(deck);
-    saved = true;
+  async function persist() {
+    saveError = null;
+    const result = await savePlayerDeck(deck, deckId, signedIn);
+    deckId = result.deckId;
+    saved = result.ok;
+    saveError = result.error ?? null;
   }
 
-  /** Clicking a tile adds its default flashcard — the first, alphabetically. */
-  function tileClick(group: TemplateGroup) {
-    if (!collection) return;
-    const preferred = group.cards[0];
-    if (!canAdd(deck, collection, preferred.id)) return;
-    add(preferred.id);
+  /** Why a card cannot be added — shown as the tile's tooltip. */
+  function tileTitle(card: Card): string {
+    const have = ownedCount(owned, card.id);
+    if (have === 0) return `${card.name} — not in your collection`;
+    if (countOf(deck, card.id) >= allowedCopies(owned, card.id)) {
+      return card.rarity === 'Legendary'
+        ? `${card.name} — Legendaries are limited to 1 per deck`
+        : `${card.name} — already at ${allowedCopies(owned, card.id)} copies`;
+    }
+    return `Add ${card.name}`;
   }
 
-  // ── Choosing a specific flashcard ─────────────────────────────
-  // A template can have many flashcards bound to it. Clicking a tile adds the
-  // default one; this popover is where you pick a different one instead, or
-  // select versions to delete from the library.
+  // ── Inspecting ────────────────────────────────────────────────
+  // The same enlarged card and definition panel the match uses. Definitions
+  // always show here — this is one of the two places studying happens
+  // (DECISIONS.md §8), so the in-game setting does not apply.
 
-  let popover: { group: TemplateGroup; rect: DOMRect } | null = null;
-  let popoverEl: HTMLElement | undefined;
+  let inspected: Card | null = null;
 
-  function openPopover(event: MouseEvent, group: TemplateGroup) {
+  function inspect(event: MouseEvent, card: Card) {
     event.stopPropagation();
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    popover = popover?.group.templateId === group.templateId ? null : { group, rect };
-  }
-
-  function closePopover() {
-    popover = null;
-  }
-
-  function onWindowPointerDown(event: PointerEvent) {
-    if (!popover || !popoverEl) return;
-    if (!popoverEl.contains(event.target as Node)) closePopover();
-  }
-
-  function onWindowKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') closePopover();
-  }
-
-  const POPOVER_WIDTH = 260;
-
-  $: popoverPos = popover
-    ? {
-        left: Math.min(Math.max(popover.rect.left, 10), window.innerWidth - POPOVER_WIDTH - 10),
-        top: Math.min(popover.rect.bottom + 6, window.innerHeight - 220)
-      }
-    : null;
-
-  function toggleSelect(id: string) {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    selected = next;
-  }
-
-  /** Deletion is always explicit — nothing is ever removed by importing. */
-  function deleteSelected() {
-    if (!collection || selected.size === 0) return;
-    const count = selected.size;
-    if (!confirm(`Delete ${count} card${count === 1 ? '' : 's'} from your library?`)) return;
-
-    const next = removeCards(collection, selected);
-    collection = next;
-    deck = pruneDeck(deck, next);
-    saveCollection(next);
-    saveDeck(deck);
-    selected = new Set();
-    saved = true;
-    closePopover();
+    inspected = card;
   }
 </script>
 
 <svelte:head><title>Collection — Flashstone</title></svelte:head>
 
-<svelte:window on:pointerdown={onWindowPointerDown} on:keydown={onWindowKeydown} />
-
 <main>
-  {#if !collection}
-    <div class="empty-state">
-      <h1>No cards yet</h1>
-      <p>Import a flashcard export first and it becomes your collection.</p>
-      <a class="cta" href="/import">Import flashcards</a>
-    </div>
-  {:else}
-    <header>
-      <h1>Collection</h1>
-      <p class="sub">
-        {collection.cards.length} flashcards across {distinct} cards. Max {MAX_COPIES} copies
-        of a card, whichever flashcards you pick.
-      </p>
-    </header>
+  <header>
+    <h1>Collection</h1>
+    <p class="sub">
+      {distinct} of {ALL_CARDS.length} cards collected. Two copies of a card per deck —
+      Legendaries one.
+    </p>
+  </header>
 
-    <div class="layout">
-      <section class="browser">
-        <div class="filters">
-          <input placeholder="Search question or answer…" bind:value={search} />
-          <select bind:value={costFilter} aria-label="Filter by cost">
-            <option value="all">Any cost</option>
-            {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as cost}
-              <option value={String(cost)}>{cost} mana</option>
-            {/each}
-          </select>
-          <select bind:value={rarityFilter} aria-label="Filter by rarity">
-            <option value="all">Any rarity</option>
-            {#each RARITIES as rarity}<option value={rarity}>{rarity}</option>{/each}
-          </select>
-          <span class="shown">{visible.length} shown</span>
-        </div>
-
-        <div class="grid">
-          {#each visible as group (group.templateId)}
-            {@const preferred = group.cards[0]}
-            {@const maxed = group.inDeck >= MAX_COPIES}
-            <div class="tile">
-              <button
-                class="tile-btn"
-                disabled={maxed}
-                on:click={() => tileClick(group)}
-                title={maxed ? `${preferred.name} — already at ${MAX_COPIES} copies` : `Add ${preferred.name}`}
-              >
-                <CardPreview card={preferred} playable={true} />
-              </button>
-
-              {#if group.inDeck > 0}
-                <span class="badge" class:max={maxed}>{maxed ? 'MAX' : group.inDeck}</span>
-              {/if}
-
-              {#if group.cards.length > 1}
-                <button
-                  class="versions-btn"
-                  on:click={(e) => openPopover(e, group)}
-                  title="{group.cards.length} flashcards use this card"
-                >
-                  {group.cards.length}
-                </button>
-              {/if}
-            </div>
-          {:else}
-            <p class="none">No cards match those filters.</p>
+  <div class="layout">
+    <section class="browser">
+      <div class="filters">
+        <input placeholder="Search term or definition…" bind:value={search} />
+        <select bind:value={costFilter} aria-label="Filter by cost">
+          <option value="all">Any cost</option>
+          {#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as cost}
+            <option value={String(cost)}>{cost} mana</option>
           {/each}
-        </div>
-      </section>
-
-      <section class="deck-panel">
-        <div class="col-head">
-          <h2>Deck</h2>
-          <span class="tally" class:full={deck.cardIds.length === DECK_SIZE}>
-            {deck.cardIds.length}/{DECK_SIZE}
-          </span>
-        </div>
-
-        {#if capacity < DECK_SIZE}
-          <p class="warn">
-            Collection can field {capacity}. Import {Math.ceil(DECK_SIZE / MAX_COPIES)}+ cards
-            for a full deck.
-          </p>
-        {:else if problems.length > 0}
-          <p class="warn">{problems.join(' ')}</p>
-        {:else}
-          <p class="ok">Legal — ready to play.</p>
-        {/if}
-
-        <ul class="deck-list">
-          {#each entries as entry (entry.card.id)}
-            <li>
-              <button class="row" on:click={() => remove(entry.card.id)} title="Remove one">
-                <span class="cost">{entry.card.cost}</span>
-                <span class="name">{entry.card.name}</span>
-                <span class="stat">{entry.card.attack}/{entry.card.health}</span>
-                <span class="count">×{entry.count}</span>
-              </button>
-            </li>
-          {:else}
-            <li class="none">Empty. Click cards to add them, or Auto-build.</li>
-          {/each}
-        </ul>
-
-        <div class="deck-actions">
-          {#if selected.size > 0}
-            <button class="danger" on:click={deleteSelected}>Delete {selected.size}</button>
-          {/if}
-          <button class="ghost" on:click={build}>Auto-build</button>
-          <button class="ghost" on:click={clear} disabled={deck.cardIds.length === 0}>
-            Clear
-          </button>
-          <button on:click={persist} disabled={problems.length > 0}>
-            {saved ? 'Saved' : 'Save deck'}
-          </button>
-        </div>
-      </section>
-    </div>
-
-    {#if popover && popoverPos && collection}
-      <div class="popover" bind:this={popoverEl} style:left={`${popoverPos.left}px`} style:top={`${popoverPos.top}px`}>
-        <div class="popover-head">{popover.group.cards.length} flashcards use this card</div>
-        <ul class="versions">
-          {#each popover.group.cards as version (version.id)}
-            <li>
-              <label class="version">
-                <input
-                  type="checkbox"
-                  checked={selected.has(version.id)}
-                  on:change={() => toggleSelect(version.id)}
-                />
-                <button
-                  class="version-add"
-                  disabled={!canAdd(deck, collection, version.id)}
-                  on:click={() => add(version.id)}
-                >
-                  <span class="v-name">{version.name}</span>
-                  <span class="v-answer">{version.description}</span>
-                </button>
-              </label>
-            </li>
-          {/each}
-        </ul>
+        </select>
+        <select bind:value={rarityFilter} aria-label="Filter by rarity">
+          <option value="all">Any rarity</option>
+          {#each RARITIES as rarity}<option value={rarity}>{rarity}</option>{/each}
+        </select>
+        <select bind:value={sectionFilter} aria-label="Filter by section">
+          <option value="all">Any section</option>
+          {#each SECTIONS as section}<option value={section}>{section}</option>{/each}
+        </select>
+        <label class="owned-only">
+          <input type="checkbox" bind:checked={ownedOnly} /> Owned only
+        </label>
+        <span class="shown">{visible.length} shown</span>
       </div>
-    {/if}
-  {/if}
+
+      <div class="grid">
+        {#each visible as card (card.id)}
+          {@const have = ownedCount(owned, card.id)}
+          {@const limit = Math.min(copyLimitFor(card.rarity), have)}
+          {@const inDeck = countOf(deck, card.id)}
+          {@const maxed = have > 0 && inDeck >= limit}
+          <div class="tile" class:locked={have === 0}>
+            <button
+              class="tile-btn"
+              disabled={!canAdd(deck, owned, card.id)}
+              on:click={() => add(card.id)}
+              title={tileTitle(card)}
+            >
+              <CardPreview {card} playable={have > 0} gold={isGold(owned, card.id)} />
+            </button>
+
+            <span
+              class="owned-count"
+              class:none={have === 0}
+              title="You own {have} of a possible {MAX_COPIES} copies"
+            >×{have}</span>
+
+            {#if inDeck > 0}
+              <span class="badge" class:max={maxed}>{maxed ? 'MAX' : inDeck}</span>
+            {/if}
+
+            <button
+              class="versions-btn"
+              on:click={(e) => inspect(e, card)}
+              title="Read {card.name}"
+            >
+              ?
+            </button>
+          </div>
+        {:else}
+          <p class="none">No cards match those filters.</p>
+        {/each}
+      </div>
+    </section>
+
+    <section class="deck-panel">
+      <div class="col-head">
+        <h2>Deck</h2>
+        <span class="tally" class:full={deck.cardIds.length === DECK_SIZE}>
+          {deck.cardIds.length}/{DECK_SIZE}
+        </span>
+      </div>
+
+      {#if saveError}
+        <p class="warn">{saveError}</p>
+      {/if}
+
+      {#if capacity < DECK_SIZE}
+        <p class="warn">
+          Your collection can field {capacity}. Open packs for more cards.
+        </p>
+      {:else if problems.length > 0}
+        <p class="warn">{problems.join(' ')}</p>
+      {:else}
+        <p class="ok">Legal — ready to play.</p>
+      {/if}
+
+      <ul class="deck-list">
+        {#each entries as entry (entry.card.id)}
+          <li>
+            <button class="row" on:click={() => remove(entry.card.id)} title="Remove one">
+              <span class="cost">{entry.card.cost}</span>
+              <span class="name">{entry.card.name}</span>
+              <span class="stat">
+                {entry.card.type === 'Minion' ? `${entry.card.attack}/${entry.card.health}` : 'Spell'}
+              </span>
+              <span class="count">×{entry.count}</span>
+            </button>
+          </li>
+        {:else}
+          <li class="none">Empty. Click cards to add them, or Auto-build.</li>
+        {/each}
+      </ul>
+
+      <div class="deck-actions">
+        <button class="ghost" on:click={build}>Auto-build</button>
+        <button class="ghost" on:click={clear} disabled={deck.cardIds.length === 0}>
+          Clear
+        </button>
+        <button on:click={persist} disabled={problems.length > 0}>
+          {saved ? (signedIn ? 'Saved to account' : 'Saved') : 'Save deck'}
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <CardInspector
+    card={inspected}
+    gold={inspected ? isGold(owned, inspected.id) : false}
+    on:close={() => (inspected = null)}
+  />
 </main>
 
 <style>
@@ -372,11 +326,6 @@
     border-color: var(--rule);
     color: var(--text-faint);
     cursor: default;
-  }
-  button.danger {
-    background: linear-gradient(180deg, var(--blood), var(--blood-deep));
-    border-color: var(--blood-deep);
-    color: #f7e3df;
   }
 
   .warn, .ok {
@@ -462,7 +411,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, 134px);
     justify-content: start;
-    gap: 14px 10px;
+    gap: 20px 10px;
     max-height: 74vh;
     overflow-y: auto;
     padding: 4px 2px 4px 4px;
@@ -642,98 +591,40 @@
 
   /* The version picker — a small anchored panel, not a row that pushes the
      grid around every time you open one. */
-  .popover {
-    position: fixed;
-    z-index: 300;
-    width: 260px;
-    max-height: 300px;
-    overflow-y: auto;
-    background: linear-gradient(180deg, var(--panel), var(--ink-2));
-    border: 1px solid var(--frame-lit);
-    border-radius: 6px;
-    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
-    padding: 8px;
-  }
+  /* Cards you don't own yet stay visible but plainly out of reach: seeing what
+     is missing is half the point of a collection screen. */
+  .tile.locked .tile-btn { filter: grayscale(0.85) brightness(0.55); }
+  .tile.locked .tile-btn:hover { filter: grayscale(0.6) brightness(0.7); }
 
-  .popover-head {
+  /* Centred under the card, clear of the attack and health gems in the bottom
+     corners — and written as a count (×2), not a ratio, so it cannot be misread
+     as a statline. */
+  .owned-count {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -7px;
+    padding: 1px 7px;
+    border-radius: 8px;
+    border: 1px solid var(--rule);
+    background: rgba(19, 13, 8, 0.92);
+    font-family: var(--display);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    color: var(--gold);
+  }
+  .owned-count.none { color: var(--text-faint); }
+
+  .owned-only {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-family: var(--display);
     font-size: 10px;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--text-faint);
-    padding: 2px 4px 8px;
-    border-bottom: 1px solid var(--rule);
-    margin-bottom: 6px;
-  }
-
-  .versions {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .version {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 3px 0;
-  }
-  .version input { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 4px; }
-
-  .version-add {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    padding: 4px 6px;
-    border: none;
-    border-radius: 3px;
-    background: none;
-    min-width: 0;
-    text-align: left;
-    text-transform: none;
-    letter-spacing: 0;
-    font-weight: 400;
-  }
-  .version-add:hover:not(:disabled) { background: rgba(74, 54, 32, 0.4); }
-  .version-add:disabled { opacity: 0.45; cursor: default; }
-
-  .v-name {
-    font-family: var(--body);
-    font-size: 13px;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .v-answer {
-    font-family: var(--body);
-    font-size: 11px;
-    color: var(--text-faint);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .empty-state { text-align: center; padding: 80px 20px; }
-  .empty-state p {
-    font-family: var(--body);
     color: var(--text-dim);
-    font-size: 16px;
+    white-space: nowrap;
   }
-  .cta {
-    display: inline-block;
-    margin-top: 16px;
-    padding: 11px 24px;
-    border: 1px solid #8a6c3c;
-    border-radius: 4px;
-    background: linear-gradient(180deg, var(--gold), #9c7c3c);
-    color: #2a1d10;
-    font-family: var(--display);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-  .cta:hover { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
+  .owned-only input { width: 13px; height: 13px; }
 </style>

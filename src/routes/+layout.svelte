@@ -3,26 +3,40 @@
   import { page } from '$app/stores';
   import '$lib/styles/flashstone.css';
   import { isLegal } from '$lib/decks/deck';
+  import { totalCopies } from '$lib/collection/owned';
+  import { starterCollection } from '$lib/data/starter';
   import { loadCollection, loadDeck } from '$lib/decks/storage';
+  import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+  import { account } from '$lib/account';
+  import { goto } from '$app/navigation';
 
+  // /import is deliberately absent: the import mechanic is shelved in favour of
+  // the built-in SL card set. The route and its parsers remain on disk.
   const links = [
     { href: '/play', label: 'Play' },
     { href: '/decks', label: 'Collection' },
-    { href: '/import', label: 'Import' },
+    { href: '/review', label: 'Review' },
     { href: '/learn', label: 'Learn' }
   ];
 
   let deckLabel = '';
 
-  onMount(() => {
-    const collection = loadCollection();
+  onMount(async () => {
+    const owned = loadCollection() ?? starterCollection();
     const deck = loadDeck();
-    if (collection && deck && isLegal(deck, collection)) {
+    if (deck && isLegal(deck, owned)) {
       deckLabel = `Deck — ${deck.name} · ${deck.cardIds.length} cards`;
-    } else if (collection) {
-      deckLabel = `${collection.cards.length} cards · no deck built`;
     } else {
-      deckLabel = 'Demo deck';
+      deckLabel = `${totalCopies(owned)} cards · starter deck`;
+    }
+
+    await account.refresh();
+
+    // Verification and reset links arrive at the site root to match the URLs
+    // the email templates were ported with. The account page handles them.
+    const params = $page.url.searchParams;
+    if (params.has('verify') || params.has('reset')) {
+      goto(`/account?${params.toString()}`, { replaceState: true });
     }
   });
 </script>
@@ -35,6 +49,19 @@
     {/each}
   </div>
   <span class="deck">{deckLabel}</span>
+
+  {#if !$account.loading}
+    <a class="account" class:signed-in={$account.user} href="/account">
+      {#if $account.user}
+        <span class="gold">{$account.gold}g</span>
+        <span class="who">{$account.user.username}</span>
+      {:else}
+        <span class="who">Sign in</span>
+      {/if}
+    </a>
+  {/if}
+
+  <SettingsMenu />
 </nav>
 
 <slot />
@@ -85,8 +112,26 @@
     color: var(--gold-bright);
   }
 
+  .account {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 11px;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    font-family: var(--display);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .account:hover { border-color: var(--frame-lit); color: var(--text); }
+  .account.signed-in { border-color: #8a6c3c; }
+  .account .gold { color: var(--gold-bright); }
+
   .deck {
     margin-left: auto;
+    margin-right: 10px;
     font-size: 12px;
     letter-spacing: .04em;
     color: #8a7657;

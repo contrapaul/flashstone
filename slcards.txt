@@ -1,0 +1,188 @@
+A1.1
+Adjustability	The ability of a product to be changed in size, commonly used to increase the range of percentiles for which a product is appropriate.									
+Anthropometrics	The aspect of ergonomics that deals with body measurements.									
+Clearance	The physical space between two objects.									
+Ergonomics	The application of scientific information concerning the relationship between human beings and the design of products, systems and environments.									
+Percentile Range (Upper and Lower Limits)	That proportion of a population with a dimension at or less than a given value. For a given demographic (gender, race, age), the 50th percentile is the median.									
+Psychology Factors	Human factor data related to psychological interpretations caused by light, smell, sound, taste, temperature and texture.									
+Percentile	A term that describes how a data point compares to all data in that set, divided into 100 equal parts.									
+Physiology Factors	Human factor data related to physical characteristics used to optimize the user’s safety, health, comfort and performance.									
+Range of Sizes	A selection of sizes a product is made in that caters for the majority of a market.									
+Static Data	Human body measurements when the subject is still (refers to measurements taken while the subject is in a fixed or standard position; e.g. arm length and overhead reach).									
+Dynamic Data	Human body measurements taken when the subject is in motion.									
+Reach	The range that a person can stretch to touch or grasp an object from a specified position.									
+Biomechanics	Research and analysis of the mechanics (operation of our muscles, joints, tendons, etc.) of the human body.									
+Workspace Envelope	A 3D space that is typically physical and/or virtual that needs to have defined permissible boundaries of movement and operation.									
+A2.1
+Advantage of User-Centred Design (UCD)	The design will be more intuitive to meet the needs of the user.									
+Disadvantages of User-Centred Design (UCD)	Expensive, difficulty interpreting different types of data into the initial design, takes more time.									
+Five Stages of User-Centred Design (UCD)	Research, concept, design, implementation and launch.									
+Population Stereotype	Responses that are widespread in a user population.									
+Primary Persona	A profile of the primary user for a product experiencing a challenge in a process that presents a design opportunity. Persona provides a human face and story to a particular audience, making it easier to empathize and cater to the user’s needs effectively.									
+Field Research	A first-hand observation of users conducted in their real environment.									
+Research Question	A type of question that focuses research to find the required answers.									
+Research Stage	Shadowing, diary studies, interviews, focus groups, benchmarking, usability testing.									
+Secondary Research	Research undertaken by someone other than the user.									
+Scenario	An imagined sequence of events in the daily life of a persona based on assumptions.									
+Task	How the design is expected to function and fulfil its expectations. Consider the user may have several sub-uses for the product.									
+Task Analysis	The process of learning about a user by observing them carry out an action to understand how they perform it. The goal of task analysis is to identify aspects of the process that could be improved.									
+Target User	A particular group of customers or potential customers for whom a product, system or environment is designed.									
+User-Centred Design (UCD)	A design process that pays particular attention to the needs of potential users by involving them in all stages of the design process (research, concept, design, implementation and launch).									
+User-Centred Research Methods	A suite of research methods used to explore the true nature of a user population or of target users. These research methods include field research, task analysis, user observation, interviews, surveys and focus groups.									
+User Observation	A research activity where the user is observed interacting with a product or completing a task to find pain points in the process or interaction.									
+User Population	The range of users for a particular product or system.									
+User Requirements	The essential requirements that a product system or environment must satisfy in relation to the user.
+
+A2.2									
+Aesthetic Prototype	A physical model developed to look and feel like the final product but that does not function.									
+Augmented Reality (AR)	A technology that uses a device to superimpose a computer-generated image onto a user’s view of the real world; interactions include sight, sound, touch engagements and extended reality (XR).									
+Assembled Drawings	A high-fidelity drawing technique, typically presented in an isometric view, that shows a product as it appears when fully assembled.									
+Computer-Aided Design (CAD)	The use of computer software to aid the design process.									
+Exploded Drawing	A formal drawing technique that depicts components of a product apart but in a relative position to how they would be fitted together.									
+Digital Human	Digital simulation of a variety of mechanical and biological aspects of the human body.									
+Functional Prototype	Also referred to as a “physical working prototype”, it works in the same way as a final product and simulates real-word functionality.									
+Fused Deposition Modelling (FDM)	A 3D rapid prototyping printing methodology that deposits melted layers of material on a bed to build up a 3D model.									
+Finite element analysis (FEA)	Digital model calculation and simulation of unknown factors in products using computer-aided design (CAD) systems. For example, simulating the stresses within a welded car part.									
+Free-Hand Sketching	Graphical drawing model created without the use of instruments such as a ruler or compass.									
+Generative Design	An artificial intelligence driven software used as an ideation technique to generate a range of digital model solutions based on prompts and constraints provided by the designer.									
+Haptic Technology	A technology that enables the user to interface with simulated touch sense via a haptic device or glove.									
+Isometric Drawing	A graphic representation of 3D objects where two axes are angled at 60° from the vertical axes.									
+High-Fidelity Prototype	A physical or virtual model of a design concept that is highly functional and interactive. A high-fidelity prototype is as functionally and aesthetically similar to the final product as possible, and typically full scale.									
+Low-Fidelity Prototype	A simplified physical or virtual prototype typically created to test a few aspects of a design idea and provide feedback for further design development in the early stages of a design process.									
+Motion Capture	The recording of human and animal movement by any means, for example, by video, magnetic, or electromechanical devices.									
+Orthographic Projection	A formal modelling technique used to depict a 3D object in 2D, typically showing the top, side and front views of an object.									
+Physical Prototype	The creation of a full-size, smaller or larger tangible version of an object that can be physically interacted with.									
+Prototype	A physical or virtual prototype created to test samples, or models built to test a concept or process, or to act as an object to be replicated or learned from. Prototypes can be developed at a range of fidelities.									
+Prototyping Techniques	The methods used to create prototypes at different levels of fidelity from sketching through to functional prototypes.									
+Rapid Prototyping	A group of manufacturing techniques used to manufacture a physical object quickly for testing aspects of a product. Typically, 3D computer-aided design (CAD) models are used.									
+Scale Prototype	Physical models that are bigger or smaller than the real product but are exactly in proportion with the product.									
+Selective Laser Sintering (SLS)	An additive manufacturing technique that uses a laser to fuse small particles of material into a mass that has a desired 3D rapid prototyping shape.									
+Solid Model	Virtual (digital) models are clear representations of the final part. They provide a complete set of data for the product to be realized.									
+Stereolithography (SLA)	An additive manufacturing technique that creates 3D physical prototypes layer by layer by hardening molecules of a photosensitive liquid polymer using a laser beam.									
+Surface Model	A virtual (digital) model presenting the outer appearance and form, offering some machining data. Surface digital models contain no data about the interior of the part.									
+Virtual Prototype	Photorealistic digital computer-aided design (CAD) based interactive models that use surface and solid modelling.									
+Virtual Reality	The ability to simulate a real situation on the screen and interact with it in a near-natural way.	
+
+A3.1								
+Bio-Materials	Any material created by, or derived from, biological organisms, including plants, animals, bacteria and fungi.									
+Chemical Properties	A property of a material that only becomes evident during or after a chemical reaction.									
+Circular Economy	An economic model in which resources remain in use for as long as possible, from which maximum value is extracted while in use, and the products and materials are recovered and regenerated at the end of the product life cycle.									
+Composite Material	A material comprised of two or more materials to improve their physical, mechanical and chemical properties and/or aesthetics characteristics.									
+Compressive Strength	The ability of a material to withstand being pushed or squashed.									
+Corrosion Resistance	The ability of a material to withstand damage caused by oxidization or other chemical reactions.									
+Density	The mass per unit of volume of a material. Its importance is in portability of a product’s weight and size. Design contexts include food packaging, because pre-packaged food is sold by weight and volume, and packing foams.									
+Ductility	The ability of a material to be drawn or extruded into an extended shape such as a wire.									
+Elasticity	The extent to which a material will return to its original shape after being deformed, once the force causing the deformation is removed.									
+Electrical Resistivity (Electical Conductivity)	The measure of a material’s ability to conduct electricity. A material with low resistivity will conduct electricity well.									
+Electro-Rheostatic	This smart property relates to a fluid that can undergo a dramatic change in its viscosity when exposed to an electric field. This effect is reversed when the electric field is removed.									
+Flammability	A measure of how quickly a material can be ignited and how quickly it burns.									
+Hygroscopy	A chemical property of a material that has the ability to absorb moisture from the surrounding environment.									
+Glass	A hard, brittle and typically transparent amorphous solid made by rapidly cooling a fusion of sand, soda and lime.									
+Hardness	The resistance a material offers to penetration or scratching.									
+Magneto-Rheostatic	This smart property relates to a fluid that can undergo a dramatic change in its viscosity when exposed to a magnetic field. This effect is reversed when the magnetic field is removed.									
+Malleability	A material’s ability to be plastically deformed under compressive forces.									
+Manufactured Material	A material that does not occur naturally in the world. It is synthetic or artificial.									
+Mechanical Properties	Properties of a material that involve the relationship between stress and strain or reaction to an applied force.									
+Melting Point	The temperature a material transforms from a solid into a liquid.									
+Natural Materials	Materials that occur in the natural world.									
+Photochromicity	A property of a smart material. A photochromic material changes colour in response to an increase in light. When the light source is removed, it returns to its original colour.									
+Physical Properties	Any property that is measurable and that describes a state of materials, including density, thermal expansion, thermal conductivity, melting point, electrical resistivity and electrical conductivity. These properties tend to be the characteristics of materials that can be identified through non-destructive testing.									
+Piezoelectricity	A property of a smart material. A piezoelectric material gives off a small electrical discharge when deformed and experiences an increase in its volume when an electrical current passes through it.									
+Plasticity	The ability of a material to be changed in shape permanently.									
+Polymer	"Synthetic materials made from chemical compounds commonly referred to as ""plastics""."									
+Reactivity (Food Safe)	A chemical property of a material that represents the extent to which a material will react with another (including air) to become unsafe for use to come in contact with food.									
+Shape Memory Material	A material that “remembers” and returns to a predefined shape after being deformed. This is achieved in response to changes in temperature or stress.									
+Smart Materials	Materials that have been designed to have one or more properties that can be modified when subject to an external stimulus in a way that the output can be controlled. This modification (change) is reversible and can be repeated.									
+Stiffness	A material’s ability to resist deflection (bending deformation) and maintain its shape.									
+Tensile Strength	The ability of a material to withstand pulling forces.									
+Textiles	A cloth or woven fabric material.									
+Thermal Conductivity	The measure of how fast heat is conducted through a slab of material with a given temperature difference across the slab.									
+Thermal Expansion	A measure of the degree of increase in dimensions (length, area or volume) when an object is heated.									
+Thermoelectricity	This refers to a smart material comprised of two dissimilar conductors that produce an electric current when heated.									
+Timber (Lumber)	Wood harvested from trees prepared for use in manufacturing, construction and carpentry. Categorized as softwoods and hardwoods depending on the type of tree it is sourced from.									
+Toughness	The ability of a material to resist the propagation of cracks.
+
+B1.1									
+Efficiency (Usability)	A usability objective that concerns the speed and accuracy in which users can perform the task a product was designed to do.									
+Environment	The place where the product is likely to be used.									
+Errors (Usability)	A usability objective that concerns the incidence of mistakes a user makes when using a product, the frequency of those incidences and the severity of those mistakes.									
+Learnability (Usability)	The extent to which a user can operate a product or system at a defined level of competence after a predetermined period of training.									
+Memorability (Usability)	A usability objective that concerns how well a user can remember how to use a product after they have not used it for a period of time.									
+Satisfaction (Usability)	A usability objective that concerns how pleasant a product is to use, typically defined as the degree to which a user’s needs, expectations and preferences are met.									
+Task	How the design is expected to function and fulfil its expectations. Consider the user may have several sub-uses for the product.									
+User-Centred Research Methods	A suite of research methods used to explore the true nature of a user population or of target users. These research methods include field research, task analysis, user observation, interviews, surveys and focus groups.    See A2.1 User-centred research methods.									
+Usability	The extent to which a product can be used by specified users to achieve specified goals effectively and efficiently, while functioning in a predictable and consistent manner.									
+Usability Objectives	Usability objectives include learnability, efficiency, memorability, errors and satisfaction.									
+User	A person utilizing the product.									
+Designing a Solution Stage	The fourth stage in the DP design process, where the intended solution is developed through iterative model—test—refine cycles.									
+B2.1
+Design Specification	A list of requirements, constraints and considerations that a yet to be designed product must fulfil.									
+Design Thinking	A non-linear, iterative process used to solve problems.									
+Empathize Stage	The first stage of the DP design process that prompts the user to discover the needs, motivations, behaviours and experiences of the intended user.									
+Focus Group	A group of people representing the target market or different personae assembled to discuss a product and provide feedback for the purpose of product development.									
+Ideation Techniques	A series of tasks used to generate ideas for solutions to a problem, which can include brainstorming, mind mapping, sketching and SCAMPER.									
+Interview	A face-to-face consultation, typically with one person.									
+Literature Search	The use of consumer reports, newspapers, magazines, encyclopaedias, manufacturers' information, etc. To conduct research.									
+Model, Test, Refine Cycle	A cyclic development tool used in design to develop products swiftly, requiring designers to create models of their products, test them with users, and use the feedback to refine their design. The designer repeats the cycle until they have resolved all user requirements related to the product.									
+Mock-up	A digital scale or full-size representation of a product is used to test the mechanics and gain feedback from users.									
+Primary Persona	A profile of the primary user for a product experiencing a challenge in a process that presents a design opportunity. Persona provides a human face and story to a particular audience, making it easier to empathize and cater to the user’s needs effectively.   See A2.1 User-centred research methods.									
+Product Analysis	The examination of a product to determine its features, strengths and weaknesses and to identify opportunities for improvement.									
+Product Requirements	The essential capabilities a product must have to be successful.									
+Problem Statement	A concise and clear description of a problem in a few sentences that states what is to be addressed.									
+Qualitative Data	Typically, descriptive data is used to find out in depth the way people think or feel—their perception. Useful for research at the individual or small (focus) group level.									
+Quantitative Data	Data that can be measured and recorded using numbers. Examples include height, shoe size and the depth of a kitchen counter and the weight of a laptop.									
+Storyboard	In the context of DP design technology, a storyboard is a visual way to communicate product usage through images, photographs or drawings, to convey the user experience. This is recorded to identify opportunities to redesign a product in order to provide a solution.									
+User Journey	A person’s perceptions and responses that result from the use, or anticipated use, of a product, system or service. A user’s journey shows empathy and is communicated through a storyboard.									
+User Observation	A research activity where the user is observed interacting with a product or completing a task used to find pain points in the process or interaction.									
+Aesthetic Characteristics	Refers to the visual and sensory qualities of an object or design that contribute to its overall appearance.									
+Computer-Aided Design (CAD)	The methods used to create prototypes at different levels of fidelity from sketching through to functional prototypes. See A2.2 Prototyping Techniques								
+Finite Element Analysis (FEA)	Digital model calculation and simulation of unknown factors in products using computer-aided design (CAD) systems. For example, simulating the stresses within a welded car part.    See A2.2 Prototyping techniques.									
+Drawings (2D, 3D, Assembled, Isometric, Orthographic Projection)	A high-fidelity drawing technique, typically presented in an isometric view, that shows a product as it appears when fully assembled. (Assembled)   A graphic representation of 3D objects where two axes are angled at 60° from the vertical axes. (Isometric)  A formal modelling technique used to depict a 3D object in 2D, typically showing the top, side and front views of an object. (Orthographic) See A2.2 Prototyping Techniques.						
+
+B2.2		
+Iterative Design	Act of repeating a process with the aim of approaching a desired goal, target or result. Each repetition of the process is also called an “iteration”, and the results of one iteration are used as the starting point for the next iteration.									
+Prototype	A physical or virtual prototype created to test samples, or models built to test a concept or process, or to act as an object to be replicated or learned from. Prototypes can be developed at a range of fidelities. A2.2 Prototyping Techniques									
+Rapid Prototyping	The methods used to create prototypes at different levels of fidelity from sketching through to functional prototypes.    See A2.2 Prototyping Techniques.														
+Texture	The texture of a material refers to its surface characteristics, feel and appearance.	
+
+C1.1								
+Functional Obsolescence	Over time, products wear out and break down. If parts are no longer available, the product can no longer work in the way it originally did. Also, if a service vital to its functioning is no longer available, it can become obsolete.									
+Planned Obsolescence	A product becomes outdated as a conscious act either to ensure a continuing market or to ensure that safety factors and new technologies can be incorporated into later versions of the product.									
+Social Obsolescence	Also known as economic obsolescence, this occurs when there is a decrease in value of the product because of external factors.									
+Style Obsolescence	Fashions and trends change over time, which can result in a product no longer being desirable. However, as evidenced by the concept of retro styling and the cyclic nature of fashion, products can become desirable again.									
+Technological Obsolescence	When a new technology supersedes an existing technology, the existing technology quickly falls out of use and is no longer incorporated into new products. Consumers instead opt for the newer, more efficient technology in their products.									
+Triple Bottom Line (TBL)	An expanded spectrum of values and criteria for measuring organizational success: economic (profit), environmental (planet) and social (people).   See C2.1 Design for sustainability.	
+C1.2								
+Design for Extremes	A common design strategy where products are designed and/or tested to ensure that they function efficiently for those users who represent the 2.5th and 97.5th percentile.									
+Inclusive Design (Universal Design)	To create products, services, environments and experiences that consider diversity, are accessible and usable by the widest range of people, regardless of age, ability or other characteristics, without the need for adaptation or specialized design.									
+User-centred research Methods	A suite of research methods used to explore the true nature of a user population or of target users. These research methods include field research, task analysis, user observation, interviews, surveys and focus groups.   See A2.1 and B1.1.						
+
+C1.3		
+Attract/Converse/Transact Model (ACT)	A framework for creating designs that improve the relations of users with a product and intentionally trigger emotional responses.     Attract: Aesthetics orientated on the ACT model  Converse: Interaction orientated on the ACT model  Transact: Function orientated on the ACT model									
+Four-Pleasure Framework	A framework that encourages design for pleasure and emotion. It comprises of four areas: socio-pleasure; physio-pleasure; psycho-pleasure; and ideo-pleasure.									
+Ideo-Pleasure	Pleasures linked to our ideal, aesthetically, culturally and otherwise.									
+Physio-Pleasure	A sensory pleasure that comes from touching, smelling, hearing or tasting something. It can also be derived from a feeling of satisfaction that comes from the effectiveness of an object in enabling an action to be performed.									
+Psycho-Pleasure	Types of pleasure that come from cognition, discovery, knowledge and other things that satisfy the intellect.									
+Socio-Pleasure	Pleasures that come from a feeling of belonging to a social group, social-enablers and other ways that one can identify oneself with social groups.									
+Usability	The extent to which a product can be used by specified users to achieve specified goals effectively and efficiently, while functioning in a predictable and consistent manner.   See B1.1.	
+
+C2.1							
+Datschefski’s Five Principles of Sustainable Design	Five principles that facilitate a holistic approach to sustainable design.    Cyclic: The product is made from organic materials, and is recyclable or compostable, or is made from minerals that are continuously cycled in a closed loop.    Solar: The product uses solar energy or other forms of renewable energy that are cyclic and safe, both during use and manufacture.    Safe: The product is non-toxic in use and disposal, and its manufacture does not involve toxic releases or the disruption of ecosystems.    Efficient: The product’s efficiency in manufacture and use is improved by a factor.    Social: The product and its components and raw materials are manufactured under fair and just operating conditions for the workers involved and the local communities.									
+Sustainability	In the context of design, sustainability seeks to eliminate a negative impact on the environment, health and well-being of users.									
+Triple Bottom Line (TBL)	An expanded spectrum of values and criteria for measuring organizational success: economic (profit), environmental (planet) and social (people).					
+C2.2			
+Biodegradable Material	A material that will decompose into basic substances through the action of microorganisms when in an environment with sufficient water, oxygen, temperature and nutrients.									
+Circular Economy	An economic model in which resources remain in use for as long as possible, from which maximum value is extracted while in use, and the products and materials are recovered and regenerated at the end of the product life cycle.									
+Dematerialization	The reduction of total material and energy throughput of any product and service.									
+Linear Approach/Economy	An economic model that follows a take—make—dispose approach, leading to depletion of resources and waste.									
+Renewable Energy Sources	A natural resource of energy that can be replenished with the passage of time or that does not abate at all.									
+Take-Back Legislation	Laws that require manufacturers to “take back” products at the end of their life for disposal or recycling. Also known as “extended producer responsibility”.					
+C3.1			
+Constructive Discontent	A design stimulus caused by not being satisfied with a product or process, prompting the designer to redesign the product or resolve the problem in a different way.									
+Reverse Engineering	A method used to understand how an existing product was made by disassembling it.									
+SWOT Analysis	In design, this is the identification of strengths, weaknesses, opportunities and threats relating to a product.	
+C4.1:
+Design for Assembly	Design that takes account of assembly at various levels, for example, component to component, components into subassemblies and subassemblies into complete products.									
+Design for Disassembly	Designing a product so that it can easily and economically be taken apart, the components reused or repaired, and the materials recycled.									
+Design for Manufacture (DfM)	Designers design specifically for optimum use of existing manufacturing capability.									
+Design for Process	Design that enables the product to be manufactured using a specific manufacturing process, for example, injection moulding.

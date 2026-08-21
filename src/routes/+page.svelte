@@ -1,32 +1,34 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { DECK_SIZE, isLegal, type Collection, type Deck } from '$lib/decks/deck';
+  import { DECK_SIZE, isLegal, type Deck } from '$lib/decks/deck';
+  import { distinctCount } from '$lib/decks/deck';
+  import { ALL_CARDS } from '$lib/data/cards';
+  import { starterCollection } from '$lib/data/starter';
+  import type { Owned } from '$lib/collection/owned';
   import { loadCollection, loadDeck } from '$lib/decks/storage';
 
-  let collection: Collection | null = null;
+  let owned: Owned = {};
   let deck: Deck | null = null;
   let ready = false;
 
   onMount(() => {
-    collection = loadCollection();
+    owned = loadCollection() ?? starterCollection();
     deck = loadDeck();
     ready = true;
   });
 
-  $: deckPlayable = Boolean(collection && deck && isLegal(deck, collection));
+  $: deckPlayable = Boolean(deck && isLegal(deck, owned));
 
   $: status = !ready
     ? ''
     : deckPlayable
       ? `Playing “${deck?.name}” — ${DECK_SIZE} cards.`
-      : collection
-        ? `${collection.cards.length} cards imported, but no legal deck yet.`
-        : 'No cards imported yet — you can still try the demo deck.';
+      : `${distinctCount(owned)} of ${ALL_CARDS.length} cards collected — playing the starter deck.`;
 
   const menu = [
     { href: '/play', title: 'Play' },
     { href: '/decks', title: 'Collection' },
-    { href: '/import', title: 'Import' },
+    { href: '/review', title: 'Review' },
     { href: '/learn', title: 'Learn to play' }
   ];
 </script>
@@ -36,7 +38,7 @@
 <main>
   <section class="hero">
     <h1>Flashstone</h1>
-    <p class="tagline">Your flashcards, as a card game.</p>
+    <p class="tagline">Design &amp; Technology, as a card game.</p>
     <p class="status" class:playable={deckPlayable}>{status}</p>
   </section>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { MinionInstance } from '../engine/state';
-  import { artFor, sigil } from '../../utils/art';
+  import { artFor, artUrlFor, sigil } from '../../utils/art';
 
   export let minion: MinionInstance;
   /** Can swing this turn — green pulse. */
@@ -15,6 +15,10 @@
   export let struck = false;
   /** Dying — plays the shatter, then the parent removes it. */
   export let dying = false;
+
+  // Drawn art when the card has a file, the generated gradient when not — the
+  // same two layers as CardPreview, so a card looks like itself on the board.
+  $: drawnArt = artUrlFor(minion.card.id);
 
   $: enraged = minion.health < minion.maxHealth;
   $: taunt = minion.keywords.includes('Taunt');
@@ -34,7 +38,9 @@
   class:frozen={minion.frozen}
   class:silenced={minion.silenced}
   class:struck
-  style:--art={artFor(minion.card.name)}
+  style:--art={drawnArt
+    ? `url("${drawnArt}") center / cover no-repeat`
+    : artFor(minion.card.name)}
   on:click
   on:pointerdown
   on:pointerenter
@@ -48,7 +54,9 @@
   {/if}
 
   <span class="ring">
-    <span class="art"><span class="sigil">{sigil(minion.card.name)}</span></span>
+    <span class="art">
+      {#if !drawnArt}<span class="sigil">{sigil(minion.card.name)}</span>{/if}
+    </span>
   </span>
 
   <span class="name">{minion.card.name}</span>

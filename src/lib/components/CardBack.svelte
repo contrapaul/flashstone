@@ -1,14 +1,35 @@
 <script lang="ts">
+  import { backUrlFor } from '../../utils/art';
+
   /** Hue of the inner field. 266 grimoire · 200 astral · 18 legendary foil. */
   export let hue = 266;
   export let mark = 'F';
-  /** Shrinks the whole back — used for the deck pile and the opponent's fan. */
+  /** Shrinks the whole back — used for the deck pile. */
   export let scale = 1;
+  /**
+   * Which back to wear. Drawn art is used when `static/art/backs/<id>.webp`
+   * exists, and the generated field below when it does not — the same fallback
+   * discipline as card art, so a back is never blank.
+   *
+   * Phase 4 stores the player's choice on their profile and passes it here; the
+   * opponent gets the default until multiplayer supplies theirs.
+   */
+  export let backId = 'default';
+
+  $: art = backUrlFor(backId);
 </script>
 
-<div class="back" style:--hue={hue} style:transform={`scale(${scale})`}>
-  <span class="field" aria-hidden="true"></span>
-  <span class="mark">{mark}</span>
+<div
+  class="back"
+  class:drawn={art}
+  style:--hue={hue}
+  style:--back-art={art ? `url("${art}")` : 'none'}
+  style:transform={`scale(${scale})`}
+>
+  {#if !art}
+    <span class="field" aria-hidden="true"></span>
+    <span class="mark">{mark}</span>
+  {/if}
 </div>
 
 <style>
@@ -24,6 +45,10 @@
     background: linear-gradient(180deg, #5a422a, #332415 14%, #241810);
     box-shadow: 0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
     transform-origin: top left;
+  }
+
+  .back.drawn {
+    background: var(--back-art) center / cover no-repeat;
   }
 
   .field {

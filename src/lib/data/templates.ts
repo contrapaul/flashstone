@@ -1,4 +1,4 @@
-import type { Keyword, Rarity } from '../../types/cards';
+import type { CardType, Effect, Keyword, Rarity, Target } from '../../types/cards';
 import { RARITY_WEIGHTS } from '../../utils/rarity';
 
 /**
@@ -283,4 +283,219 @@ export function nearestTemplate(want: {
     }
   }
   return best;
+}
+
+// ──────────────────────────────────────────────────────────────
+// ABILITIES
+//
+// The other half of the mechanical layer. A template supplies the statline; the
+// pools below supply what the card *does*, bound the same way — deterministically,
+// from the card's own hash — so a card's ability is as stable as its stats.
+//
+// Two hard constraints, both enforced by tests in slCards.test.ts:
+//
+//  1. **No `Passive` trigger.** It resolves to nothing (see types/cards.ts).
+//  2. **Every spell effect is `Battlecry`.** That is the only trigger `playCard`
+//     fires for a spell, so any other trigger makes the card do nothing at all.
+// ──────────────────────────────────────────────────────────────
+
+/**
+ * How often a minion of each rarity has an ability at all. Commons are mostly
+ * vanilla on purpose: a board where every minion triggers something is
+ * unreadable, and plain stats are what makes the rare cards feel rare.
+ */
+const ABILITY_CHANCE: Record<Rarity, number> = {
+  Common: 0.2,
+  Uncommon: 0.45,
+  Rare: 0.7,
+  Epic: 0.9,
+  Legendary: 1
+};
+
+/** Small effects, safe on any card at any cost. */
+const MODEST: Effect[] = [
+  { trigger: 'Battlecry', action: 'DealDamage', target: 'EnemyMinion', value: 1 },
+  { trigger: 'Battlecry', action: 'DealDamage', target: 'RandomEnemy', value: 2 },
+  { trigger: 'Battlecry', action: 'DrawCard', value: 1 },
+  { trigger: 'Battlecry', action: 'Heal', target: 'Hero', value: 2 },
+  { trigger: 'Battlecry', action: 'BuffAttack', target: 'FriendlyMinion', value: 1 },
+  { trigger: 'Battlecry', action: 'BuffHealth', target: 'FriendlyMinion', value: 2 },
+  { trigger: 'Battlecry', action: 'SummonToken', value: 1 },
+  { trigger: 'Battlecry', action: 'Freeze', target: 'EnemyMinion' },
+  { trigger: 'Deathrattle', action: 'SummonToken', value: 1 },
+  { trigger: 'Deathrattle', action: 'DrawCard', value: 1 },
+  { trigger: 'Deathrattle', action: 'DealDamage', target: 'AllEnemies', value: 1 },
+  { trigger: 'StartOfTurn', action: 'BuffAttack', target: 'Self', value: 1 },
+  { trigger: 'EndOfTurn', action: 'Heal', target: 'Hero', value: 1 },
+  { trigger: 'Battlecry', action: 'GainKeyword', target: 'Self', keyword: 'Taunt' }
+];
+
+/** Reserved for Rare and above — swingy enough to decide a board. */
+const POTENT: Effect[] = [
+  { trigger: 'Battlecry', action: 'DealDamage', target: 'AllEnemies', value: 2 },
+  { trigger: 'Battlecry', action: 'Destroy', target: 'EnemyMinion' },
+  { trigger: 'Battlecry', action: 'Silence', target: 'EnemyMinion' },
+  { trigger: 'Battlecry', action: 'DrawCard', value: 2 },
+  { trigger: 'Battlecry', action: 'SummonToken', value: 2 },
+  { trigger: 'Battlecry', action: 'GainKeyword', target: 'Self', keyword: 'DivineShield' },
+  { trigger: 'StartOfTurn', action: 'SummonToken', value: 1 },
+  { trigger: 'Deathrattle', action: 'DealDamage', target: 'AllEnemies', value: 2 },
+  { trigger: 'EndOfTurn', action: 'BuffAttack', target: 'FriendlyMinion', value: 1 }
+];
+
+/**
+ * A spell is nothing but its effect, so it always has one, and it is always a
+ * Battlecry. Values run higher than a minion's — a spell leaves no body behind.
+ */
+const SPELL_MODEST: Effect[] = [
+  { trigger: 'Battlecry', action: 'DealDamage', target: 'RandomEnemy', value: 3 },
+  { trigger: 'Battlecry', action: 'DealDamage', target: 'EnemyMinion', value: 3 },
+  { trigger: 'Battlecry', action: 'DrawCard', value: 2 },
+  { trigger: 'Battlecry', action: 'Heal', target: 'Hero', value: 5 },
+  { trigger: 'Battlecry', action: 'BuffAttack', target: 'FriendlyMinion', value: 2 },
+  { trigger: 'Battlecry', action: 'BuffHealth', target: 'FriendlyMinion', value: 3 },
+  { trigger: 'Battlecry', action: 'Freeze', target: 'EnemyMinion' },
+  { trigger: 'Battlecry', action: 'SummonToken', value: 2 }
+];
+
+const SPELL_POTENT: Effect[] = [
+  { trigger: 'Battlecry', action: 'DealDamage', target: 'AllEnemies', value: 3 },
+  { trigger: 'Battlecry', action: 'Destroy', target: 'EnemyMinion' },
+  { trigger: 'Battlecry', action: 'Silence', target: 'EnemyMinion' },
+  { trigger: 'Battlecry', action: 'DrawCard', value: 3 },
+  { trigger: 'Battlecry', action: 'SummonToken', value: 3 },
+  { trigger: 'Battlecry', action: 'GainKeyword', target: 'FriendlyMinion', keyword: 'Windfury' }
+];
+
+const POTENT_RARITIES: Rarity[] = ['Rare', 'Epic', 'Legendary'];
+
+/**
+ * A second, independent avalanche of the card's hash.
+ *
+ * `templateForHash` already spends the `>>> 8` and `>>> 16` slices of the raw
+ * value. Reusing the same bits here would correlate a card's ability with its
+ * statline — every 4-mana 4/5 would end up with the same Battlecry. Mixing first
+ * decorrelates the two completely.
+ */
+function mix(hash: number): number {
+  let h = hash >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb352d);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x846ca68b);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
+ * Binds a hash to an ability list. Pure, like `templateForHash` — the same card
+ * always does the same thing, which is the whole point of a memorable card.
+ * Minions may get nothing; spells always get exactly one effect.
+ */
+export function abilityForHash(
+  hash: number,
+  rarity: Rarity,
+  type: CardType,
+  cost: number
+): Effect[] {
+  const h = mix(hash);
+  const potent = POTENT_RARITIES.includes(rarity);
+
+  if (type === 'Spell') {
+    // Cost gates a spell's pool, not just rarity. A spell is nothing but its
+    // effect, so an expensive one drawing "Freeze a minion" is a dead card, and
+    // a one-mana "Destroy a minion" is a broken one. Rarity still opens the
+    // potent pool early for cheap Rares and above.
+    const pool = cost >= 4 ? SPELL_POTENT : potent ? [...SPELL_MODEST, ...SPELL_POTENT] : SPELL_MODEST;
+    return [pool[h % pool.length]];
+  }
+
+  // A 0–999 roll from a slice not used for the pick below.
+  if ((h >>> 12) % 1000 >= ABILITY_CHANCE[rarity] * 1000) return [];
+
+  const pool = potent ? [...MODEST, ...POTENT] : MODEST;
+  return [pool[h % pool.length]];
+}
+
+// ──────────────────────────────────────────────────────────────
+// CARD TEXT
+// ──────────────────────────────────────────────────────────────
+
+const TARGET_PHRASE: Partial<Record<Target, string>> = {
+  EnemyMinion: 'a random enemy minion',
+  FriendlyMinion: 'a friendly minion',
+  RandomEnemy: 'a random enemy',
+  AllEnemies: 'all enemies',
+  Self: 'this minion',
+  Hero: 'your hero'
+};
+
+const KEYWORD_TEXT: Record<Keyword, string> = {
+  Taunt: 'Taunt',
+  Charge: 'Charge',
+  DivineShield: 'Divine Shield',
+  Windfury: 'Windfury',
+  Stealth: 'Stealth'
+};
+
+function phrase(effect: Effect): string {
+  const value = effect.value ?? 1;
+  const target = TARGET_PHRASE[effect.target ?? 'Self'] ?? 'a target';
+
+  switch (effect.action) {
+    case 'DealDamage':
+      return `Deal ${value} damage to ${effect.target === 'Hero' ? 'the enemy hero' : target}`;
+    case 'DrawCard':
+      return value === 1 ? 'Draw a card' : `Draw ${value} cards`;
+    case 'Heal':
+      return `Restore ${value} Health to ${target}`;
+    case 'BuffAttack':
+      return `Give ${target} +${value} Attack`;
+    case 'BuffHealth':
+      return `Give ${target} +${value} Health`;
+    case 'SummonToken':
+      return value === 1 ? 'Summon a 1/1 Study Note' : `Summon ${value} 1/1 Study Notes`;
+    case 'Destroy':
+      return `Destroy ${target}`;
+    case 'Freeze':
+      return `Freeze ${target}`;
+    case 'Silence':
+      return `Silence ${target}`;
+    case 'GainKeyword':
+      return `Give ${target} ${KEYWORD_TEXT[effect.keyword ?? 'Taunt']}`;
+    case 'GainMana':
+      return `Gain ${value} Mana Crystal${value === 1 ? '' : 's'} this turn`;
+  }
+}
+
+/**
+ * The card's game text — and **only** its game text.
+ *
+ * Keywords are deliberately absent: `CardPreview` renders those on their own
+ * line, so naming them here would print them twice. A vanilla card returns '',
+ * and so does a card whose only trait is a keyword. The term's definition is
+ * never part of this; it lives on `card.definition` and is shown when inspecting.
+ */
+export function describeEffects(effects: Effect[], type: CardType): string {
+  return effects
+    .map((effect) => {
+      const body = `${phrase(effect)}.`;
+      // A spell is its effect, so it needs no trigger label; a minion does.
+      if (type !== 'Minion') return body;
+      switch (effect.trigger) {
+        case 'Battlecry':
+          return `Battlecry: ${body}`;
+        case 'Deathrattle':
+          return `Deathrattle: ${body}`;
+        case 'StartOfTurn':
+          return `At the start of your turn, ${body[0].toLowerCase()}${body.slice(1)}`;
+        case 'EndOfTurn':
+          return `At the end of your turn, ${body[0].toLowerCase()}${body.slice(1)}`;
+        case 'OnAttack':
+          return `After this attacks, ${body[0].toLowerCase()}${body.slice(1)}`;
+        default:
+          return body;
+      }
+    })
+    .join(' ');
 }

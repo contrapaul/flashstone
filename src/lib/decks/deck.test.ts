@@ -1,283 +1,263 @@
 import { describe, expect, it } from 'vitest';
-import { mapRowsToCards } from '../parsers/fieldMapper';
+import { ALL_CARDS, cardById } from '../data/cards';
+import { STARTER_CARD_IDS, starterCollection, starterDeck } from '../data/starter';
+import { addCopies, ownedCount, type Owned } from '../collection/owned';
 import {
   DECK_SIZE,
+  LEGENDARY_COPIES,
   MAX_COPIES,
   addCard,
+  allowedCopies,
   autoBuild,
   canAdd,
+  copyLimitFor,
   countOf,
-  countOfTemplate,
   deckEntries,
   deckProblems,
+  distinctCount,
   emptyDeck,
-  groupByTemplate,
   isLegal,
   maxDeckSize,
-  mergeCollection,
   pruneDeck,
   removeCard,
-  removeCards,
-  resolveDeck,
-  templateCount,
-  templateOf,
-  type Collection
+  resolveDeck
 } from './deck';
 
-function collectionFrom(rows: { Front: string; Back: string }[]): Collection {
-  return {
-    name: 'Test',
-    cards: mapRowsToCards(rows, { front: 'Front', back: 'Back' }),
-    importedAt: '2026-07-25T00:00:00.000Z'
-  };
+const LEGENDARY = ALL_CARDS.find((c) => c.rarity === 'Legendary')!;
+const COMMON = ALL_CARDS.find((c) => c.rarity === 'Common')!;
+
+/** Owns two copies of the first `n` cards in the set. */
+function ownsFirst(n: number): Owned {
+  const owned: Owned = {};
+  for (const card of ALL_CARDS.slice(0, n)) owned[card.id] = { copies: 2, gold: 0 };
+  return owned;
 }
 
-function collectionOf(size: number, prefix = ''): Collection {
-  return collectionFrom(
-    Array.from({ length: size }, (_, i) => ({
-      Front: `${prefix}q${i}`,
-      Back: `${prefix}a${i}`
-    }))
-  );
-}
+describe('copy limits', () => {
+  it('allows two of anything below Legendary', () => {
+    for (const rarity of ['Common', 'Uncommon', 'Rare', 'Epic'] as const) {
+      expect(copyLimitFor(rarity)).toBe(MAX_COPIES);
+    }
+  });
 
-/** Two cards guaranteed to share a template, for the per-template copy rules. */
-function sharedTemplatePair(): { collection: Collection; a: string; b: string } {
-  const collection = collectionOf(400);
-  const groups = new Map<string, string[]>();
-  for (const card of collection.cards) {
-    const t = templateOf(card);
-    const list = groups.get(t);
-    if (list) list.push(card.id);
-    else groups.set(t, [card.id]);
-  }
-  const pair = [...groups.values()].find((ids) => ids.length >= 2)!;
-  return { collection, a: pair[0], b: pair[1] };
-}
+  it('allows only one Legendary', () => {
+    expect(copyLimitFor('Legendary')).toBe(LEGENDARY_COPIES);
+    expect(LEGENDARY_COPIES).toBe(1);
+  });
 
-describe('deck editing', () => {
-  it('adds and removes single copies', () => {
-    const collection = collectionOf(5);
-    const id = collection.cards[0].id;
+  it('refuses a third copy of a Common', () => {
+    const owned = { [COMMON.id]: { copies: 2 as const, gold: 0 as const } };
     let deck = emptyDeck();
+    deck = addCard(deck, owned, COMMON.id);
+    deck = addCard(deck, owned, COMMON.id);
+    expect(countOf(deck, COMMON.id)).toBe(2);
 
-    deck = addCard(deck, collection, id);
-    deck = addCard(deck, collection, id);
-    expect(countOf(deck, id)).toBe(2);
-
-    deck = removeCard(deck, id);
-    expect(countOf(deck, id)).toBe(1);
-    expect(deck.cardIds).toHaveLength(1);
+    expect(canAdd(deck, owned, COMMON.id)).toBe(false);
+    deck = addCard(deck, owned, COMMON.id);
+    expect(countOf(deck, COMMON.id)).toBe(2);
   });
 
-  it('refuses a third copy of the same card', () => {
-    const collection = collectionOf(5);
-    const id = collection.cards[0].id;
+  it('refuses a second copy of a Legendary even when two are owned', () => {
+    const owned = { [LEGENDARY.id]: { copies: 2 as const, gold: 0 as const } };
+    let deck = addCard(emptyDeck(), owned, LEGENDARY.id);
+    expect(countOf(deck, LEGENDARY.id)).toBe(1);
+
+    expect(canAdd(deck, owned, LEGENDARY.id)).toBe(false);
+    deck = addCard(deck, owned, LEGENDARY.id);
+    expect(countOf(deck, LEGENDARY.id)).toBe(1);
+  });
+
+  it('caps a card at the number of copies actually owned', () => {
+    const owned = { [COMMON.id]: { copies: 1 as const, gold: 0 as const } };
+    expect(allowedCopies(owned, COMMON.id)).toBe(1);
+
+    const deck = addCard(emptyDeck(), owned, COMMON.id);
+    expect(canAdd(deck, owned, COMMON.id)).toBe(false);
+  });
+
+  it('refuses a card that is not owned at all', () => {
+    expect(allowedCopies({}, COMMON.id)).toBe(0);
+    expect(canAdd(emptyDeck(), {}, COMMON.id)).toBe(false);
+  });
+
+  it('refuses a card that is not in the registry', () => {
+    const owned = { 'no-such-card': { copies: 2 as const, gold: 0 as const } };
+    expect(allowedCopies(owned, 'no-such-card')).toBe(0);
+  });
+
+  // Two unrelated terms often draw the same statline. Under the old
+  // per-template rule they blocked each other in a deck; they must not now.
+  it('lets two different cards sharing a statline both be fielded', () => {
+    const pairs = new Map<string, string[]>();
+    for (const card of ALL_CARDS) {
+      if (card.type !== 'Minion') continue;
+      const key = `${card.cost}/${card.attack}/${card.health}/${card.rarity}`;
+      pairs.set(key, [...(pairs.get(key) ?? []), card.id]);
+    }
+    const shared = [...pairs.values()].find(
+      (ids) => ids.length >= 2 && ids.every((id) => cardById(id)!.rarity !== 'Legendary')
+    );
+    expect(shared, 'no two cards share a statline — test is vacuous').toBeDefined();
+
+    const owned: Owned = {
+      [shared![0]]: { copies: 2, gold: 0 },
+      [shared![1]]: { copies: 2, gold: 0 }
+    };
     let deck = emptyDeck();
-    for (let i = 0; i < 5; i++) deck = addCard(deck, collection, id);
-    expect(countOf(deck, id)).toBe(MAX_COPIES);
-    expect(canAdd(deck, collection, id)).toBe(false);
-  });
-
-  it('ignores an id that is not in the collection', () => {
-    const collection = collectionOf(3);
-    expect(canAdd(emptyDeck(), collection, 'not-a-real-id')).toBe(false);
-    expect(addCard(emptyDeck(), collection, 'not-a-real-id').cardIds).toHaveLength(0);
-  });
-
-  it('does not mutate the deck it was given', () => {
-    const collection = collectionOf(3);
-    const deck = emptyDeck();
-    addCard(deck, collection, collection.cards[0].id);
-    expect(deck.cardIds).toHaveLength(0);
+    for (const id of [shared![0], shared![0], shared![1], shared![1]]) {
+      deck = addCard(deck, owned, id);
+    }
+    expect(deck.cardIds).toHaveLength(4);
   });
 });
 
-describe('the copy limit counts templates, not flashcards', () => {
-  it('caps two per template even across different flashcards', () => {
-    const { collection, a, b } = sharedTemplatePair();
-    const template = templateOf(collection.cards.find((c) => c.id === a)!);
-
-    let deck = addCard(emptyDeck(), collection, a);
-    deck = addCard(deck, collection, b);
-    expect(countOfTemplate(deck, collection, template)).toBe(2);
-
-    // A third flashcard on the same template is refused, even though it is a
-    // different card — this is the rule that stops a huge import inflating one
-    // statline into a whole deck.
-    expect(canAdd(deck, collection, a)).toBe(false);
-    expect(canAdd(deck, collection, b)).toBe(false);
-    expect(addCard(deck, collection, b).cardIds).toHaveLength(2);
+describe('deck size', () => {
+  it('refuses a 31st card', () => {
+    const owned = ownsFirst(20);
+    const deck = autoBuild(owned, 1);
+    expect(deck.cardIds).toHaveLength(DECK_SIZE);
+    const extra = Object.keys(owned)[0];
+    expect(canAdd(deck, owned, extra)).toBe(false);
   });
 
-  it('lets you mix which flashcards fill a template slot', () => {
-    const { collection, a, b } = sharedTemplatePair();
-    const deck = addCard(addCard(emptyDeck(), collection, a), collection, b);
-    expect(new Set(deck.cardIds)).toEqual(new Set([a, b]));
+  it('removes one copy at a time', () => {
+    const owned = { [COMMON.id]: { copies: 2 as const, gold: 0 as const } };
+    let deck = addCard(addCard(emptyDeck(), owned, COMMON.id), owned, COMMON.id);
+    deck = removeCard(deck, COMMON.id);
+    expect(countOf(deck, COMMON.id)).toBe(1);
   });
 
-  it('reports an over-filled template as a problem', () => {
-    const { collection, a, b } = sharedTemplatePair();
-    const deck = { name: 'bad', cardIds: [a, a, b] };
-    expect(deckProblems(deck, collection).join(' ')).toMatch(/More than 2 copies/);
+  it('reports how much a thin collection can field', () => {
+    const owned = { [COMMON.id]: { copies: 2 as const, gold: 0 as const } };
+    expect(maxDeckSize(owned)).toBe(2);
+    expect(distinctCount(owned)).toBe(1);
+    expect(maxDeckSize(ownsFirst(40))).toBe(DECK_SIZE);
   });
 
-  it('bounds deck size by distinct templates, not raw card count', () => {
-    const collection = collectionOf(400);
-    expect(templateCount(collection)).toBeLessThan(collection.cards.length);
-    expect(maxDeckSize(collection)).toBe(DECK_SIZE);
-
-    const tiny = collectionOf(3);
-    expect(maxDeckSize(tiny)).toBe(templateCount(tiny) * MAX_COPIES);
+  it('counts a Legendary once toward what can be fielded', () => {
+    const owned = { [LEGENDARY.id]: { copies: 2 as const, gold: 0 as const } };
+    expect(maxDeckSize(owned)).toBe(1);
   });
 });
 
 describe('legality', () => {
-  it('requires exactly a full deck', () => {
-    const collection = collectionOf(200);
-    expect(isLegal(emptyDeck(), collection)).toBe(false);
-
-    const deck = autoBuild(collection, 1);
-    expect(deck.cardIds).toHaveLength(DECK_SIZE);
-    expect(deckProblems(deck, collection)).toEqual([]);
+  it('accepts the starter deck', () => {
+    expect(deckProblems(starterDeck(), starterCollection())).toEqual([]);
+    expect(isLegal(starterDeck(), starterCollection())).toBe(true);
   });
 
-  it('reports cards that left the collection', () => {
-    const collection = collectionOf(200);
-    const deck = autoBuild(collection, 2);
-    const shrunk: Collection = { ...collection, cards: collection.cards.slice(0, 2) };
-    expect(deckProblems(deck, shrunk).join(' ')).toMatch(/no longer in your collection/);
+  it('rejects a short deck', () => {
+    expect(deckProblems(emptyDeck(), {})[0]).toContain('0 of 30');
+  });
+
+  it('rejects cards the player does not own', () => {
+    const deck = { name: 'x', cardIds: Array(DECK_SIZE).fill(COMMON.id) };
+    const problems = deckProblems(deck, {});
+    expect(problems.some((p) => p.includes("don't own"))).toBe(true);
+  });
+
+  it('rejects two copies of a Legendary by name', () => {
+    const deck = { name: 'x', cardIds: [LEGENDARY.id, LEGENDARY.id] };
+    const owned = { [LEGENDARY.id]: { copies: 2 as const, gold: 0 as const } };
+    expect(deckProblems(deck, owned).some((p) => p.includes('Legendary'))).toBe(true);
+  });
+
+  it('rejects cards that no longer exist', () => {
+    const deck = { name: 'x', cardIds: ['deleted-card'] };
+    expect(deckProblems(deck, {}).some((p) => p.includes('no longer exist'))).toBe(true);
   });
 });
 
-describe('auto-build', () => {
-  it('fills a legal deck and never breaks the template limit', () => {
-    const collection = collectionOf(300);
-    const deck = autoBuild(collection, 7);
+describe('autoBuild', () => {
+  it('produces a legal 30-card deck from the starter collection', () => {
+    const owned = starterCollection();
+    const deck = autoBuild(owned, 7);
     expect(deck.cardIds).toHaveLength(DECK_SIZE);
-    expect(isLegal(deck, collection)).toBe(true);
+    expect(deckProblems(deck, owned)).toEqual([]);
+  });
 
-    const byId = new Map(collection.cards.map((c) => [c.id, c]));
-    const counts = new Map<string, number>();
-    for (const id of deck.cardIds) {
-      const t = templateOf(byId.get(id)!);
-      counts.set(t, (counts.get(t) ?? 0) + 1);
+  it('is deterministic for a given seed', () => {
+    const owned = ownsFirst(40);
+    expect(autoBuild(owned, 42).cardIds).toEqual(autoBuild(owned, 42).cardIds);
+  });
+
+  it('never exceeds a card limit', () => {
+    const owned = ownsFirst(60);
+    const deck = autoBuild(owned, 3);
+    for (const id of new Set(deck.cardIds)) {
+      expect(countOf(deck, id), id).toBeLessThanOrEqual(allowedCopies(owned, id));
     }
-    for (const n of counts.values()) expect(n).toBeLessThanOrEqual(MAX_COPIES);
   });
 
-  it('falls short gracefully when there are too few templates', () => {
-    const collection = collectionOf(4);
-    const deck = autoBuild(collection, 4);
-    expect(deck.cardIds.length).toBe(maxDeckSize(collection));
-    expect(isLegal(deck, collection)).toBe(false);
-  });
-
-  it('is stable for a given seed and varies across seeds', () => {
-    const collection = collectionOf(300);
-    expect(autoBuild(collection, 11)).toEqual(autoBuild(collection, 11));
-    expect(autoBuild(collection, 11).cardIds.join()).not.toBe(
-      autoBuild(collection, 12).cardIds.join()
-    );
+  it('falls short rather than cheating when the collection is too thin', () => {
+    const owned = ownsFirst(4);
+    expect(autoBuild(owned, 1).cardIds).toHaveLength(8);
   });
 });
 
-describe('resolving a deck for play', () => {
-  it('expands ids into the engine card list', () => {
-    const collection = collectionOf(200);
-    const cards = resolveDeck(autoBuild(collection, 5), collection);
+describe('the starter set', () => {
+  it('is 15 cards, 2 copies each', () => {
+    expect(STARTER_CARD_IDS).toHaveLength(15);
+    expect(new Set(STARTER_CARD_IDS).size).toBe(15);
+    const owned = starterCollection();
+    for (const id of STARTER_CARD_IDS) expect(ownedCount(owned, id)).toBe(2);
+  });
+
+  it('names only real cards, and no Legendary', () => {
+    for (const id of STARTER_CARD_IDS) {
+      const card = cardById(id);
+      expect(card, id).toBeDefined();
+      expect(card!.rarity, id).not.toBe('Legendary');
+    }
+  });
+
+  it('makes exactly one full deck', () => {
+    expect(starterDeck().cardIds).toHaveLength(DECK_SIZE);
+    expect(maxDeckSize(starterCollection())).toBe(DECK_SIZE);
+  });
+
+  it('has a playable curve and at least one spell', () => {
+    const cards = resolveDeck(starterDeck());
     expect(cards).toHaveLength(DECK_SIZE);
-    expect(cards.every((c) => c.type === 'Minion')).toBe(true);
+    expect(cards.filter((c) => c.cost <= 2).length).toBeGreaterThanOrEqual(10);
+    expect(cards.filter((c) => c.type === 'Spell').length).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...cards.map((c) => c.cost))).toBeLessThanOrEqual(7);
   });
+});
 
-  it('skips ids missing from the collection rather than throwing', () => {
-    const collection = collectionOf(10);
-    const deck = { name: 'd', cardIds: [collection.cards[0].id, 'not-a-real-id'] };
-    expect(resolveDeck(deck, collection)).toHaveLength(1);
-  });
-
-  it('groups the deck list by card, ordered by cost', () => {
-    const collection = collectionOf(200);
-    const entries = deckEntries(autoBuild(collection, 9), collection);
-    expect(entries.reduce((sum, e) => sum + e.count, 0)).toBe(DECK_SIZE);
+describe('deck views', () => {
+  it('groups the deck by card, ordered by cost', () => {
+    const entries = deckEntries(starterDeck());
+    expect(entries).toHaveLength(15);
+    expect(entries.every((e) => e.count === 2)).toBe(true);
     const costs = entries.map((e) => e.card.cost);
     expect([...costs].sort((a, b) => a - b)).toEqual(costs);
   });
-});
 
-describe('the collection view', () => {
-  it('gives one row per template, listing every flashcard on it', () => {
-    const collection = collectionOf(300);
-    const groups = groupByTemplate(emptyDeck(), collection);
-
-    expect(groups).toHaveLength(templateCount(collection));
-    expect(groups.reduce((sum, g) => sum + g.cards.length, 0)).toBe(
-      collection.cards.length
-    );
-    const costs = groups.map((g) => g.sample.cost);
-    expect([...costs].sort((a, b) => a - b)).toEqual(costs);
-  });
-
-  it('reports how many copies of each template are already in the deck', () => {
-    const { collection, a, b } = sharedTemplatePair();
-    const template = templateOf(collection.cards.find((c) => c.id === a)!);
-    const deck = addCard(addCard(emptyDeck(), collection, a), collection, b);
-
-    const group = groupByTemplate(deck, collection).find((g) => g.templateId === template)!;
-    expect(group.inDeck).toBe(2);
-    expect(group.cards.length).toBeGreaterThanOrEqual(2);
+  it('resolves ids into cards, skipping unknown ones', () => {
+    expect(resolveDeck({ name: 'x', cardIds: [COMMON.id, 'gone'] })).toHaveLength(1);
   });
 });
 
-describe('the library accumulates', () => {
-  it('keeps everything from both imports', () => {
-    const first = collectionOf(5, 'a');
-    const second = collectionOf(5, 'b');
-    const merged = mergeCollection(first, second);
-    expect(merged.cards).toHaveLength(10);
+describe('pruneDeck', () => {
+  it('drops copies the player can no longer field', () => {
+    const deck = { name: 'x', cardIds: [COMMON.id, COMMON.id] };
+    const owned = { [COMMON.id]: { copies: 1 as const, gold: 0 as const } };
+    expect(pruneDeck(deck, owned).cardIds).toEqual([COMMON.id]);
   });
 
-  it('treats re-importing an unchanged file as a no-op', () => {
-    const first = collectionOf(8);
-    const again = collectionOf(8);
-    expect(mergeCollection(first, again).cards).toHaveLength(8);
+  it('drops a card that has left the registry', () => {
+    expect(pruneDeck({ name: 'x', cardIds: ['gone'] }, {}).cardIds).toEqual([]);
   });
 
-  it('keeps the old card when an answer is edited', () => {
-    const original = collectionFrom([{ Front: 'Capital of Japan?', Back: 'Tokyo' }]);
-    const edited = collectionFrom([
-      { Front: 'Capital of Japan?', Back: 'Tokyo, on Honshu' }
-    ]);
-    const merged = mergeCollection(original, edited);
-
-    expect(merged.cards).toHaveLength(2);
-    expect(merged.cards.map((c) => c.description).sort()).toEqual([
-      'Tokyo',
-      'Tokyo, on Honshu'
-    ]);
+  it('leaves a legal deck untouched', () => {
+    const deck = starterDeck();
+    expect(pruneDeck(deck, starterCollection()).cardIds).toEqual(deck.cardIds);
   });
 
-  it('starts a library from nothing', () => {
-    const incoming = collectionOf(3);
-    expect(mergeCollection(null, incoming)).toBe(incoming);
-  });
-
-  it('never drops a card on its own — only on request', () => {
-    const collection = collectionOf(10);
-    const doomed = collection.cards.slice(0, 4).map((c) => c.id);
-    const after = removeCards(collection, doomed);
-    expect(after.cards).toHaveLength(6);
-    expect(after.cards.some((c) => doomed.includes(c.id))).toBe(false);
-  });
-
-  it('prunes deck slots whose card was deleted', () => {
-    const collection = collectionOf(200);
-    const deck = autoBuild(collection, 3);
-    const gone = deck.cardIds.slice(0, 5);
-    const after = removeCards(collection, gone);
-
-    const pruned = pruneDeck(deck, after);
-    expect(pruned.cardIds).toHaveLength(DECK_SIZE - new Set(gone).size);
-    expect(deckProblems(pruned, after).join(' ')).not.toMatch(/no longer/);
+  it('drops a second Legendary', () => {
+    const owned = addCopies({}, LEGENDARY.id, 2);
+    const deck = { name: 'x', cardIds: [LEGENDARY.id, LEGENDARY.id] };
+    expect(pruneDeck(deck, owned).cardIds).toEqual([LEGENDARY.id]);
   });
 });

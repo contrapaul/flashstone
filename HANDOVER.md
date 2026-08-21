@@ -34,7 +34,7 @@ From the app directory:
 npm install && npx svelte-kit sync && npm test && npm run build && npm run check
 ```
 
-Expected: **33 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
+Expected: **193 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
 reports **0 errors**. That was the verified state at handover. `svelte-kit sync` must run
 before `check` on a fresh clone or `tsconfig.json` fails to resolve its `extends`.
 
@@ -50,12 +50,33 @@ the `make` repo — that name should not reappear).
 
 ### Design decisions Paul already made — do not reopen without asking
 
-- **Flashcards affect deck construction only. There is NO in-match quizzing.** Cards are
-  generated from study material at import time; the match itself is plain Hearthstone.
-  `_rawFront`/`_rawBack` are captured on import and deliberately unused during play.
-  This was chosen over three alternatives (answer-to-play, quiz-for-mana, answer-to-attack).
-- Opponent is a **local scripted AI**. No multiplayer, no hot-seat.
-- **All state is client-side.** D1 is not wired up.
+- **The card set is fixed and built in.** 155 cards, one per Design & Technology
+  syllabus term, generated from `slcards.txt`. **The flashcard import mechanic is
+  shelved** (2026-08-21): `/import` is an unlinked notice page, though the parsers and
+  their 33 tests remain. See `docs/plan/DECISIONS.md` §1 and §7.
+- **There is NO in-match quizzing.** The match is plain Hearthstone; the studying
+  happens by reading your own cards. This was chosen over three alternatives
+  (answer-to-play, quiz-for-mana, answer-to-attack).
+- **Drag is the only way to play a card.** A pointer tap opens the inspector instead, so
+  a tap can never spend mana by mistake. Enter on the keyboard still picks up and places.
+- **One card component, scaled — never re-laid out.** `CardInspector` renders the
+  ordinary `CardPreview` at 2.5x. Do not build a context-specific card rendering; a card
+  must look identical in hand, in the collection and in review. A minion on the board is
+  a different object and legitimately looks different (`MinionView`).
+- **A card in play shows game text only.** A keyword-only card reads `Charge`; a vanilla
+  card's text panel is empty. The term's **definition never appears on the card face** —
+  it lives on `card.definition` and shows in the collection, in review, and beside an
+  inspected card. `DECISIONS.md` §8.
+- **Copy limits are per card**: two of anything, **one of a Legendary**. The template
+  library still supplies statlines but no longer gates deck legality.
+- Opponent is a **local scripted AI** playing **its own deck** (`data/aiDeck.ts`) — no
+  longer a mirror match. Multiplayer is planned; see `docs/plan/PHASE-5-MULTIPLAYER.md`.
+- **Accounts are D1-backed, built exactly like `time` and `make/bloodbowl`** — the
+  `_lib` modules were ported near-verbatim into `src/lib/server/`. **Gold, collection
+  and decks are server-authoritative**; the client may read a balance and never sets one.
+  Every gold award is idempotent by primary key on `(user, source, ref)`.
+- **Playing signed out must keep working.** Practice against the AI needs no account and
+  falls back to the starter collection in localStorage. Do not gate `/play` on a session.
 - Rules use standard Hearthstone defaults: 30 hero health, 7-minion board cap, 10 max mana,
   +1 mana/turn, player first with 3 cards, AI draws 4 + The Coin, fatigue on empty deck.
 
@@ -95,14 +116,42 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 | `src/lib/engine/engine.ts` | `createMatch`, `playCard`, `attack`, `endTurn`, effect resolution, `COIN_CARD` |
 | `src/lib/engine/rng.ts` | Seeded RNG — matches are reproducible from `state.seed` |
 | `src/lib/engine/ai.ts` | `playAiTurn` — curve-out, Coin logic, Taunt clearing, free trades, lethal check |
-| `src/lib/data/demoDeck.ts` | 12 placeholder cards; `buildDemoDeck()` = 2 copies each |
+| `src/lib/data/slTerms.ts` | **Generated** by `npm run cards` from `slcards.txt`. Data only — never hand-edit |
+| `src/lib/data/slCards.ts` | Applies the mechanical layer to those terms. **Hand-editable**; holds `OVERRIDES` for tuning one card |
+| `src/lib/data/cards.ts` | The card **registry** — `ALL_CARDS`, `cardById`. Nothing else may import `slCards`/`customCards` |
+| `src/lib/data/customCards.ts` | Hand-authored cards merged into the registry. The injection point for new cards |
+| `src/lib/data/starter.ts` | The 15 starter cards, 2 copies each = one legal deck |
+| `src/lib/data/aiDeck.ts` | The opponent's own 30-card list, built to a curve |
+| `src/lib/collection/owned.ts` | Ownership as counts per card id, plus gold (foil) variants |
+| `src/lib/data/demoDeck.ts` | 12 hand-crafted cards. **Test fixtures only** — no longer reachable from the app |
 | `src/routes/+page.svelte` | Board UI, targeting, match log, game-over overlay |
-| `src/lib/components/` | `CardPreview.svelte` (hand), `MinionView.svelte` (board) |
+| `src/lib/components/` | `CardPreview.svelte` (hand), `MinionView.svelte` (board), `CardInspector.svelte` (the enlarged card + definition, used by the match, the collection and review) |
+| `src/lib/settings.ts` | Client-side settings store. Today: "show definitions in game" |
+| `src/lib/server/` | **Server-only.** Ported auth (`crypto`, `session`, `ratelimit`, `email`), plus `collection`, `gold` and the `api` helpers. SvelteKit forbids importing these from a component |
+| `src/lib/collection/sync.ts` | The one place the app asks what a player owns — server when signed in, localStorage when not |
+| `src/lib/account.ts` | Client cache of `/api/profile` |
+| `src/hooks.server.ts` | Resolves the session cookie into `locals.user` |
+| `src/routes/api/` | `auth/*`, `collection`, `decks`, `profile`, `rewards/*` |
+| `db/migrations/` | D1 schema. **Append-only** — never edit an applied migration |
+| `src/lib/review/timer.ts` | Active-review-seconds clock — pauses on hidden tab and after 30s idle |
+| `src/routes/review/+page.svelte` | Review mode — the same card, definition beside it |
 | `src/lib/parsers/`, `src/utils/rarity.ts` | Import pipeline — **written but not wired to anything** |
 
 **Conventions:** engine functions mutate `MatchState` in place and return a boolean for
 legality; the UI reassigns (`state = state`) to trigger Svelte reactivity. Effect targets
 resolve automatically — there is no manual targeting in v0.1.
+
+**The event queue — why the engine looks like this.** `engine.ts` appends
+presentation cues to `state.events` at every mutation site (13 of them: draw,
+summon, attack, shield, damage, death, turn, freeze, silence, buff). The engine
+finishes mutating first; `drain()` in `play/+page.svelte` then replays the queue
+on a timeline, so an attack lunges before its target shatters. Two consequences
+to respect: the visuals lag the truth by up to a second, and `myTurn` is gated on
+`!draining` so the player cannot act mid-playback. An empty queue is valid — the
+board simply snaps. Anything that mutates state must emit, or it will not animate.
+This replaced a synchronous-engine-that-yields design, which was judged
+considerably more work. (Recorded here 2026-08-21 when `docs/OVERHAUL.md`, whose
+work was fully applied in `8d8841b` and `b22d22a`, was retired.)
 
 **The clean seam:** `createMatch(playerDeck, aiDeck, seed)` takes a plain `Card[]`.
 Swapping demo cards for imported ones is a one-line change.
@@ -136,6 +185,22 @@ Deploy either by connecting the repo in the Cloudflare dashboard (build command
 `npm run build`, output directory `.svelte-kit/cloudflare`) or directly with
 `npm run deploy`, which builds and runs `wrangler pages deploy`.
 
+**Three things the accounts work added here, all load-bearing:**
+
+- **API routes are SvelteKit `+server.ts`, never a `functions/` directory.**
+  `adapter-cloudflare` emits a `_worker.js`, and Pages ignores `functions/` whenever one
+  exists — copying `time`'s layout across would 404 in production while looking right in
+  the repo. This is why the ported auth has a different shell but identical internals.
+- **D1 is bound as `DB`** in `wrangler.toml` (`flashstone-db`,
+  `2d848ca6-c435-47f5-be5a-552037001bfe`) and reached as `platform.env.DB`. A
+  dashboard-driven build needs the same binding configured in the dashboard.
+- **`platformProxy` in `svelte.config.js` gives `vite dev` the real bindings**, so the
+  dev loop is `npm run dev` — not a rebuild plus `wrangler pages dev`. Migrations run
+  with `npx wrangler d1 execute flashstone-db --local|--remote --file <migration>`.
+
+`RESEND_API_KEY` is **not set**. Until it is, verification and reset emails are a logged
+no-op, so signup works locally but delivers nothing.
+
 For reference, the old location could not host this at all: `make/wrangler.toml` used
 `pages_build_output_dir = "."` with no build step, so `/fun/flashcards/` served the
 portfolio 404 fallback while the raw `.svelte` and `package.json` sources were publicly
@@ -144,6 +209,13 @@ readable. Using a build command means only built assets publish.
 ---
 
 ## 7. Known gaps and the next real feature
+
+> **Outstanding work now lives in `docs/plan/`.** That directory holds the phased build
+> plan for multiplayer, gold and packs, daily quests, the SL card set, the table-UX pass
+> and card art — start at `docs/plan/README.md`. This section stays as the record of
+> *small known defects*; the plan owns *features*. `docs/OVERHAUL.md` was fully applied
+> and was deleted on 2026-08-21; its one durable paragraph is in §5 above.
+
 
 > **Keep this section current.** A stale version of it sent a later session
 > chasing two bugs that had already been fixed. If you resolve something here,
@@ -161,9 +233,23 @@ the same flashcard always yields the same card.
 stats share a seed. Verified identical for identical input — don't "fix" either
 hash without changing both.
 
+### Resolved by Phase 1 (2026-08-21)
+- `GainKeyword` now has a real `keyword` field on `Effect`; `condition` is still read as
+  a fallback.
+- Spells fire correctly — the convention is that **every spell effect must be tagged
+  `Battlecry`**, which is what `playCard` fires. Enforced by a test over the card set,
+  not by the engine.
+- `Passive` is still a no-op, but the generator can no longer emit it, and a test proves
+  no card carries one.
+- One collection, one deck, and the mirror match are all gone.
+
 ### Smaller known issues
 - Nothing grants `armor`, so `HeroPortrait` shows a permanent 0. Wire a source or
-  drop the slot.
+  drop the slot. Phase 1B §3.5 decides this alongside weapons.
+- **Manual targeting still does not exist** — effects auto-resolve their targets. This
+  is the main thing blocking real spells; it is Phase 1B §1.
+- **Seven self-hosted `.woff2` files are missing**, so every page logs 404s and falls
+  back to Georgia. See `static/fonts/README.md`.
 - **No card uses `Freeze`, `Silence` or `Stealth`.** The mechanics are implemented
   and tested, but nothing in `demoDeck.ts` uses the first two and the rarity
   keyword pools in `fieldMapper.ts` don't include Stealth — so they never appear
@@ -190,7 +276,8 @@ hash without changing both.
 
 ```bash
 npm run dev      # http://localhost:5173
-npm test         # vitest, 77 tests
+npm run cards    # regenerate src/lib/data/slTerms.ts from slcards.txt
+npm test         # vitest, 193 tests
 npm run check    # svelte-check, expect 0 errors
 npm run build    # production build via adapter-cloudflare
 ```

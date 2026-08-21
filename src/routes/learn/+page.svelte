@@ -3,8 +3,8 @@
 <main>
   <h1>Learn to play</h1>
   <p class="lead">
-    Flashstone is a turn-based card game built from your own study material. Your
-    flashcards become minions, so the reading happens while you play — there is no quiz
+    Flashstone is a turn-based card game built from the Design &amp; Technology syllabus.
+    Every term is a card, so the reading happens while you play — there is no quiz
     interrupting the match.
   </p>
 
@@ -60,20 +60,21 @@
   </section>
 
   <section>
-    <h2>How your flashcards become cards</h2>
+    <h2>Where the cards come from</h2>
     <p>
-      Import a CSV or Markdown export and every flashcard becomes a minion. The
-      <strong>question becomes the card's name</strong> and the
-      <strong>answer becomes its text</strong>, so your board is a review sheet.
+      Every card is a syllabus term. The <strong>term is the card's name</strong>; its
+      cost, stats and ability are fixed to that term and never change, so a card you
+      have played once plays the same way forever.
     </p>
     <p>
-      If your file has cost, attack, health, or rarity columns, those are used directly.
-      Otherwise they are derived from the card's own words — the same flashcard always
-      produces the same minion, so your collection is stable between imports.
+      A card on the table shows only what matters to the game — its ability, and any
+      keywords it has. The <strong>definition is not printed on the card</strong>:
+      click a card to inspect it, or open the collection, and the definition is there.
     </p>
     <p>
-      Rarity decides keywords. Commons are plain; rarer cards earn one, and legendaries
-      always have one.
+      You start with 15 cards, two copies of each — one complete deck. The rest are
+      collected by opening packs. A deck holds 30 cards, at most two copies of any card,
+      and only one copy of a Legendary.
     </p>
   </section>
 
