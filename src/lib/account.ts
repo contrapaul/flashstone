@@ -28,6 +28,26 @@ const initial: AccountState = { loading: true, user: null, gold: 0, cardBack: 'd
 function createAccount() {
   const { subscribe, set } = writable<AccountState>(initial);
 
+  /**
+   * Claims the daily login bonus, if today's is unclaimed.
+   *
+   * Safe to call on every load: the server keys it on the UTC day number, so
+   * the second call of the day awards nothing. Returns what it paid, so the UI
+   * can say so.
+   */
+  async function claimDaily(): Promise<number> {
+    if (!browser) return 0;
+    try {
+      const res = await fetch('/api/rewards/daily', { method: 'POST' });
+      if (!res.ok) return 0;
+      const data = await res.json();
+      if (data.awarded > 0) await refresh();
+      return data.awarded ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   async function refresh(): Promise<AccountState> {
     if (!browser) return initial;
     try {
@@ -73,6 +93,7 @@ function createAccount() {
   return {
     subscribe,
     refresh,
+    claimDaily,
     signup: (email: string, username: string, password: string) =>
       post('/api/auth/signup', { email, username, password }),
     login: (email: string, password: string) => post('/api/auth/login', { email, password }),

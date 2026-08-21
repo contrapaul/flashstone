@@ -6,6 +6,7 @@
   import { ownedCount, isGold, type Owned } from '$lib/collection/owned';
   import { loadCollection } from '$lib/decks/storage';
   import { createReviewTimer } from '$lib/review/timer';
+  import { reportProgress } from '$lib/quests/client';
   import { createRng, shuffle } from '$lib/engine/rng';
 
   /**
@@ -28,15 +29,29 @@
 
   const timer = createReviewTimer(Date.now());
   let ticker: ReturnType<typeof setInterval>;
+  /** Seconds already reported, so each one is only ever sent once. */
+  let reported = 0;
 
   onMount(() => {
     owned = loadCollection() ?? starterCollection();
     reshuffle();
-    ticker = setInterval(() => (seconds = timer.tick(Date.now())), 1000);
+    // Reported in batches rather than every second: the server clamps each
+    // increment at 120s anyway, and one request a minute is plenty.
+    ticker = setInterval(() => {
+      seconds = timer.tick(Date.now());
+      const unreported = seconds - reported;
+      if (unreported >= 30) {
+        reportProgress('reviewSeconds', unreported);
+        reported = seconds;
+      }
+    }, 1000);
     document.addEventListener('visibilitychange', onVisibility);
   });
 
   onDestroy(() => {
+    // Flush whatever is owed, so leaving after 40s does not lose it.
+    const owed = timer.tick(Date.now()) - reported;
+    if (owed > 0) reportProgress('reviewSeconds', owed);
     clearInterval(ticker);
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibility);

@@ -16,10 +16,13 @@
     { href: '/play', label: 'Play' },
     { href: '/decks', label: 'Collection' },
     { href: '/review', label: 'Review' },
+    { href: '/shop', label: 'Shop' },
     { href: '/learn', label: 'Learn' }
   ];
 
   let deckLabel = '';
+  /** Set when today's login bonus was just paid, so the nav can say so once. */
+  let dailyBonus = 0;
 
   onMount(async () => {
     const owned = loadCollection() ?? starterCollection();
@@ -30,7 +33,14 @@
       deckLabel = `${totalCopies(owned)} cards · starter deck`;
     }
 
-    await account.refresh();
+    const state = await account.refresh();
+
+    // The first load of a UTC day pays the login bonus. The server keys it on
+    // the day number, so calling this on every load costs nothing.
+    if (state.user) {
+      const paid = await account.claimDaily();
+      if (paid > 0) dailyBonus = paid;
+    }
 
     // Verification and reset links arrive at the site root to match the URLs
     // the email templates were ported with. The account page handles them.
@@ -49,6 +59,12 @@
     {/each}
   </div>
   <span class="deck">{deckLabel}</span>
+
+  {#if dailyBonus > 0}
+    <button class="bonus" on:click={() => (dailyBonus = 0)} title="Dismiss">
+      +{dailyBonus}g daily bonus
+    </button>
+  {/if}
 
   {#if !$account.loading}
     <a class="account" class:signed-in={$account.user} href="/account">
@@ -110,6 +126,20 @@
     border-color: #8a6c3c;
     background: linear-gradient(180deg, #4a3620, #2a1d10);
     color: var(--gold-bright);
+  }
+
+  .bonus {
+    padding: 5px 11px;
+    border: 1px solid #8a6c3c;
+    border-radius: 4px;
+    background: linear-gradient(180deg, var(--gold), #9c7c3c);
+    color: #2a1d10;
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
   .account {

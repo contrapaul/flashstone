@@ -1,9 +1,14 @@
 <script lang="ts">
   import { backUrlFor } from '../../utils/art';
+  import { cardBackById } from '../shop';
 
-  /** Hue of the inner field. 266 grimoire · 200 astral · 18 legendary foil. */
-  export let hue = 266;
-  export let mark = 'F';
+  /**
+   * Hue and mark of the generated field. Left unset, they come from the back's
+   * own entry in the catalogue — passing them explicitly is only for one-off
+   * decorative uses such as the deck pile.
+   */
+  export let hue: number | null = null;
+  export let mark: string | null = null;
   /** Shrinks the whole back — used for the deck pile. */
   export let scale = 1;
   /**
@@ -16,19 +21,22 @@
    */
   export let backId = 'default';
 
+  $: def = cardBackById(backId);
   $: art = backUrlFor(backId);
+  $: shownHue = hue ?? def.hue;
+  $: shownMark = mark ?? def.mark;
 </script>
 
 <div
   class="back"
   class:drawn={art}
-  style:--hue={hue}
+  style:--hue={shownHue}
   style:--back-art={art ? `url("${art}")` : 'none'}
   style:transform={`scale(${scale})`}
 >
   {#if !art}
     <span class="field" aria-hidden="true"></span>
-    <span class="mark">{mark}</span>
+    <span class="mark">{shownMark}</span>
   {/if}
 </div>
 

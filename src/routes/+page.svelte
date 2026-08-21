@@ -29,6 +29,7 @@
     { href: '/play', title: 'Play' },
     { href: '/decks', title: 'Collection' },
     { href: '/review', title: 'Review' },
+    { href: '/shop', title: 'Shop' },
     { href: '/learn', title: 'Learn to play' }
   ];
 </script>

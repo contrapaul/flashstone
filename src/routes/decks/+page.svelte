@@ -24,6 +24,7 @@
     type Deck
   } from '$lib/decks/deck';
   import { cacheOwned, loadPlayer, savePlayerDeck } from '$lib/collection/sync';
+  import { reportProgress } from '$lib/quests/client';
 
   let owned: Owned = {};
   let deck: Deck = emptyDeck();
@@ -99,10 +100,14 @@
 
   async function persist() {
     saveError = null;
+    // A *new* deck, not a re-save: the quest is for building one, so keying on
+    // whether we already had a server id means saving twice counts once.
+    const wasNew = deckId === null;
     const result = await savePlayerDeck(deck, deckId, signedIn);
     deckId = result.deckId;
     saved = result.ok;
     saveError = result.error ?? null;
+    if (result.ok && wasNew) reportProgress('decksBuilt', 1);
   }
 
   /** Why a card cannot be added — shown as the tile's tooltip. */

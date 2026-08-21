@@ -34,7 +34,7 @@ From the app directory:
 npm install && npx svelte-kit sync && npm test && npm run build && npm run check
 ```
 
-Expected: **193 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
+Expected: **222 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
 reports **0 errors**. That was the verified state at handover. `svelte-kit sync` must run
 before `check` on a fresh clone or `tsconfig.json` fails to resolve its `extends`.
 
@@ -75,6 +75,13 @@ the `make` repo — that name should not reappear).
   `_lib` modules were ported near-verbatim into `src/lib/server/`. **Gold, collection
   and decks are server-authoritative**; the client may read a balance and never sets one.
   Every gold award is idempotent by primary key on `(user, source, ref)`.
+- **Gold is only ever written by the server**, through `award()` in `lib/server/gold.ts`,
+  which is idempotent on `(user, source, ref)`. Purchases debit with
+  `UPDATE ... WHERE gold >= cost` inside a `batch`, so two racing buys cannot both
+  succeed and a balance can never go negative. **Never add a code path that sets gold
+  directly.**
+- **Quest progress is reported by the client and clamped by the server.** The client is
+  the only witness to a card being played; `MAX_INCREMENT` is what stops it mattering.
 - **Playing signed out must keep working.** Practice against the AI needs no account and
   falls back to the starter collection in localStorage. Do not gate `/play` on a session.
 - Rules use standard Hearthstone defaults: 30 hero health, 7-minion board cap, 10 max mana,
@@ -128,6 +135,10 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 | `src/lib/components/` | `CardPreview.svelte` (hand), `MinionView.svelte` (board), `CardInspector.svelte` (the enlarged card + definition, used by the match, the collection and review) |
 | `src/lib/settings.ts` | Client-side settings store. Today: "show definitions in game" |
 | `src/lib/server/` | **Server-only.** Ported auth (`crypto`, `session`, `ratelimit`, `email`), plus `collection`, `gold` and the `api` helpers. SvelteKit forbids importing these from a component |
+| `src/lib/packs/pack.ts` | Pure, seeded pack generation — no duplicates, guaranteed Rare+, 5% gold |
+| `src/lib/quests/` | `quests.ts` (definitions, the daily three, increment clamps) and `client.ts` (fire-and-forget reporting) |
+| `src/lib/shop.ts` | Prices and the card-back catalogue. Shared by client and server so they cannot disagree |
+| `src/lib/server/{shop,quests}.ts` | Purchases and quest progress. Every gold movement goes through `gold.ts` |
 | `src/lib/collection/sync.ts` | The one place the app asks what a player owns — server when signed in, localStorage when not |
 | `src/lib/account.ts` | Client cache of `/api/profile` |
 | `src/hooks.server.ts` | Resolves the session cookie into `locals.user` |
@@ -277,7 +288,7 @@ hash without changing both.
 ```bash
 npm run dev      # http://localhost:5173
 npm run cards    # regenerate src/lib/data/slTerms.ts from slcards.txt
-npm test         # vitest, 193 tests
+npm test         # vitest, 222 tests
 npm run check    # svelte-check, expect 0 errors
 npm run build    # production build via adapter-cloudflare
 ```

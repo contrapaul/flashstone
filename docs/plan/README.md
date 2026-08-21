@@ -24,7 +24,7 @@ are. Read it first, then this. Keep both current.
 npm install && npx svelte-kit sync && npm test && npm run check
 ```
 
-   Baseline after Phase 3 (2026-08-22): **193 tests pass, `svelte-check` reports 0 errors.**
+   Baseline after Phase 4 (2026-08-22): **222 tests pass, `svelte-check` reports 0 errors.**
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -48,7 +48,7 @@ ticked, and continue.
 | [1B](PHASE-1B-SPELLS-WEAPONS.md) | Spells, weapons, targeting | follow-up 3 | 1 | Not started |
 | [2](PHASE-2-TABLE-UX.md) | Table & card UX | 2, 7, 8, 13 | — (light overlap w/ 1) | **Done** 2026-08-21 |
 | [3](PHASE-3-ACCOUNTS.md) | Accounts & server state | (enables 3, 4, 6) | 1 | **Done** 2026-08-22 |
-| [4](PHASE-4-ECONOMY.md) | Gold, packs, quests, card backs | 3, 4, 6, 12, 14 + follow-up 5 | 1, 1B, 2, 3 | Not started |
+| [4](PHASE-4-ECONOMY.md) | Gold, packs, quests, card backs | 3, 4, 6, 12, 14 + follow-up 5 | 1, 1B, 2, 3 | **Done** 2026-08-22 |
 | [5](PHASE-5-MULTIPLAYER.md) | Play Online | 1 | 1B, 3 | Not started |
 
 "Follow-ups" are the five clarifications Paul added on 2026-08-21, recorded in

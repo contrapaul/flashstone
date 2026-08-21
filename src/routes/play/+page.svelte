@@ -14,6 +14,8 @@
   import { starterDeck } from '$lib/data/starter';
   import { isLegal, resolveDeck } from '$lib/decks/deck';
   import { loadPlayer } from '$lib/collection/sync';
+  import { reportProgress } from '$lib/quests/client';
+  import { account } from '$lib/account';
   import { playAiTurn } from '$lib/engine/ai';
   import { attack, canPlayCard, createMatch, endTurn, playCard } from '$lib/engine/engine';
   import { EVENT_BEAT, type GameEvent } from '$lib/engine/events';
@@ -50,6 +52,12 @@
   let floatSeq = 0;
   let draining = false;
   let handWidth = 1440;
+  /**
+   * Identifies this match to the win-reward endpoint, which is idempotent per
+   * id — so a double-fired report, or a reload after winning, pays once.
+   */
+  let matchId = '';
+  let rewarded = false;
   let handHeight = 900;
 
   onMount(() => {
@@ -411,6 +419,8 @@
   }
 
   function restart() {
+    matchId = crypto.randomUUID();
+    rewarded = false;
     state = createMatch(deckCards, aiCards, Date.now() % 100000);
     selectedId = null;
     aiThinking = false;
@@ -644,7 +654,10 @@
     if (finished.kind === 'card') {
       if (!overMyBoard(event.clientY)) return;
       if (!canPlayCard(state, 'player', finished.handIndex)) return;
+      // Read the card before playing it — playCard splices it out of the hand.
+      const played = me.hand[finished.handIndex];
       playCard(state, 'player', finished.handIndex, finished.slot);
+      countCardPlayed(played);
     } else {
       if (!finished.target) return;
       attack(state, 'player', finished.instanceId, finished.target);
@@ -654,6 +667,46 @@
     state = state;
     drain();
   }
+
+  // ── Quest counters ───────────────────────────────────────────
+  // Reported to the server, which clamps every increment — see lib/quests. All
+  // of it is fire-and-forget: a player without an account, or offline, still
+  // plays a normal game.
+
+  function countCardPlayed(card: Card | undefined) {
+    if (!card) return;
+    reportProgress('cardsPlayed', 1);
+    if (card.type === 'Spell') reportProgress('spellsCast', 1);
+  }
+
+  /**
+   * A win pays gold and advances the "win 2 games" quest, once per match.
+   *
+   * Guarded by `rewarded` here and by the match id on the server, because this
+   * is reactive: any later state change would otherwise re-enter it.
+   */
+  async function onWin() {
+    if (rewarded) return;
+    rewarded = true;
+    reportProgress('wins', 1);
+    try {
+      const res = await fetch('/api/rewards/win', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        goldWon = data.awarded ?? 0;
+        await account.refresh();
+      }
+    } catch {
+      // Signed out or offline. The match result stands either way.
+    }
+  }
+
+  let goldWon = 0;
+  $: if (state.winner === 'player' && !rewarded) void onWin();
 
   function onPointerCancel() {
     press = null;
@@ -858,6 +911,9 @@
     <div class="overlay">
       <div class="result">
         <h2>{state.winner === 'player' ? 'Victory' : state.winner === 'ai' ? 'Defeat' : 'Draw'}</h2>
+        {#if state.winner === 'player' && goldWon > 0}
+          <p class="prize">+{goldWon} gold</p>
+        {/if}
         <button on:click={restart}>Play again</button>
       </div>
     </div>
@@ -1147,6 +1203,14 @@
     padding-top: 2px;
     transform-origin: bottom center;
     transition: transform .2s ease;
+  }
+
+  .prize {
+    margin: 0 0 4px;
+    font-family: var(--display);
+    font-size: 15px;
+    letter-spacing: .12em;
+    color: var(--gold-bright);
   }
 
   .overlay {
