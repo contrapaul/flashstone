@@ -1,0 +1,40 @@
+# The realtime Worker: Durable Objects for online matches and the public lobby.
+#
+# This is a SEPARATE deployment from the Pages app, and has to be. Cloudflare
+# Pages cannot define Durable Object classes — it can only bind to ones a Worker
+# exports. See docs/plan/PHASE-5-MULTIPLAYER.md §1 for why that beat migrating
+# the whole app to Workers static assets.
+#
+# Deploy with:  npm run deploy:realtime
+name = "flashstone-realtime"
+main = "src/index.ts"
+compatibility_date = "2025-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Same database as the Pages app: the room loads both players' decks and pays
+# out the winner itself, so it needs the real collection, not a client's word.
+[[d1_databases]]
+binding = "DB"
+database_name = "flashstone-db"
+database_id = "2d848ca6-c435-47f5-be5a-552037001bfe"
+
+[[durable_objects.bindings]]
+name = "MATCH"
+class_name = "MatchRoom"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+# SQLite-backed Durable Objects — available without a paid plan, unlike the
+# original key-value backing.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MatchRoom", "Lobby"]
+
+[vars]
+# TICKET_SECRET is a secret, not a var. Set it on both projects with the SAME
+# value, or every connection will be rejected:
+#   npx wrangler secret put TICKET_SECRET --config workers/realtime/wrangler.toml
+#   npx wrangler pages secret put TICKET_SECRET
+APP_ORIGIN = "http://localhost:5173"

@@ -27,6 +27,7 @@
 
   const menu = [
     { href: '/play', title: 'Play' },
+    { href: '/online', title: 'Play Online' },
     { href: '/decks', title: 'Collection' },
     { href: '/review', title: 'Review' },
     { href: '/shop', title: 'Shop' },

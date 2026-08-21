@@ -1,5 +1,5 @@
 import type { Card, CardType, Effect, Keyword } from '../../types/cards';
-import { hashText } from '../../utils/art';
+import { hashText } from '../../utils/hash';
 import { abilityForHash, describeEffects, templateForHash } from './templates';
 import { SL_TERMS, type SlTerm } from './slTerms';
 

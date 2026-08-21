@@ -34,7 +34,7 @@ From the app directory:
 npm install && npx svelte-kit sync && npm test && npm run build && npm run check
 ```
 
-Expected: **222 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
+Expected: **278 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
 reports **0 errors**. That was the verified state at handover. `svelte-kit sync` must run
 before `check` on a fresh clone or `tsconfig.json` fails to resolve its `extends`.
 
@@ -69,8 +69,15 @@ the `make` repo — that name should not reappear).
   inspected card. `DECISIONS.md` §8.
 - **Copy limits are per card**: two of anything, **one of a Legendary**. The template
   library still supplies statlines but no longer gates deck legality.
-- Opponent is a **local scripted AI** playing **its own deck** (`data/aiDeck.ts`) — no
-  longer a mirror match. Multiplayer is planned; see `docs/plan/PHASE-5-MULTIPLAYER.md`.
+- **Online play is server-authoritative.** The engine runs in a Durable Object, not in
+  either browser. A client sends *intents* and receives a `PlayerView` that **never
+  contains the opponent's hand** — sending the whole `MatchState` would put their cards
+  in the other browser's memory and make the whole arrangement pointless.
+- **One board, two modes.** `MatchTable.svelte` renders a `PlayerView` and emits intents;
+  `/play` gives it a `LocalSource`, `/online/[gameId]` a `RemoteSource`. **Never branch
+  the table on the mode** — that is how the two games start drifting apart.
+- Practice is against a **local scripted AI** playing **its own deck** (`data/aiDeck.ts`),
+  not a mirror match.
 - **Accounts are D1-backed, built exactly like `time` and `make/bloodbowl`** — the
   `_lib` modules were ported near-verbatim into `src/lib/server/`. **Gold, collection
   and decks are server-authoritative**; the client may read a balance and never sets one.
@@ -138,6 +145,9 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 | `src/lib/packs/pack.ts` | Pure, seeded pack generation — no duplicates, guaranteed Rare+, 5% gold |
 | `src/lib/quests/` | `quests.ts` (definitions, the daily three, increment clamps) and `client.ts` (fire-and-forget reporting) |
 | `src/lib/shop.ts` | Prices and the card-back catalogue. Shared by client and server so they cannot disagree |
+| `src/lib/net/` | `protocol.ts` (the wire, Zod-validated), `room.ts` (the rules, no sockets), `view.ts` (what the table may infer), `source.ts` (Local/Remote), `client.ts` (browser socket), `ticket.ts` (HMAC bridge) |
+| `src/lib/components/MatchTable.svelte` | **The** board. Both modes use it |
+| `workers/realtime/` | Separate wrangler project: `MatchRoom` and `Lobby` Durable Objects |
 | `src/lib/server/{shop,quests}.ts` | Purchases and quest progress. Every gold movement goes through `gold.ts` |
 | `src/lib/collection/sync.ts` | The one place the app asks what a player owns — server when signed in, localStorage when not |
 | `src/lib/account.ts` | Client cache of `/api/profile` |
@@ -209,8 +219,19 @@ Deploy either by connecting the repo in the Cloudflare dashboard (build command
   dev loop is `npm run dev` — not a rebuild plus `wrangler pages dev`. Migrations run
   with `npx wrangler d1 execute flashstone-db --local|--remote --file <migration>`.
 
-`RESEND_API_KEY` is **not set**. Until it is, verification and reset emails are a logged
-no-op, so signup works locally but delivers nothing.
+**Online play is a second deployment.** Cloudflare Pages cannot define Durable Object
+classes, so `workers/realtime/` deploys separately with `npm run deploy:realtime`. The
+browser talks to it directly; Pages only mints a signed ticket (`src/lib/net/ticket.ts`),
+because a cross-origin session cookie would be a far worse trade.
+
+Locally: `npm run dev` and `npm run realtime` together. That script passes
+`--persist-to .wrangler/state` **and must keep doing so** — `wrangler dev --config <path>`
+otherwise resolves state relative to the config file and the Worker gets its own empty
+D1, which presents as "no such table: decks".
+
+**Neither `RESEND_API_KEY` nor `TICKET_SECRET` is set, and nothing is deployed.** Until
+they are, email is a logged no-op and online play returns "not configured". The exact
+commands are in `docs/plan/PHASE-5-MULTIPLAYER.md`.
 
 For reference, the old location could not host this at all: `make/wrangler.toml` used
 `pages_build_output_dir = "."` with no build step, so `/fun/flashcards/` served the
@@ -288,7 +309,8 @@ hash without changing both.
 ```bash
 npm run dev      # http://localhost:5173
 npm run cards    # regenerate src/lib/data/slTerms.ts from slcards.txt
-npm test         # vitest, 222 tests
+npm test         # vitest, 278 tests
+npm run realtime # the Durable Object Worker on :8787 (needed for online play)
 npm run check    # svelte-check, expect 0 errors
 npm run build    # production build via adapter-cloudflare
 ```

@@ -15,6 +15,12 @@
 // art and its stats should come from the same seed.
 
 import type { Rarity } from '../types/cards';
+import { hashText } from './hash';
+
+// Re-exported so existing importers keep working. The implementation moved to
+// utils/hash.ts, which the Durable Object can bundle — this file cannot, because
+// `import.meta.glob` below is a Vite feature that esbuild does not understand.
+export { hashText };
 
 export const RARITY_COLOR: Record<Rarity, string> = {
   Common: '#b9ac93',
@@ -25,16 +31,6 @@ export const RARITY_COLOR: Record<Rarity, string> = {
 };
 
 const HUES = [28, 44, 262, 208, 336, 158, 12, 190];
-
-/** FNV-1a. Stable across runs and platforms. */
-export function hashText(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  return h;
-}
 
 /** A layered CSS background: rays + weave + a conic base, hued from the name. */
 export function artFor(name: string): string {

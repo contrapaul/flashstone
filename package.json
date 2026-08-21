@@ -10,7 +10,9 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "deploy": "vite build && wrangler pages deploy",
-    "cards": "node scripts/build-sl-cards.mjs"
+    "cards": "node scripts/build-sl-cards.mjs",
+    "realtime": "wrangler dev --config workers/realtime/wrangler.toml --port 8787 --persist-to .wrangler/state",
+    "deploy:realtime": "wrangler deploy --config workers/realtime/wrangler.toml"
   },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "^4.0.0",

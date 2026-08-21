@@ -14,6 +14,7 @@
   // the built-in SL card set. The route and its parsers remain on disk.
   const links = [
     { href: '/play', label: 'Play' },
+    { href: '/online', label: 'Online' },
     { href: '/decks', label: 'Collection' },
     { href: '/review', label: 'Review' },
     { href: '/shop', label: 'Shop' },

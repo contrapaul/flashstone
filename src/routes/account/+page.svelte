@@ -49,9 +49,13 @@
 
     if (mode === 'login') {
       message = await account.login(email, password);
+      if (!message) returnToNext();
     } else if (mode === 'signup') {
       message = await account.signup(email, username, password);
-      if (!message) notice = 'Account created. Check your email to verify the address.';
+      if (!message) {
+        notice = 'Account created. Check your email to verify the address.';
+        returnToNext();
+      }
     } else if (mode === 'forgot') {
       message = await account.requestReset(email);
       // Deliberately the same answer whether or not the account exists.
@@ -72,6 +76,12 @@
     await account.logout();
     busy = false;
     notice = 'Signed out.';
+  }
+
+  /** Sends the player back where they came from — an invite link, usually. */
+  function returnToNext() {
+    const next = $page.url.searchParams.get('next');
+    if (next && next.startsWith('/')) location.href = next;
   }
 
   const TITLES: Record<Mode, string> = {
