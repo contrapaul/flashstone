@@ -7,6 +7,13 @@ export const DECK_SIZE = 30;
 export const MAX_COPIES = 2;
 /** Legendaries are singletons. DECISIONS.md §2. */
 export const LEGENDARY_COPIES = 1;
+/**
+ * How many decks a signed-in player may keep. DECISIONS.md §11.
+ *
+ * Enforced server-side; the builder shows it as ten slots. Signed-out play
+ * keeps one deck in localStorage — slots are an account feature, not a paywall.
+ */
+export const MAX_DECKS = 10;
 
 /**
  * A deck is a list of card ids; the registry says what they are and the

@@ -24,14 +24,16 @@ are. Read it first, then this. Keep both current.
 npm install && npx svelte-kit sync && npm test && npm run check
 ```
 
-   Baseline after Phase 7 (2026-08-22): **377 tests pass, `svelte-check` reports 0 errors.**
+   Baseline after Phase 8 (2026-08-22): **385 tests pass, `svelte-check` reports 0 errors.**
    Every **build** phase is complete, including hero powers, which were deferred
    twice before Phase 6 built them. [Phase 7](PHASE-7-ECONOMY-TUNING.md) is
    **decided**: the prices stand, the pack class slot now aims at the class the
    collection is thinnest in, and a one-time new-player package hands over 7
-   packs and 200 gold. Its numbers are measured but still unplayed. [Phase 8](PHASE-8-DECK-SLOTS.md) is real work — class is a
-   property of a *deck*, and players are meant to keep up to ten of them, but the
-   UI still exposes only one.
+   packs and 200 gold. Its numbers are measured but still unplayed.
+   [Phase 8](PHASE-8-DECK-SLOTS.md) is **built**: ten named deck slots, each with
+   its own class, and an explicit choice of which one is played — also untested
+   in a signed-in browser. **Migrations `0004` and `0005` are applied locally and
+   not remotely.**
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -59,7 +61,7 @@ ticked, and continue.
 | [5](PHASE-5-MULTIPLAYER.md) | Play Online | 1 | 1B, 3 | **Done** 2026-08-22 |
 | [6](PHASE-6-CLASSES.md) | Classes & hero powers | new 2026-08-22 | 1, 1B, 3, 4 | **Done** 2026-08-22 |
 | [7](PHASE-7-ECONOMY-TUNING.md) | Economy & shop review | — (decisions) | 4, 6 | **Decided** — one number changed, new-player package built; playing it is all that is left |
-| [8](PHASE-8-DECK-SLOTS.md) | Deck slots (10 per player) | — | 6 | **Not started** |
+| [8](PHASE-8-DECK-SLOTS.md) | Deck slots (10 per player) | — | 6 | **Complete** — untested in a signed-in browser |
 
 "Follow-ups" are the five clarifications Paul added on 2026-08-21, recorded in
 `DECISIONS.md` §8–§10 and in the Phase 1 and 1B steps: table text is game-text only,

@@ -65,10 +65,15 @@ the `make` repo — that name should not reappear).
   nobody is ever locked out of a class they have not collected.
 - **Class belongs to a deck, not to a player.** As in Hearthstone, players keep
   several decks across several classes and swap between them; there is no such
-  thing as "the player's class". Up to **10 deck slots** — the schema and API
-  already support many decks per user, but **the UI still exposes only one**
-  (`docs/plan/PHASE-8-DECK-SLOTS.md`). Do not write code that assumes one deck or
-  a per-player class.
+  thing as "the player's class". Up to **10 deck slots**, enforced server-side,
+  each with its own class and name (Phase 8). Do not write code that assumes one
+  deck or a per-player class.
+- **"Your deck" means the *active* one**, `profiles.active_deck`, not the most
+  recently updated — editing a deck must not change what you take into a match.
+  Every reader falls back to most-recent when no choice has been made. Four
+  places read it: the builder, `collection/sync.ts`, `/api/online/ticket` and
+  `MatchRoom.loadDeck`. Signed out there is one deck in localStorage, and that
+  copy mirrors the active deck.
 - **Hero powers are data, not engine branches.** `data/classes.ts` gives each a
   list of `Effect`s that resolve through the same `resolveEffect` cards use, so a
   power can never do something a card could not.
@@ -175,7 +180,7 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 | `src/lib/collection/sync.ts` | The one place the app asks what a player owns — server when signed in, localStorage when not |
 | `src/lib/account.ts` | Client cache of `/api/profile` |
 | `src/hooks.server.ts` | Resolves the session cookie into `locals.user` |
-| `src/routes/api/` | `auth/*`, `collection`, `decks`, `profile`, `rewards/*` |
+| `src/routes/api/` | `auth/*`, `collection`, `decks` (+ `decks/active`), `profile`, `quests/*`, `rewards/*`, `shop/*` |
 | `db/migrations/` | D1 schema. **Append-only** — never edit an applied migration |
 | `src/lib/review/timer.ts` | Active-review-seconds clock — pauses on hidden tab and after 30s idle |
 | `src/routes/review/+page.svelte` | Review mode — the same card, definition beside it |

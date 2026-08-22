@@ -1,7 +1,7 @@
 import { json, error, type RequestHandler } from '@sveltejs/kit';
 import { db, env as platformEnv, readJson, requireUser } from '$lib/server/api';
 import { signTicket } from '$lib/net/ticket';
-import { loadOwned, loadDecks } from '$lib/server/collection';
+import { activeDeckId, loadOwned, loadDecks } from '$lib/server/collection';
 import { isLegal } from '$lib/decks/deck';
 
 /**
@@ -28,8 +28,15 @@ export const POST: RequestHandler = async (event) => {
   // 'lobby' is the sentinel for lobby operations, which are not tied to a game.
   const gameId = String(body.gameId ?? 'lobby');
 
-  const [owned, decks] = await Promise.all([loadOwned(DB, user.id), loadDecks(DB, user.id)]);
-  const deck = decks[0];
+  const [owned, decks, activeId] = await Promise.all([
+    loadOwned(DB, user.id),
+    loadDecks(DB, user.id),
+    activeDeckId(DB, user.id)
+  ]);
+  // The **active** deck, because that is the one the match room will deal.
+  // Checking the most recent one here would let an illegal active deck through
+  // the gate and fall over inside the match instead.
+  const deck = decks.find((d) => d.id === activeId) ?? decks[0];
   if (!deck || !isLegal({ name: deck.name, cardIds: deck.cardIds }, owned)) {
     error(400, 'You need a legal 30-card deck before playing online. Build one in Collection.');
   }

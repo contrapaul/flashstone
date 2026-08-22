@@ -218,6 +218,6 @@ Real problems noticed but out of scope. **Not fixed.**
   local otherwise; a deck built while signed out is not offered for upload on sign-in. It
   is still on the device, and saving once while signed in pushes it. A prompt would be
   friendlier — worth doing if it bites.
-- **One account, one deck in the UI.** The schema and `/api/decks` support many decks per
-  user; the builder only ever reads and writes the most recent. Multiple named decks are
-  a UI job nobody has asked for yet.
+- ~~**One account, one deck in the UI.**~~ **Fixed in Phase 8.** The builder keeps
+  up to ten named decks, each with its own class, and which one is played is an
+  explicit choice rather than "the most recently updated".

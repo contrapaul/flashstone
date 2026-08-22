@@ -143,12 +143,28 @@ export class MatchRoom {
     this.resetTurnClock();
   }
 
+  /**
+   * The player's **active** deck, not their most recent one.
+   *
+   * `profiles.active_deck` is the choice; the most recently updated deck is the
+   * fallback for an account that has never made one, and for an active_deck
+   * that points at a deck since deleted. Editing a deck must not silently
+   * change what someone takes into an online match.
+   */
   private async loadDeck(userId: string): Promise<{ cards: Card[]; heroClass: CardClass }> {
-    const row = await this.env.DB.prepare(
-      'SELECT name, card_ids, class FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1'
-    )
-      .bind(userId)
-      .first();
+    const row =
+      (await this.env.DB.prepare(
+        `SELECT d.name, d.card_ids, d.class FROM decks d
+         JOIN profiles p ON p.active_deck = d.id
+         WHERE p.user_id = ?1 AND d.user_id = ?1`
+      )
+        .bind(userId)
+        .first()) ??
+      (await this.env.DB.prepare(
+        'SELECT name, card_ids, class FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1'
+      )
+        .bind(userId)
+        .first());
 
     if (!row) return { cards: [], heroClass: 'Neutral' };
     try {

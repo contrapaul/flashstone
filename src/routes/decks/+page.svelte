@@ -27,7 +27,16 @@
     removeCard,
     type Deck
   } from '$lib/decks/deck';
-  import { cacheOwned, loadPlayer, savePlayerDeck } from '$lib/collection/sync';
+  import {
+    LOCAL_DECK_ID,
+    cacheOwned,
+    deleteDeck,
+    loadPlayer,
+    savePlayerDeck,
+    setActiveDeck,
+    type DeckRecord
+  } from '$lib/collection/sync';
+  import { MAX_DECKS } from '$lib/decks/deck';
   import { reportProgress } from '$lib/quests/client';
 
   let owned: Owned = {};
@@ -36,6 +45,72 @@
   let deckId: string | null = null;
   let signedIn = false;
   let saveError: string | null = null;
+
+  // ── Deck slots ────────────────────────────────────────────────
+  let decks: DeckRecord[] = [];
+  /** The deck a match is dealt from — not necessarily the one being edited. */
+  let activeId: string | null = null;
+
+  $: slotsLeft = MAX_DECKS - decks.length;
+
+  /** Warns before throwing away edits, wherever a switch would lose them. */
+  function mayLeave(): boolean {
+    if (saved || deck.cardIds.length === 0) return true;
+    return confirm('This deck has unsaved changes. Leave it?');
+  }
+
+  function editDeck(record: DeckRecord) {
+    if (record.id === deckId || !mayLeave()) return;
+    deck = pruneDeck({ name: record.name, cardIds: record.cardIds, class: record.class }, owned);
+    deckId = record.id;
+    saved = true;
+    saveError = null;
+  }
+
+  function newDeck() {
+    if (!mayLeave()) return;
+    deck = emptyDeck();
+    deckId = null;
+    saved = false;
+    saveError = null;
+  }
+
+  async function playThis(id: string) {
+    const record = decks.find((d) => d.id === id);
+    const ok = await setActiveDeck(id, record);
+    if (ok) activeId = id;
+    else saveError = 'Could not change the deck you play.';
+  }
+
+  async function removeDeck(record: DeckRecord) {
+    if (!confirm(`Delete “${record.name}”? This cannot be undone.`)) return;
+
+    const result = await deleteDeck(record.id);
+    if (!result.ok) {
+      saveError = 'Could not delete that deck.';
+      return;
+    }
+    decks = result.decks;
+    activeId = result.activeId;
+    // Editing the deck that just went is the one case where the builder has to
+    // move on its own: fall back to whatever is now active, or an empty slot.
+    if (deckId === record.id) {
+      const next = decks.find((d) => d.id === activeId) ?? decks[0];
+      if (next) editDeckForce(next);
+      else {
+        deck = emptyDeck();
+        deckId = null;
+        saved = false;
+      }
+    }
+  }
+
+  /** `editDeck` without the unsaved-changes prompt, for a deck that is gone. */
+  function editDeckForce(record: DeckRecord) {
+    deck = pruneDeck({ name: record.name, cardIds: record.cardIds, class: record.class }, owned);
+    deckId = record.id;
+    saved = true;
+  }
 
   $: deckClass = deck.class ?? DEFAULT_CLASS;
   $: heroPower = heroPowerFor(deckClass);
@@ -77,6 +152,8 @@
     const player = await loadPlayer();
     owned = player.owned;
     deckId = player.deckId;
+    decks = player.decks;
+    activeId = player.activeId;
     signedIn = player.signedIn;
     // A saved deck can outlive a card leaving the set, or copies being spent.
     if (player.deck) deck = pruneDeck(player.deck, owned);
@@ -135,11 +212,26 @@
     // A *new* deck, not a re-save: the quest is for building one, so keying on
     // whether we already had a server id means saving twice counts once.
     const wasNew = deckId === null;
-    const result = await savePlayerDeck(deck, deckId, signedIn);
+    // The local mirror follows the active deck; saving one of the others must
+    // not overwrite what offline play and the nav bar read.
+    const isActive = activeId === null || activeId === deckId;
+    const result = await savePlayerDeck(deck, deckId, signedIn, isActive);
     deckId = result.deckId;
     saved = result.ok;
     saveError = result.error ?? null;
-    if (result.ok && wasNew) reportProgress('decksBuilt', 1);
+    if (!result.ok) return;
+
+    if (wasNew) reportProgress('decksBuilt', 1);
+    if (result.activeId) activeId = result.activeId;
+
+    // Keep the slot list honest without another round trip: the saved deck is
+    // either new, or one already in the list under a possibly new name.
+    const id = deckId ?? LOCAL_DECK_ID;
+    const record: DeckRecord = { id, name: deck.name, cardIds: deck.cardIds, class: deck.class };
+    decks = decks.some((d) => d.id === id)
+      ? decks.map((d) => (d.id === id ? record : d))
+      : [record, ...decks];
+    if (!activeId) activeId = id;
   }
 
   /** Why a card cannot be added — shown as the tile's tooltip. */
@@ -176,6 +268,60 @@
       {distinct} of {ALL_CARDS.length} cards collected. Two copies of a card per deck —
       Legendaries one.
     </p>
+
+    <section class="slots" aria-label="Your decks">
+      <div class="slot-head">
+        <h2 class="slot-title">Decks</h2>
+        {#if signedIn}
+          <span class="slot-count">{decks.length} of {MAX_DECKS}</span>
+        {:else}
+          <span class="slot-count">Saved on this device</span>
+        {/if}
+      </div>
+
+      <div class="slot-row">
+        {#each decks as record (record.id)}
+          {@const editing = record.id === deckId}
+          {@const playing = record.id === activeId}
+          <div class="slot" class:editing class:playing>
+            <button class="slot-open" on:click={() => editDeck(record)} title="Edit {record.name}">
+              <span class="slot-name">{record.name}</span>
+              <span class="slot-meta">
+                {record.class ?? 'Any class'} · {record.cardIds.length}/{DECK_SIZE}
+              </span>
+            </button>
+
+            {#if signedIn}
+              <div class="slot-actions">
+                {#if playing}
+                  <span class="playing-tag">Playing</span>
+                {:else}
+                  <button class="link" on:click={() => playThis(record.id)}>Play this</button>
+                {/if}
+                <button class="link danger" on:click={() => removeDeck(record)}>Delete</button>
+              </div>
+            {/if}
+          </div>
+        {/each}
+
+        {#if signedIn && slotsLeft > 0}
+          <button class="slot new" on:click={newDeck}>
+            <span class="slot-name">+ New deck</span>
+            <span class="slot-meta">{slotsLeft} slot{slotsLeft === 1 ? '' : 's'} left</span>
+          </button>
+        {/if}
+      </div>
+
+      {#if !signedIn}
+        <p class="slot-note">
+          Signed-in players keep up to {MAX_DECKS} decks, each with its own class.
+          <a href="/account">Sign in</a> to unlock the rest — this one stays on this device
+          either way.
+        </p>
+      {:else if slotsLeft === 0}
+        <p class="slot-note">All {MAX_DECKS} slots are full. Delete one to build another.</p>
+      {/if}
+    </section>
 
     <div class="classes" role="group" aria-label="Deck class">
       {#each PLAYABLE_CLASSES as option (option)}
@@ -261,7 +407,13 @@
 
     <section class="deck-panel">
       <div class="col-head">
-        <h2>Deck</h2>
+        <input
+          class="deck-name"
+          aria-label="Deck name"
+          maxlength="60"
+          bind:value={deck.name}
+          on:input={() => (saved = false)}
+        />
         <span class="tally" class:full={deck.cardIds.length === DECK_SIZE}>
           {deck.cardIds.length}/{DECK_SIZE}
         </span>
@@ -325,6 +477,135 @@
   }
 
   header { margin-bottom: 16px; }
+
+  .slots { margin: 14px 0 6px; }
+
+  .slot-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .slot-title {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .slot-count {
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+  }
+
+  .slot-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .slot {
+    display: flex;
+    flex-direction: column;
+    min-width: 150px;
+    padding: 7px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--ink-2);
+    text-align: left;
+  }
+  .slot.editing { border-color: var(--frame-lit); }
+  .slot.playing { box-shadow: inset 3px 0 0 var(--gold); }
+
+  .slot.new {
+    cursor: pointer;
+    border-style: dashed;
+    color: var(--text-dim);
+  }
+  .slot.new:hover { border-color: var(--frame-lit); color: var(--gold-bright); }
+
+  .slot-open {
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .slot-name {
+    display: block;
+    font-family: var(--body);
+    font-size: 13.5px;
+    color: var(--text);
+  }
+
+  .slot-meta {
+    display: block;
+    font-family: var(--display);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+  }
+
+  .slot-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 5px;
+  }
+
+  .playing-tag {
+    font-family: var(--display);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+  }
+
+  .link {
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .link:hover { color: var(--gold-bright); }
+  .link.danger:hover { color: #f0928a; }
+
+  .slot-note {
+    margin: 8px 0 0;
+    font-family: var(--body);
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .deck-name {
+    flex: 1;
+    min-width: 0;
+    padding: 3px 6px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    font-family: var(--display);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .deck-name:hover { border-color: var(--rule); }
+  .deck-name:focus {
+    outline: none;
+    border-color: var(--frame-lit);
+    background: var(--ink-2);
+  }
 
   h1 {
     font-family: var(--display);

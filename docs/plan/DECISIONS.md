@@ -207,7 +207,17 @@ Confirmed 2026-08-22.
   several decks across several classes and swap between them. Choosing a class is
   a per-deck decision made every time a deck is built — **not** a one-time choice
   at first run. The first deck is simply the first of many.
-- **Players may keep up to 10 decks** (`PHASE-8-DECK-SLOTS.md`).
+- **Players may keep up to 10 decks.** The limit is enforced server-side; an
+  eleventh save is refused rather than merely unrendered.
+- **Which deck is played is an explicit choice**, held in `profiles.active_deck`
+  and read by both the practice route and the online match room. It falls back
+  to the most recently updated deck for an account that has never chosen one, or
+  whose choice has since been deleted. Editing a deck must not silently change
+  what you take into a match, which "most recent" would.
+- **Signed out, there is one deck**, in localStorage. Slots are an account
+  feature; the builder says so plainly rather than showing nine locked slots,
+  which would read as a paywall in a game that has none. The local copy mirrors
+  the **active** deck, so offline play falls back to the deck you actually play.
 - **All four classes are unlocked from the start.** There is no gate, no purchase
   and no progression to choosing one; a player may build a deck of any class on
   first run and switch freely.

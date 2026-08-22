@@ -1,6 +1,6 @@
 import type { Owned } from '$lib/collection/owned';
 import { STARTER_CARD_IDS } from '$lib/data/starter';
-import { deckProblems, type Deck } from '$lib/decks/deck';
+import { deckProblems, MAX_DECKS, type Deck } from '$lib/decks/deck';
 
 /**
  * The server's view of a player's collection and decks.
@@ -69,6 +69,59 @@ export async function loadDecks(DB: any, userId: string): Promise<(Deck & { id: 
     }
   });
 }
+
+/**
+ * The deck the player plays.
+ *
+ * Falls back to the most recently updated one whenever no choice has been made
+ * — which is every account that existed before deck slots, and any account
+ * whose active deck was just deleted. Returns null only when there are no decks.
+ */
+export async function activeDeckId(DB: any, userId: string): Promise<string | null> {
+  const profile = await DB.prepare('SELECT active_deck FROM profiles WHERE user_id = ?1')
+    .bind(userId)
+    .first();
+  const chosen = (profile?.active_deck as string) ?? null;
+
+  if (chosen) {
+    // A stale id — the deck was deleted from under it — must not beat the
+    // fallback, or the player ends up with no deck and no way to see why.
+    const still = await DB.prepare('SELECT id FROM decks WHERE id = ?1 AND user_id = ?2')
+      .bind(chosen, userId)
+      .first();
+    if (still) return chosen;
+  }
+
+  const recent = await DB.prepare(
+    'SELECT id FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1'
+  )
+    .bind(userId)
+    .first();
+  return (recent?.id as string) ?? null;
+}
+
+/** Marks a deck active. Refuses an id that is not this player's. */
+export async function setActiveDeck(DB: any, userId: string, deckId: string): Promise<boolean> {
+  const owns = await DB.prepare('SELECT id FROM decks WHERE id = ?1 AND user_id = ?2')
+    .bind(deckId, userId)
+    .first();
+  if (!owns) return false;
+
+  await DB.prepare('UPDATE profiles SET active_deck = ?1 WHERE user_id = ?2')
+    .bind(deckId, userId)
+    .run();
+  return true;
+}
+
+/** How many decks this player is keeping, against the limit of MAX_DECKS. */
+export async function countDecks(DB: any, userId: string): Promise<number> {
+  const row = await DB.prepare('SELECT COUNT(*) AS n FROM decks WHERE user_id = ?1')
+    .bind(userId)
+    .first();
+  return (row?.n as number) ?? 0;
+}
+
+export { MAX_DECKS };
 
 /** Every reason this deck cannot be saved, from the server's own records. */
 export function validateDeck(deck: Deck, owned: Owned): string[] {
