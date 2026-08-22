@@ -25,8 +25,10 @@ npm install && npx svelte-kit sync && npm test && npm run check
 ```
 
    Baseline after Phase 1B (2026-08-22): **313 tests pass, `svelte-check` reports 0 errors.**
-   **Every phase is complete**, including hero powers, which were deferred twice
-   before Phase 6 built them.
+   Every **build** phase is complete, including hero powers, which were deferred
+   twice before Phase 6 built them. [Phase 7](PHASE-7-ECONOMY-TUNING.md) is
+   outstanding and is a **decision** phase — the economy works but its numbers
+   have never been played, and one measured result says the curve is wrong.
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -53,6 +55,7 @@ ticked, and continue.
 | [4](PHASE-4-ECONOMY.md) | Gold, packs, quests, card backs | 3, 4, 6, 12, 14 + follow-up 5 | 1, 1B, 2, 3 | **Done** 2026-08-22 |
 | [5](PHASE-5-MULTIPLAYER.md) | Play Online | 1 | 1B, 3 | **Done** 2026-08-22 |
 | [6](PHASE-6-CLASSES.md) | Classes & hero powers | new 2026-08-22 | 1, 1B, 3, 4 | **Done** 2026-08-22 |
+| [7](PHASE-7-ECONOMY-TUNING.md) | Economy & shop review | — (decisions) | 4, 6 | **Not started** |
 
 "Follow-ups" are the five clarifications Paul added on 2026-08-21, recorded in
 `DECISIONS.md` §8–§10 and in the Phase 1 and 1B steps: table text is game-text only,

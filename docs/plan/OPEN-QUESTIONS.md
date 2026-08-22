@@ -28,17 +28,23 @@ if no answer arrives — so **no phase stalls waiting on this file.**
 
 ### Note on #16 — how long a class set actually takes
 
-> **Updated 2026-08-22 with a measured figure, replacing the estimate below.**
-> With one reserved class slot per pack, completing one class's ten cards at two
-> copies takes **57 packs — 5,700 gold, roughly three weeks of daily play**.
-> Asserted in `pack.test.ts` as a regression guard.
+> **Updated 2026-08-22 — measured, and the finding is bigger than the question.**
 >
-> My earlier estimate of "about a week" was wrong: it ignored that the reserved
-> slot deals a class card of **any** class, so only about a quarter of them are
-> the player's own. The remaining lever, if three weeks is still too slow, is to
-> weight the reserved slot toward the player's own class — `openPack` would need
-> to be told which class that is. **Not done, because it is a design decision
-> about whether packs should know who is opening them.**
+> | Goal | Packs | Days at ~265 gold/day |
+> |---|---|---|
+> | One class's 10 cards, 2 copies | 52–57 | ~22 |
+> | **The entire 210-card collection** | **78** | **~29** |
+>
+> Getting your own class takes three quarters as long as getting *everything*.
+> The no-duplicate rule fills the 170 Neutral cards fast while the reserved slot
+> deals a class card of **any** class, so only a quarter of it is yours.
+>
+> Simulated fix — the slot favours the opener's class: own set **17–19 packs
+> (~7 days)**, full collection unchanged at 78. Roughly triples the rate on the
+> cards players actually want, at the cost of packs knowing who opens them.
+>
+> **Not applied.** It is a design decision, and it belongs to
+> `PHASE-7-ECONOMY-TUNING.md` §1.1 along with the rest of the untested economy.
 
 ### Original estimate (superseded)
 
