@@ -27,8 +27,10 @@ The window is a wide letterbox strip across the upper half of the card, and it i
 filled with `cover` — so the image is **cropped to fill**, centred, if its ratio
 differs. Keep anything essential away from the outer 6%.
 
-Card ids are listed in `src/lib/data/slTerms.ts`. To see them with their stats,
-run `npm run dev` and open `/decks`.
+**`FILENAMES.md` next to this file lists every filename to draw**, in the order
+that pays off fastest, with each card's rarity, type and syllabus section. Card
+ids also live in `src/lib/data/slTerms.ts`; to see them with their stats, run
+`npm run dev` and open `/decks`.
 
 > A card with no file keeps its generated gradient and its letter sigil. Once a
 > file exists the sigil is hidden automatically.
@@ -42,8 +44,9 @@ run `npm run dev` and open `/decks`.
 | **Source size** | **536 × 672 px** (4×) |
 | **Transparency** | not needed |
 
-Four backs ship: one default plus three purchasable. A back appears in the shop
-as soon as its file exists.
+Five backs ship: one default, three purchasable at 300 gold, and `ascendant`,
+which is **not for sale** — it is unlocked by winning three games, so it should
+read as earned. A back appears in the shop as soon as its file exists.
 
 ## 3. UI elements — `art/ui/<name>.webp`
 
@@ -119,14 +122,14 @@ still-loading backdrop looks deliberate rather than blank.
 ## 5. Gold (foil) variants — `art/ui/`
 
 Gold cards are a **treatment, not a second illustration.** They reuse the
-standard card's art. Two assets cover all 155 cards:
+standard card's art. Two assets cover all 210 cards:
 
 | Name | What it is | Source size | Transparency |
 |---|---|---|---|
 | `foil-frame` | the gold card border, drawn as a 9-slice-able frame | 536 × 672 px | **yes** |
 | `foil-sheen` | the highlight band that sweeps across the face | 1072 × 672 px | **yes** |
 
-**Do not draw 155 gold illustrations.** The current CSS treatment — a gold border
+**Do not draw 210 gold illustrations.** The current CSS treatment — a gold border
 plus an animated sheen — already works; these two files replace it with drawn
 versions.
 
