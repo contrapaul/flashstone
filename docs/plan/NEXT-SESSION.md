@@ -1,16 +1,17 @@
-# Handoff — after the economy session
+# Handoff — after the economy and deck-slots sessions
 
-Written 2026-08-22. Replaces the pre-economy handoff. Delete this file once the
-deck-slots session is done.
+Written 2026-08-22. Every phase in `docs/plan/` is now done or decided; what is
+left is playing it. Delete this file once someone has.
 
 ## Where the project is
 
-Flashstone is **feature-complete and deployed**. **377 tests pass,
+Flashstone is **feature-complete and deployed**. **385 tests pass,
 `svelte-check` reports 0 errors**, and both projects build. Live at
 `flashstone.contrapaul.com`, realtime Worker at
 `flashstone-realtime.contrapaul.workers.dev`.
 
-`PHASE-7-ECONOMY-TUNING.md` is **decided**. Two things changed:
+`PHASE-7-ECONOMY-TUNING.md` is **decided** and `PHASE-8-DECK-SLOTS.md` is
+**built**. Three things changed:
 
 1. **The reserved class slot now aims at the thinnest class.** Measured, not
    guessed: the old any-class rule left 17% of players owning nothing of some
@@ -20,19 +21,29 @@ Flashstone is **feature-complete and deployed**. **377 tests pass,
 2. **The new-player package** (`DECISIONS.md` §13) — four one-time intro quests
    paying **7 packs and 200 gold**, plus the `Ascendant` card back, which gold
    cannot buy. Packs are now held in an inventory and opened from the shop.
+3. **Ten deck slots**, each with its own class and name, and an explicit choice
+   of which deck is played (`profiles.active_deck`). "Your deck" no longer means
+   "the most recently updated", which was a surprising rule once there were ten.
 
 Every price is unchanged: pack 100, card back 300, daily 50, AI win 25, online
 win 40, quests 75/50/50/40/40, three quests a day.
 
 ## Before anything else
 
-**Migration `0004_onboarding.sql` has been applied locally but not remotely.**
+**Migrations `0004` and `0005` are applied locally but not remotely.**
 
 ```
 npx wrangler d1 execute flashstone-db --remote --file db/migrations/0004_onboarding.sql
 ```
 
-Without it, `/api/profile` and every intro-quest call fail on `profiles.packs`.
+```
+npx wrangler d1 execute flashstone-db --remote --file db/migrations/0005_active_deck.sql
+```
+
+Without them `/api/profile` fails on `profiles.packs`, and every deck call fails
+on `profiles.active_deck`. The realtime Worker reads the same database, so it
+needs `0005` too — `npm run deploy:realtime` after the migration, since
+`MatchRoom` now joins through the new column.
 
 ## What is still open
 
@@ -44,9 +55,10 @@ Without it, `/api/profile` and every intro-quest call fail on `profiles.packs`.
   projects build, but nothing has signed in and clicked Claim. Worth doing first
   after the remote migration: play one match against the AI, lose it on purpose,
   and confirm the 100 gold and the pack arrive.
-- **`PHASE-8-DECK-SLOTS.md`** — ten deck slots. The schema and `/api/decks`
-  already support many decks per user; **only the UI is single-deck**, so three
-  of the four classes are effectively invisible. This is the real remaining work.
+- **Ten slots have never been driven in a signed-in browser.** The route
+  handlers are covered by tests and the signed-out path was checked by hand, but
+  "build a Designer deck and an Engineer deck and switch between them" is still
+  an unrun sentence — as is playing a chosen deck online. `PHASE-8` §5.
 - **`PHASE-7` §4.1** — what the shop offers a player with a complete collection.
   Now with a wrinkle: they may be holding unopened packs, which are deliberately
   not burned on duplicates.
