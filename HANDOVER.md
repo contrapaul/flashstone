@@ -122,7 +122,7 @@ the `make` repo — that name should not reappear).
 
 ---
 
-## 4. Toolchain landmines — five things that were broken, don't reintroduce them
+## 4. Toolchain landmines — six things that were broken, don't reintroduce them
 
 This project had **never successfully built** before this work. Each of these is a real
 trap, not a style preference:
@@ -141,6 +141,24 @@ trap, not a style preference:
    identifiers *referenced in the expression*. Use a reactive value
    (`$: targetableIds = new Set(...)`) instead of a function call. This caused a real bug
    where enemy minions didn't highlight as attack targets.
+6. **`d1 execute --remote --file` does not work with a `wrangler login` token.**
+   The `--file` form uploads to the D1 **import** API, which returns
+   `Authentication error [code: 10000]` / 401 for the OAuth token wrangler 3.114
+   mints — while `/memberships`, `/user` and the `--command` query endpoint all
+   answer 200 on that same token. It is the endpoint, not the scope: the token
+   reports `d1 (write)` and Super Administrator. Verified 2026-08-22 applying
+   `0004` and `0005`.
+   **Apply remote migrations with `--command` instead**, one statement per
+   invocation, flattened onto one line:
+   ```
+   npx wrangler d1 execute flashstone-db --remote --command "ALTER TABLE profiles ADD COLUMN packs INTEGER NOT NULL DEFAULT 0"
+   ```
+   The files in `db/migrations/` remain the record of the schema — the commands
+   are only how it gets applied. `--local --file` is unaffected and still the
+   right way to migrate the dev database. Confirm afterwards with
+   `PRAGMA table_info(<table>)` and
+   `SELECT name FROM sqlite_master WHERE type='table'`, because a failed import
+   leaves no trace either way.
 
 ---
 
