@@ -3,6 +3,7 @@ import { ALL_CARDS } from '../data/cards';
 import { MAX_OWNED, ownedCount, goldCount, type Owned } from '../collection/owned';
 import { starterCollection } from '../data/starter';
 import { GOLD_CHANCE, PACK_SIZE, applyPack, openPack } from './pack';
+import { PLAYABLE_CLASSES } from '../../types/cards';
 
 const RARE_OR_BETTER = ['Rare', 'Epic', 'Legendary'];
 
@@ -209,6 +210,37 @@ describe('class cards in packs', () => {
     expect(pack.every((p) => (p.card.class ?? 'Neutral') === 'Neutral')).toBe(true);
   });
 
+  /**
+   * The curve that actually matters.
+   *
+   * Class is a property of a **deck**, not a player — people build several decks
+   * across several classes — so the meaningful question is how fast cards arrive
+   * across *all four*, not how fast one class completes. Measured 2026-08-22:
+   * one card of every class by 6 packs, five of every class by 21, the whole
+   * 210-card collection by 78.
+   *
+   * These are regression guards on the shape of the curve. If they start
+   * failing, re-measure rather than nudging them.
+   */
+  it('spreads across all four classes quickly', () => {
+    let owned: Owned = {};
+    let packs = 0;
+    const distinct = (cls: string) =>
+      ALL_CARDS.filter((c) => c.class === cls && (owned[c.id]?.copies ?? 0) > 0).length;
+
+    while (packs < 60 && !PLAYABLE_CLASSES.every((c) => distinct(c) >= 5)) {
+      owned = applyPack(owned, openPack(owned, packs + 1));
+      packs++;
+    }
+
+    expect(
+      PLAYABLE_CLASSES.every((c) => distinct(c) >= 5),
+      `only reached ${PLAYABLE_CLASSES.map((c) => `${c}:${distinct(c)}`).join(' ')}`
+    ).toBe(true);
+    // ~8 days at realistic income, so every class is playable early.
+    expect(packs, `took ${packs} packs`).toBeLessThan(30);
+  });
+
   // The number that decides whether collecting a class feels reasonable.
   // Measured, not estimated — see OPEN-QUESTIONS.md #16.
   it('delivers one class’s full set in a sane number of packs', () => {
@@ -226,14 +258,13 @@ describe('class cards in packs', () => {
 
     expect(wanted.every((id) => (owned[id]?.copies ?? 0) >= 2), 'never completed').toBe(true);
 
-    // **Measured at 57 packs**, and worth knowing rather than estimating: the
-    // reserved slot deals a class card of *any* class, so only about a quarter
-    // of them are yours. 57 packs is 5,700 gold — roughly three weeks of daily
-    // play, down from about a month with no reservation.
+    // 57 packs. Worth knowing, but **not the number to optimise**: a player
+    // building decks across several classes is served by the spread test above,
+    // not by rushing one class. Completing a single class is a late-game
+    // milestone, and it lands at roughly the same time as the whole collection
+    // (78 packs) because packs never deal a card already held at two copies.
     //
-    // This assertion is a regression guard, not a target. If it starts failing,
-    // something changed the pool or the reservation, and the number below should
-    // be re-measured rather than nudged.
+    // A regression guard, not a target. Re-measure rather than nudge.
     expect(packs, `took ${packs} packs`).toBeLessThan(70);
   });
 });

@@ -192,6 +192,12 @@ Confirmed 2026-08-22. Built in `docs/plan/PHASE-6-CLASSES.md`.
 
 Confirmed 2026-08-22.
 
+- **Class belongs to a deck, not to a player.** As in Hearthstone, a player has no
+  class of their own: each deck picks one, and a player is expected to keep
+  several decks across several classes and swap between them. Choosing a class is
+  a per-deck decision made every time a deck is built — **not** a one-time choice
+  at first run. The first deck is simply the first of many.
+- **Players may keep up to 10 decks** (`PHASE-8-DECK-SLOTS.md`).
 - **All four classes are unlocked from the start.** There is no gate, no purchase
   and no progression to choosing one; a player may build a deck of any class on
   first run and switch freely.
@@ -199,9 +205,14 @@ Confirmed 2026-08-22.
   and are unlocked **organically, through packs** — bought with gold or earned.
 - The consequence is worth stating, because it is what makes this work: **picking
   a class gives you a hero power, not cards.** A deck of nothing but Neutral cards
-  is legal for every class, so a new player can play any of the four immediately
-  with the starter 15; the class cards deepen a deck they can already field.
-  Nobody is ever locked out of a class they have not collected.
+  is legal for every class, so a new player can build **four** decks on day one —
+  one per class — with nothing but the starter 15, and feel four different games
+  through the hero powers alone. Class cards deepen decks they can already field.
+- Because players collect toward **all four** classes rather than one, the
+  meaningful acquisition figures are the spread, not the completion of any single
+  class: **one card of every class by 6 packs (~2 days), five of every class by 21
+  (~8 days)**, the whole 210-card collection by 78 (~29 days). Measured, and
+  guarded in `packs/pack.test.ts`.
 
 ## 12. Backdrop and menu art
 

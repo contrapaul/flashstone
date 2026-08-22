@@ -31,46 +31,46 @@ at two copies is 420 cards.
 
 **Time to collect, measured by simulation:**
 
-| Goal | Packs | Gold | Days at ~265/day |
+Class belongs to a **deck**, not a player, and players are expected to keep
+several decks across several classes. So the figures that matter are how quickly
+cards spread across **all four**, not how quickly any one class completes.
+
+| Milestone | Packs | Gold | Days at ~265/day |
 |---|---|---|---|
-| One class's 10 cards, 2 copies | 52–57 | ~5,500 | **~22** |
-| **The entire 210-card collection** | **78** | **7,800** | **~29** |
+| One card of every class | 6 | 600 | **~2** |
+| Five of every class | 21 | 2,100 | **~8** |
+| All 40 class cards, 1 copy | 56 | 5,600 | ~21 |
+| Everything, 2 copies | 78 | 7,800 | ~29 |
 
 ---
 
-## 1. The curve is the problem, not the prices
+## 1. The curve looks healthy — check that, then leave it alone
 
-Read those last two rows together. **Getting your own class's ten cards takes 22
-days; getting all 210 cards takes 29.** Three quarters of the entire collection
-grind buys you one class.
+Every class is meaningfully playable within about a week, and the whole game is
+collected in about a month. For a tool used over a school term that seems right,
+but nobody has played it.
 
-That is not a tuning wobble, it is the shape being wrong. The no-duplicate rule
-makes packs efficient at filling gaps, so the 170 Neutral cards arrive quickly
-while your ten class cards stay a needle in a haystack — the reserved class slot
-deals a card of **any** class, so only a quarter of it is yours.
+> **A correction, recorded because it nearly shipped as advice.** An earlier
+> version of this file led with "one class's ten cards take ~22 days, versus ~29
+> for the entire collection", and proposed weighting the reserved pack slot
+> toward *the opener's class* to fix it.
+>
+> **That was the wrong model of the player.** There is no "opener's class" —
+> class is a per-deck choice and people build across all four. Measured against
+> the right question the curve is fine, and the proposed fix would have optimised
+> something nobody does while making packs depend on which deck happened to be
+> loaded. Withdrawn.
 
-The player's most-wanted cards are the slowest thing in the game to get.
+- [ ] **1.1** Play enough to confirm the spread *feels* right, particularly the
+      first fortnight — 6 packs to touch every class and 21 to have five of each.
+      → **verify:** judgement, not an assertion. `packs/pack.test.ts` guards the
+      shape (five of every class inside 30 packs) so a later change cannot break
+      it silently.
 
-- [ ] **1.1** Decide whether the reserved slot should favour **the opener's own
-      class**. Simulated on 2026-08-22, changing only that:
-
-      | | Own class set | Full collection |
-      |---|---|---|
-      | Today (slot = any class) | 52–57 packs | 78 packs |
-      | **Slot favours your class** | **17–19 packs (~7 days)** | **78 packs (unchanged)** |
-
-      It roughly triples the rate on the cards a player actually wants and leaves
-      total collection time untouched. The cost is conceptual: **packs would know
-      who is opening them**, which some people dislike on principle.
-      → **implementation:** `openPack` takes the opener's class; the reserved slot
-      prefers it and falls back to any class, then to the whole pool. The
-      no-duplicate, never-a-third-copy and guaranteed-Rare rules are unchanged.
-      → **verify:** the measured figure in `pack.test.ts` moves from <70 to <25.
-
-- [ ] **1.2** If 1.1 is rejected, decide instead whether **~22 days for one class**
-      is acceptable for a tool used over a school term, or whether pack price,
-      gold income or pack size should move. Changing prices affects everything;
-      changing the slot affects only the thing that is wrong.
+- [ ] **1.2** Completing a **single** class takes 52–57 packs and lands at roughly
+      the same time as the whole collection, because packs never deal a card
+      already held at two copies. That is a late-game milestone, not a barrier —
+      decide whether it needs anything at all.
 
 ## 2. Prices and income nobody has played
 

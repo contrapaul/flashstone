@@ -23,26 +23,35 @@ Live at `flashstone.contrapaul.com`, with the realtime Worker at
 price, reward and rate in the game was proposed by Claude and accepted to keep the
 build moving. None has been played.
 
-### The one finding that matters
+### The numbers, measured
 
-Measured against the real `openPack`, not estimated:
+Class belongs to a **deck**, not a player: people keep several decks across
+several classes and swap between them (up to 10 slots — see below). So the
+figures that matter are how fast cards spread across **all four** classes.
 
-| Goal | Packs | Days at ~265 gold/day |
+| Milestone | Packs | Days at ~265 gold/day |
 |---|---|---|
-| One class's 10 cards, 2 copies | 52–57 | **~22** |
-| The entire 210-card collection | 78 | **~29** |
+| One card of every class | 6 | ~2 |
+| Five of every class | 21 | ~8 |
+| Everything, 2 copies | 78 | ~29 |
 
-Getting your own class's cards takes three quarters as long as getting *every card
-in the game*. The player's most-wanted cards are the slowest thing to obtain.
+Every class is meaningfully playable inside a fortnight; the whole game is
+collected in about a month. **The curve looks healthy — the job is to play it and
+confirm, not to fix it.**
 
-The cause: packs never deal a card you already have two of, so the 170 Neutral
-cards fill in quickly, while the reserved class slot deals a card of **any** class
-— only a quarter of it is yours.
+> **One correction worth reading, because it nearly shipped as advice.** An
+> earlier draft of the economy plan led with "one class takes ~22 days versus ~29
+> for everything" and proposed weighting packs toward *the opener's class*. That
+> assumed a player has a class. They do not — class is per-deck. Measured against
+> the right question the curve is fine, and the proposal is withdrawn. The lesson
+> generalises: check the model of the player before optimising a number.
 
-Simulated fix, changing only that slot to favour the opener's class:
-**17–19 packs (~7 days) for your own set, full collection unchanged at 78.**
-Not applied — it is a design decision about whether packs should know who is
-opening them, and it is Paul's call.
+### The other outstanding work
+
+`PHASE-8-DECK-SLOTS.md` — players are meant to keep **up to 10 decks**, each with
+its own class. The schema and `/api/decks` already support many decks per user;
+**only the UI is single-deck**, so three of the four classes are effectively
+invisible today. Mostly interface work over machinery that already exists.
 
 ## How to work here
 

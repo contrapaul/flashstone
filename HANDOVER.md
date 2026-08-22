@@ -63,6 +63,12 @@ the `make` repo — that name should not reappear).
   unlocked from the start; class *cards* are earned from packs. A class deck may
   be entirely Neutral, so picking a class gives you a **hero power, not cards** —
   nobody is ever locked out of a class they have not collected.
+- **Class belongs to a deck, not to a player.** As in Hearthstone, players keep
+  several decks across several classes and swap between them; there is no such
+  thing as "the player's class". Up to **10 deck slots** — the schema and API
+  already support many decks per user, but **the UI still exposes only one**
+  (`docs/plan/PHASE-8-DECK-SLOTS.md`). Do not write code that assumes one deck or
+  a per-player class.
 - **Hero powers are data, not engine branches.** `data/classes.ts` gives each a
   list of `Effect`s that resolve through the same `resolveEffect` cards use, so a
   power can never do something a card could not.
@@ -149,7 +155,9 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 | `src/lib/data/slCards.ts` | Applies the mechanical layer to those terms. **Hand-editable**; holds `OVERRIDES` for tuning one card |
 | `src/lib/data/cards.ts` | The card **registry** — `ALL_CARDS`, `cardById`. Nothing else may import `slCards`/`customCards` |
 | `src/lib/data/customCards.ts` | Hand-authored cards merged into the registry. The injection point for new cards |
-| `src/lib/data/starter.ts` | The 15 starter cards, 2 copies each = one legal deck |
+| `src/lib/data/starter.ts` | The 15 starter cards, 2 copies each = one legal deck in **any** class |
+| `src/lib/data/classes.ts` | The four classes and their hero powers, as data |
+| `src/lib/data/tokens.ts` | Summoned-only cards, deliberately outside the registry |
 | `src/lib/data/aiDeck.ts` | The opponent's own 30-card list, built to a curve |
 | `src/lib/collection/owned.ts` | Ownership as counts per card id, plus gold (foil) variants |
 | `src/lib/data/demoDeck.ts` | 12 hand-crafted cards. **Test fixtures only** — no longer reachable from the app |

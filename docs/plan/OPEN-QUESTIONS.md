@@ -28,23 +28,23 @@ if no answer arrives — so **no phase stalls waiting on this file.**
 
 ### Note on #16 — how long a class set actually takes
 
-> **Updated 2026-08-22 — measured, and the finding is bigger than the question.**
+> **Updated 2026-08-22, then corrected.** Class belongs to a **deck**, not a
+> player, and players keep several decks across several classes — so "how long to
+> grind *your* class" was the wrong question. Measured against the right one:
 >
-> | Goal | Packs | Days at ~265 gold/day |
+> | Milestone | Packs | Days at ~265 gold/day |
 > |---|---|---|
-> | One class's 10 cards, 2 copies | 52–57 | ~22 |
-> | **The entire 210-card collection** | **78** | **~29** |
+> | One card of every class | 6 | ~2 |
+> | Five of every class | 21 | ~8 |
+> | Everything, 2 copies | 78 | ~29 |
 >
-> Getting your own class takes three quarters as long as getting *everything*.
-> The no-duplicate rule fills the 170 Neutral cards fast while the reserved slot
-> deals a class card of **any** class, so only a quarter of it is yours.
+> Every class is meaningfully playable inside a fortnight, and the whole game is
+> collected in about a month. **The curve is fine and needs no lever.**
 >
-> Simulated fix — the slot favours the opener's class: own set **17–19 packs
-> (~7 days)**, full collection unchanged at 78. Roughly triples the rate on the
-> cards players actually want, at the cost of packs knowing who opens them.
->
-> **Not applied.** It is a design decision, and it belongs to
-> `PHASE-7-ECONOMY-TUNING.md` §1.1 along with the rest of the untested economy.
+> An earlier note here proposed weighting the reserved pack slot toward "the
+> opener's class". **Withdrawn** — there is no such thing when class is per-deck,
+> and it would have optimised something nobody does. Guarded now by a spread test
+> in `packs/pack.test.ts` rather than a single-class one.
 
 ### Original estimate (superseded)
 
