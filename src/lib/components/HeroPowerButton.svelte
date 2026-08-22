@@ -107,6 +107,9 @@
     font-size: 8px;
     letter-spacing: .1em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    /* Sits directly on the play field, so it follows the field's ink rather
+       than the dark-UI faint grey. Falls back for the collection and review
+       screens, where there is no field. */
+    color: var(--field-ink, var(--text-faint));
   }
 </style>

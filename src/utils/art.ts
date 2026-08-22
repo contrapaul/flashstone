@@ -80,6 +80,7 @@ export function cardTitle(front: string): string {
 const CARD_ART = import.meta.glob('/static/art/cards/*.{webp,png}');
 const BACK_ART = import.meta.glob('/static/art/backs/*.{webp,png}');
 const UI_ART = import.meta.glob('/static/art/ui/*.{webp,png,svg}');
+const SCENE_ART = import.meta.glob('/static/art/scene/*.{webp,png,jpg}');
 
 /** `/static/art/cards/foo.webp` → `foo`. */
 function indexByStem(modules: Record<string, unknown>): Map<string, string> {
@@ -96,6 +97,7 @@ function indexByStem(modules: Record<string, unknown>): Map<string, string> {
 const CARD_ART_BY_ID = indexByStem(CARD_ART);
 const BACK_ART_BY_ID = indexByStem(BACK_ART);
 const UI_ART_BY_NAME = indexByStem(UI_ART);
+const SCENE_ART_BY_NAME = indexByStem(SCENE_ART);
 
 /** The drawn illustration for a card, or null to fall back to `artFor`. */
 export function artUrlFor(cardId: string): string | null {
@@ -114,6 +116,16 @@ export function backUrlFor(backId: string): string | null {
  */
 export function uiArtUrl(name: string): string | null {
   return UI_ART_BY_NAME.get(name) ?? null;
+}
+
+/**
+ * A full-bleed backdrop — `table`, `table-portrait`, `menu`. Null keeps the CSS
+ * gradient the field is painted with, which is the fallback by design: a
+ * missing or still-loading backdrop must look deliberate rather than blank.
+ * `static/art/README.md` §4 has the sizes and the composition constraints.
+ */
+export function sceneUrl(name: string): string | null {
+  return SCENE_ART_BY_NAME.get(name) ?? null;
 }
 
 /** Every card back that has art, for the shop. Always includes 'default'. */

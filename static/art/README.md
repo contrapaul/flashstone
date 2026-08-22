@@ -126,8 +126,18 @@ vignette — do it only if a specific 4K display looks soft.
 a dark painterly scene. This is a study tool that will be opened on school wifi;
 a 3 MB background is felt on every single page load.
 
-The current CSS gradient stays underneath as the fallback, so a missing or
-still-loading backdrop looks deliberate rather than blank.
+The CSS gradient stays underneath as the fallback, so a missing or still-loading
+backdrop looks deliberate rather than blank.
+
+> **The play field is a temporary light brown** while it waits for `table.webp`.
+> Dropping the file in covers it, with no code change — but note that anything
+> sitting directly on the field (the hero names, the mana line, the centre rule,
+> the hero-power captions) takes its colour from `--field-ink` and `--field-rule`
+> on `.table` in `MatchTable.svelte`. **A dark backdrop needs those two set back
+> to their pale values**, which are kept in a comment right beside them.
+>
+> `menu.webp` is specified but **not yet read by anything** — only the play
+> field is wired.
 
 ## 5. Gold (foil) variants — `art/ui/`
 

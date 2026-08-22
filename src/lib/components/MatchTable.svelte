@@ -24,6 +24,15 @@
   } from '../net/view';
   import type { ChosenRef } from '../net/protocol';
   import type { Card } from '../../types/cards';
+  import { sceneUrl } from '../../utils/art';
+
+  /**
+   * The painted backdrop, when one has been dropped into `static/art/scene/`.
+   * Resolved once: the index is built at build time, so it cannot change while
+   * a match is running.
+   */
+  const tableArt = sceneUrl('table');
+  const portraitArt = sceneUrl('table-portrait');
 
   /**
    * The table. **One board for both modes.**
@@ -630,7 +639,13 @@
   on:keydown={onWindowKey}
 />
 
-<main class="table" class:quaking style:--fit={fit.toFixed(3)}>
+<main
+  class="table"
+  class:quaking
+  style:--fit={fit.toFixed(3)}
+  style:--scene={tableArt ? `url("${tableArt}")` : 'none'}
+  style:--scene-portrait={portraitArt ? `url("${portraitArt}")` : 'none'}
+>
   <div class="vignette" aria-hidden="true"></div>
 
   <section class="hero-row foe">
@@ -659,16 +674,19 @@
         hit={hitHero === 'foe'}
         on:click={onEnemyHero}
       />
-      <div class="hero-meta">
-        <span>Opponent</span>
-        <span>Mana {view.foe.mana}/{view.foe.maxMana}</span>
-      </div>
 
-      <HeroPowerButton
-        heroClass={view.foe.heroClass}
-        used={view.foe.heroPowerUsed}
-        mine={false}
-      />
+      <div class="hero-side">
+        <div class="hero-meta">
+          <span>Opponent</span>
+          <span>Mana {view.foe.mana}/{view.foe.maxMana}</span>
+        </div>
+
+        <HeroPowerButton
+          heroClass={view.foe.heroClass}
+          used={view.foe.heroPowerUsed}
+          mine={false}
+        />
+      </div>
     </div>
 
     <div class="deck-pile">
@@ -741,16 +759,18 @@
     <ManaTray mana={view.me.mana} maxMana={view.me.maxMana} />
 
     <div class="hero-block reverse" bind:this={myHeroEl}>
-      <div class="hero-meta right">
-        <span>{deckName || 'You'}</span>
-        <span>Deck {view.me.deckCount}</span>
+      <div class="hero-side">
+        <div class="hero-meta right">
+          <span>{deckName || 'You'}</span>
+          <span>Deck {view.me.deckCount}</span>
+        </div>
+        <HeroPowerButton
+          heroClass={view.me.heroClass}
+          usable={myTurn && view.me.canUseHeroPower}
+          used={view.me.heroPowerUsed}
+          on:click={onHeroPower}
+        />
       </div>
-      <HeroPowerButton
-        heroClass={view.me.heroClass}
-        usable={myTurn && view.me.canUseHeroPower}
-        used={view.me.heroPowerUsed}
-        on:click={onHeroPower}
-      />
 
       <HeroPortrait
         label="You"
@@ -852,7 +872,31 @@
     /* 12px, not 10: the hand cards' stat gems overhang the card frame. */
     padding-bottom: 12px;
     overflow: hidden;
-    background: radial-gradient(120% 90% at 50% -10%, #2a1c11 0%, #150e08 45%, var(--ink) 100%);
+    /*
+     * TEMPORARY light-brown field, standing in until
+     * `static/art/scene/table.webp` is dropped in (see static/art/README.md §4).
+     *
+     * Warm and mid-light rather than pale: the cards' own rules panels are
+     * parchment, and a cream table would leave them with no edge.
+     *
+     * The three lines below are the whole of it. Anything that sits directly on
+     * the field takes its colour from `--field-ink` or `--field-rule` rather
+     * than from a literal, so going back to a dark field — or handing the field
+     * to a painted backdrop — is these three declarations and nothing else.
+     */
+    --field-ink: #4b3a23;
+    --field-rule: #7d6038;
+    --field-base: radial-gradient(120% 90% at 50% -10%, #d3bd9c 0%, #b0946f 45%, #8f7454 100%);
+
+    /* The dark field this replaced, for when a painted backdrop lands and the
+       ink needs to go pale again:
+         --field-ink: #8a7050;
+         --field-rule: #6b512f;
+         --field-base: radial-gradient(120% 90% at 50% -10%, #2a1c11 0%, #150e08 45%, var(--ink) 100%); */
+
+    /* `art/scene/table.webp` paints over the base when it exists; until then
+       `--scene` is `none` and this is exactly the gradient above. */
+    background: var(--scene, none) center / cover no-repeat, var(--field-base);
   }
 
   /*
@@ -865,6 +909,18 @@
   .table > :global(.centre),
   .table > :global(.hand) {
     zoom: var(--fit, 1);
+  }
+
+  /*
+   * A 16:9 backdrop cropped into a 3:4 viewport loses about 44% of its width,
+   * which is why `table-portrait.webp` exists. Falls back to the landscape one,
+   * and then to the gradient — a missing portrait variant is not an error.
+   */
+  @media (max-width: 820px) {
+    .table {
+      background: var(--scene-portrait, var(--scene, none)) center / cover no-repeat,
+        var(--field-base);
+    }
   }
 
   .vignette {
@@ -927,8 +983,32 @@
      backs are unscaled and each one is rotated by its wrapper instead. */
   .foe-card :global(.back) { transform-origin: bottom center; }
 
-  .hero-block { display: flex; align-items: center; gap: 14px; }
-  .hero-block.reverse { flex-direction: row; }
+  /*
+   * Three tracks with the portrait in the middle one, so the **portrait** is
+   * what sits on the table's centre axis — not the block that contains it.
+   *
+   * It was a flex row, which centred the group: the name, mana and hero power
+   * beside the portrait pushed it about 80px off axis, on both sides and in
+   * opposite directions. That is the line every attack is dragged along and
+   * every hero-targeted card is dropped on, so the one thing that should have
+   * been on the axis was the one thing that was not. It also puts `heroPos()`
+   * back on the portrait, which is where a damage number should float from.
+   *
+   * The flanking track is empty on one side by design — the side content keeps
+   * the position it had, and the portrait no longer pays for it.
+   */
+  .hero-block {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .hero-block > :global(.hero) { grid-column: 2; }
+  .hero-block > .hero-side { grid-column: 3; justify-self: start; }
+  .hero-block.reverse > .hero-side { grid-column: 1; justify-self: end; }
+
+  .hero-side { display: flex; align-items: center; gap: 14px; }
 
   .hero-meta {
     display: flex;
@@ -938,7 +1018,7 @@
     font-size: 11px;
     letter-spacing: .06em;
     text-transform: uppercase;
-    color: var(--text-dim);
+    color: var(--field-ink);
   }
   .hero-meta.right { text-align: right; }
 
@@ -1102,7 +1182,11 @@
     padding: 0 28px;
   }
 
-  .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #6b512f, transparent); }
+  .rule {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--field-rule), transparent);
+  }
 
   .phase {
     position: absolute;
@@ -1112,7 +1196,7 @@
     letter-spacing: .3em;
     text-transform: uppercase;
     white-space: nowrap;
-    color: #8a7050;
+    color: var(--field-ink);
   }
 
   .end-turn {
