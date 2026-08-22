@@ -1,76 +1,73 @@
-# Handoff — economy and shop session
+# Handoff — after the economy session
 
-Written 2026-08-22 at the end of the build sessions. Delete this file once the
-economy session is done.
+Written 2026-08-22. Replaces the pre-economy handoff. Delete this file once the
+deck-slots session is done.
 
 ## Where the project is
 
-Flashstone is **feature-complete and deployed**. Every build phase in
-`docs/plan/` is finished: the 155-card SL set, the table rebuild, accounts on D1,
-gold/packs/quests, online play on Durable Objects, spells and weapons, and four
-classes with hero powers. **364 tests pass, `svelte-check` reports 0 errors**, and
-both projects build.
+Flashstone is **feature-complete and deployed**. **377 tests pass,
+`svelte-check` reports 0 errors**, and both projects build. Live at
+`flashstone.contrapaul.com`, realtime Worker at
+`flashstone-realtime.contrapaul.workers.dev`.
 
-Live at `flashstone.contrapaul.com`, with the realtime Worker at
-`flashstone-realtime.contrapaul.workers.dev`. `TICKET_SECRET`, `REALTIME_URL` and
-`RESEND_API_KEY` are all set.
+`PHASE-7-ECONOMY-TUNING.md` is **decided**. Two things changed:
 
-**Nothing is broken.** This session is about numbers, not repair.
+1. **The reserved class slot now aims at the thinnest class.** Measured, not
+   guessed: the old any-class rule left 17% of players owning nothing of some
+   class after seven packs. Now every class is touched within 4 packs at worst,
+   and five of every class arrives at ~16 rather than 21. The endgame is
+   untouched (78 packs for everything, 56 for one class).
+2. **The new-player package** (`DECISIONS.md` §13) — four one-time intro quests
+   paying **7 packs and 200 gold**, plus the `Ascendant` card back, which gold
+   cannot buy. Packs are now held in an inventory and opened from the shop.
 
-## What this session is for
+Every price is unchanged: pack 100, card back 300, daily 50, AI win 25, online
+win 40, quests 75/50/50/40/40, three quests a day.
 
-`PHASE-7-ECONOMY-TUNING.md` — read it first. It is a **decision** phase: every
-price, reward and rate in the game was proposed by Claude and accepted to keep the
-build moving. None has been played.
+## Before anything else
 
-### The numbers, measured
+**Migration `0004_onboarding.sql` has been applied locally but not remotely.**
 
-Class belongs to a **deck**, not a player: people keep several decks across
-several classes and swap between them (up to 10 slots — see below). So the
-figures that matter are how fast cards spread across **all four** classes.
+```
+npx wrangler d1 execute flashstone-db --remote --file db/migrations/0004_onboarding.sql
+```
 
-| Milestone | Packs | Days at ~265 gold/day |
-|---|---|---|
-| One card of every class | 6 | ~2 |
-| Five of every class | 21 | ~8 |
-| Everything, 2 copies | 78 | ~29 |
+Without it, `/api/profile` and every intro-quest call fail on `profiles.packs`.
 
-Every class is meaningfully playable inside a fortnight; the whole game is
-collected in about a month. **The curve looks healthy — the job is to play it and
-confirm, not to fix it.**
+## What is still open
 
-> **One correction worth reading, because it nearly shipped as advice.** An
-> earlier draft of the economy plan led with "one class takes ~22 days versus ~29
-> for everything" and proposed weighting packs toward *the opener's class*. That
-> assumed a player has a class. They do not — class is per-deck. Measured against
-> the right question the curve is fine, and the proposal is withdrawn. The lesson
-> generalises: check the model of the player before optimising a number.
-
-### The other outstanding work
-
-`PHASE-8-DECK-SLOTS.md` — players are meant to keep **up to 10 decks**, each with
-its own class. The schema and `/api/decks` already support many decks per user;
-**only the UI is single-deck**, so three of the four classes are effectively
-invisible today. Mostly interface work over machinery that already exists.
+- **Play it.** `PHASE-7` §1.1 and §5.3. The economy has been simulated at every
+  step and played at none. That was true before this session and is still true;
+  the numbers are just better founded now.
+- **The new-player package has not been exercised in a browser.** The server
+  logic is covered by `src/lib/server/intro.test.ts`, the types check and both
+  projects build, but nothing has signed in and clicked Claim. Worth doing first
+  after the remote migration: play one match against the AI, lose it on purpose,
+  and confirm the 100 gold and the pack arrive.
+- **`PHASE-8-DECK-SLOTS.md`** — ten deck slots. The schema and `/api/decks`
+  already support many decks per user; **only the UI is single-deck**, so three
+  of the four classes are effectively invisible. This is the real remaining work.
+- **`PHASE-7` §4.1** — what the shop offers a player with a complete collection.
+  Now with a wrinkle: they may be holding unopened packs, which are deliberately
+  not burned on duplicates.
 
 ## How to work here
 
 - `docs/plan/README.md` is the index; `DECISIONS.md` holds settled design and
-  **must be updated in the same commit** as any number that changes, or the docs
-  start lying.
+  **must be updated in the same commit** as any number that changes.
 - `HANDOVER.md` §4 lists real toolchain traps. Svelte 4 only — no runes.
 - Verify before changing anything: `npm test && npm run check`.
-- Economy constants are all one-liners: `packs/pack.ts`, `lib/shop.ts`,
-  `server/gold.ts`, `quests/quests.ts`.
-- `pack.test.ts` asserts the acquisition rate as a **regression guard**. If a
+- Economy constants are one-liners: `packs/pack.ts`, `lib/shop.ts`,
+  `server/gold.ts`, `quests/quests.ts`, `quests/intro.ts`.
+- `pack.test.ts` asserts the acquisition curve as a **regression guard**. If a
   change moves it, re-measure and update the number — do not nudge it to pass.
 
-## Two habits worth keeping
+## The habit that keeps paying
 
-Two estimates in this project turned out wrong and were caught by measuring
+Four estimates in this project turned out wrong and were caught by measuring
 rather than reasoning: the acquisition rate (predicted ~17 packs, actually 57),
-and the AI's hero power use (predicted fine, actually never fired because it
-curved out to zero mana first). **Simulate the number rather than deriving it.**
-
-The other is that `openPack` is pure and seeded, which is exactly why the
-simulations above were cheap. Keep it that way.
+the AI's hero power use (predicted fine, actually never fired), the class-grind
+framing (the wrong model of the player), and this session's — the reserved class
+slot *looked* fine at the median and hid a 17% tail. **Simulate the number
+rather than deriving it.** `openPack` is pure and seeded, which is what makes
+that cheap. Keep it that way.
