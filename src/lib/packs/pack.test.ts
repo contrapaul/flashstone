@@ -215,13 +215,29 @@ describe('class cards in packs', () => {
    *
    * Class is a property of a **deck**, not a player — people build several decks
    * across several classes — so the meaningful question is how fast cards arrive
-   * across *all four*, not how fast one class completes. Measured 2026-08-22:
-   * one card of every class by 6 packs, five of every class by 21, the whole
-   * 210-card collection by 78.
+   * across *all four*, not how fast one class completes. Re-measured 2026-08-22
+   * after the class slot began aiming at the thinnest class: one card of every
+   * class by 4 packs at worst, five of every class by ~16, the whole 210-card
+   * collection by 78.
    *
    * These are regression guards on the shape of the curve. If they start
    * failing, re-measure rather than nudging them.
    */
+  it('gives a card of every class within four packs, from any seed', () => {
+    for (let run = 0; run < 40; run++) {
+      let owned: Owned = {};
+      for (let p = 1; p <= 4; p++) owned = applyPack(owned, openPack(owned, run * 4001 + p));
+      const per = PLAYABLE_CLASSES.map(
+        (cls) => ALL_CARDS.filter((c) => c.class === cls && (owned[c.id]?.copies ?? 0) > 0).length
+      );
+      // The onboarding package hands over seven packs (DECISIONS.md §13); this
+      // is what makes "every class is playable straight away" a promise rather
+      // than a median. Before the thinnest-class rule, 17% of players finished
+      // those seven still owning nothing of some class.
+      expect(Math.min(...per), `run ${run} reached ${per.join('/')}`).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   it('spreads across all four classes quickly', () => {
     let owned: Owned = {};
     let packs = 0;
@@ -237,8 +253,9 @@ describe('class cards in packs', () => {
       PLAYABLE_CLASSES.every((c) => distinct(c) >= 5),
       `only reached ${PLAYABLE_CLASSES.map((c) => `${c}:${distinct(c)}`).join(' ')}`
     ).toBe(true);
-    // ~8 days at realistic income, so every class is playable early.
-    expect(packs, `took ${packs} packs`).toBeLessThan(30);
+    // 17 packs on this sequence — ~6 days at realistic income, or day 5 with
+    // the onboarding package. Re-measure rather than nudge.
+    expect(packs, `took ${packs} packs`).toBeLessThan(24);
   });
 
   // The number that decides whether collecting a class feels reasonable.
@@ -258,7 +275,7 @@ describe('class cards in packs', () => {
 
     expect(wanted.every((id) => (owned[id]?.copies ?? 0) >= 2), 'never completed').toBe(true);
 
-    // 57 packs. Worth knowing, but **not the number to optimise**: a player
+    // 56 packs. Worth knowing, but **not the number to optimise**: a player
     // building decks across several classes is served by the spread test above,
     // not by rushing one class. Completing a single class is a late-game
     // milestone, and it lands at roughly the same time as the whole collection

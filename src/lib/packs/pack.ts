@@ -20,19 +20,50 @@ export const GOLD_CHANCE = 0.05;
 const RARE_OR_BETTER: Rarity[] = ['Rare', 'Epic', 'Legendary'];
 
 /**
- * One slot per pack is reserved for a class card of any class.
+ * One slot per pack is reserved for a class card, drawn from whichever class
+ * the collection currently holds fewest distinct cards of.
  *
  * Class cards are only obtainable from packs, and they are a small share of a
- * large pool: without this, a full two-copy set of your own class is around 84
- * packs — over a month of daily play, likely longer than the topic is taught.
- * Reserving a slot cuts that to about a week without changing the principle
- * that cards are earned rather than granted. See OPEN-QUESTIONS.md #16; the
- * measured figure is asserted in pack.test.ts rather than trusted.
+ * large pool: without a reserved slot at all, a full two-copy set of one class
+ * is around 84 packs — over a month of daily play, likely longer than the topic
+ * is taught. See OPEN-QUESTIONS.md #16; the measured figures are asserted in
+ * pack.test.ts rather than trusted.
+ *
+ * Reserving the slot for *any* class left a real tail: measured over 300 runs,
+ * 17% of players still owned nothing of some class after seven packs, and half
+ * needed 5 packs to touch all four with a p90 of 9. Aiming the slot at the
+ * thinnest class makes that deterministic — every class by pack 4, five of
+ * every class by 16 — and changes nothing later: the whole collection still
+ * takes 78 packs and one class still completes at 51, because the pool is the
+ * same set of cards either way.
+ *
+ * Thinnest is a property of the **collection**, not of the player. There is no
+ * "player's class" to bias toward — class is a per-deck choice (DECISIONS.md
+ * §11) — and this rule deliberately does not invent one.
  */
 const RESERVE_CLASS_SLOT = true;
 
 function isClassCard(card: Card): boolean {
   return (card.class ?? 'Neutral') !== 'Neutral';
+}
+
+/**
+ * Narrows a pool of class cards to the classes the player holds fewest distinct
+ * cards of, counting only classes still present in the pool — a class already
+ * collected in full cannot be the thinnest one, or the slot would aim at
+ * nothing. Ties keep every tied class, so the rng still chooses between them.
+ */
+function thinnestClass(owned: Owned, classCards: Card[]): Card[] {
+  const held = new Map<string, number>();
+  for (const card of ALL_CARDS) {
+    const cls = card.class;
+    if (!cls || cls === 'Neutral') continue;
+    if (ownedCount(owned, card.id) > 0) held.set(cls, (held.get(cls) ?? 0) + 1);
+  }
+
+  let fewest = Infinity;
+  for (const card of classCards) fewest = Math.min(fewest, held.get(card.class!) ?? 0);
+  return classCards.filter((c) => (held.get(c.class!) ?? 0) === fewest);
 }
 
 export interface PackCard {
@@ -99,7 +130,7 @@ export function openPack(owned: Owned, seed: number): PackCard[] {
       const classCards = remaining.filter(isClassCard);
       // Falls back to the whole pool once every class card is collected, rather
       // than dealing a short pack.
-      if (classCards.length > 0) pool = classCards;
+      if (classCards.length > 0) pool = thinnestClass(owned, classCards);
     }
 
     const rarity = weightedRarity(rng, pool);

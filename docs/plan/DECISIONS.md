@@ -44,6 +44,14 @@ Do not reopen them without asking. Anything genuinely undecided is in
   A *second* copy of an already-owned card is **not** a duplicate.
 - Rarity: 4 slots roll on `RARITY_WEIGHTS` (Common 50 / Uncommon 30 / Rare 15 /
   Epic 4 / Legendary 1); the 5th slot is **guaranteed Rare or better**.
+- The **1st slot is a class card**, drawn from whichever class the collection
+  currently holds **fewest distinct cards of**. Measured 2026-08-22 over 300
+  runs: every class is touched by pack 4 at worst (was a median of 5 and a p90
+  of 9), and five of every class arrives at ~16 packs (was 21). The late game is
+  untouched — 78 packs for everything, 56 for a single class — because the pool
+  of cards is the same either way.
+  - Thinnest is a property of the **collection**, not the player. There is no
+    "player's class" to weight toward; class is a per-deck choice (§11).
 
 ## 4. Gold
 
