@@ -116,15 +116,15 @@ room. Each had to learn the same new answer.
 - [ ] **5.1** Nothing has driven ten slots in a **signed-in** browser. The route
       handlers are covered by tests and the signed-out path was checked by hand,
       but "build a Designer deck and an Engineer deck and switch between them"
-      is still an unrun sentence. Do it after `0005` is applied remotely.
+      is still an unrun sentence. `0005` is applied remotely, so nothing blocks
+      it.
 - [ ] **5.2** Online play with a chosen deck (§3.1) is likewise untested against
       a real match room.
 
-**Migration `0005_active_deck.sql` is applied locally and not remotely.**
-
-```
-npx wrangler d1 execute flashstone-db --remote --file db/migrations/0005_active_deck.sql
-```
+**Migration `0005_active_deck.sql` is applied, locally and remotely** (verified
+2026-08-22 — `profiles.active_deck` is live). The realtime Worker has **not**
+been redeployed since `MatchRoom` learned to read it, so §5.2 is blocked on
+`npm run deploy:realtime` rather than on the schema.
 
 ---
 

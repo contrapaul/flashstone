@@ -30,20 +30,23 @@ win 40, quests 75/50/50/40/40, three quests a day.
 
 ## Before anything else
 
-**Migrations `0004` and `0005` are applied locally but not remotely.**
+**Both migrations are applied — locally and remotely, verified 2026-08-22.**
+`profiles.packs`, `profiles.active_deck` and `intro_quests` are live on
+`flashstone-db`.
+
+Note for the next migration: `d1 execute --remote --file` **fails** with an
+authentication error against the D1 import API. Apply remote migrations with
+`--command`, one statement at a time. `HANDOVER.md` §4.6 has the detail.
+
+**The realtime Worker still needs redeploying** — `MatchRoom` now joins through
+`profiles.active_deck`, and the deployed copy does not:
 
 ```
-npx wrangler d1 execute flashstone-db --remote --file db/migrations/0004_onboarding.sql
+npm run deploy:realtime
 ```
 
-```
-npx wrangler d1 execute flashstone-db --remote --file db/migrations/0005_active_deck.sql
-```
-
-Without them `/api/profile` fails on `profiles.packs`, and every deck call fails
-on `profiles.active_deck`. The realtime Worker reads the same database, so it
-needs `0005` too — `npm run deploy:realtime` after the migration, since
-`MatchRoom` now joins through the new column.
+**The Pages app needs deploying too** (`npm run deploy`), or the live site is
+still the pre-economy build.
 
 ## What is still open
 
