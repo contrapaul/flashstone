@@ -25,7 +25,8 @@ npm install && npx svelte-kit sync && npm test && npm run check
 ```
 
    Baseline after Phase 1B (2026-08-22): **313 tests pass, `svelte-check` reports 0 errors.**
-   **Every phase is complete.** Hero powers are the one deliberate omission.
+   Phases 1–5 and 1B are complete. **Phase 6 (classes) is the outstanding work**,
+   and it is where hero powers — deferred twice — finally get built.
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -51,6 +52,7 @@ ticked, and continue.
 | [3](PHASE-3-ACCOUNTS.md) | Accounts & server state | (enables 3, 4, 6) | 1 | **Done** 2026-08-22 |
 | [4](PHASE-4-ECONOMY.md) | Gold, packs, quests, card backs | 3, 4, 6, 12, 14 + follow-up 5 | 1, 1B, 2, 3 | **Done** 2026-08-22 |
 | [5](PHASE-5-MULTIPLAYER.md) | Play Online | 1 | 1B, 3 | **Done** 2026-08-22 |
+| [6](PHASE-6-CLASSES.md) | Classes & hero powers | new 2026-08-22 | 1, 1B, 3, 4 | Not started |
 
 "Follow-ups" are the five clarifications Paul added on 2026-08-21, recorded in
 `DECISIONS.md` §8–§10 and in the Phase 1 and 1B steps: table text is game-text only,
@@ -68,7 +70,7 @@ that 3 builds. 4 and 5 do not depend on each other and can run in parallel once 
 
 ## Recommended order and why
 
-**1 → 1B → 2 → 3 → (4 ∥ 5)**
+**1 → 1B → 2 → 3 → (4 ∥ 5) → 6**
 
 Phase 1 first because everything downstream is expressed in terms of the card set:
 packs deal cards, quests count cards played, multiplayer syncs card ids. Building the
@@ -87,7 +89,14 @@ Phase 3 next because it is a hard prerequisite for two large phases and is mostl
 **port, not a design job** — the auth code is lifted almost unchanged from the `time`
 repo (see that phase's §1).
 
-Phase 4 and 5 last, in either order or together.
+Phase 4 and 5 in either order or together.
+
+Phase 6 last, because it touches everything the others built: cards gain a class,
+decks gain a legality rule, packs gain a distribution question, the table gains a
+button, and the match room gains one more intent to re-validate. It is also the
+only phase that needs **new engine systems** rather than new content — hero
+powers, spell damage, named tokens and a source of armor — so doing it earlier
+would have meant building them twice.
 
 ---
 

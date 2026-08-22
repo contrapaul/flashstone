@@ -282,8 +282,12 @@ hash without changing both.
 ### Smaller known issues
 - Nothing grants `armor`. The slot now hides at zero rather than showing a permanent 0,
   so it no longer looks broken, but no card produces armor.
-- **Hero powers are unbuilt and deliberately deferred.** `CardType` carries `'HeroPower'`
-  and the engine treats such a card as a Spell.
+- **Hero powers are unbuilt.** `'HeroPower'` is in `CardType` and the Zod enum and
+  appears nowhere else — no engine code, no UI, no once-per-turn tracking.
+  `docs/plan/PHASE-6-CLASSES.md` builds them, along with the three other systems
+  classes need and the codebase lacks: **spell damage** (no such concept today),
+  **named tokens** (`SummonToken` can only summon one hardcoded 1/1), and a
+  **source of armor**.
 - **Seven self-hosted `.woff2` files are missing**, so every page logs 404s and falls
   back to Georgia. See `static/fonts/README.md`.
 - **No card uses `Freeze`, `Silence` or `Stealth`.** The mechanics are implemented

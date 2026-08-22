@@ -79,7 +79,44 @@ the card inspected at 2.5×.
 > rebuilt (`docs/plan/PHASE-2-TABLE-UX.md` §6). Drawing them now is safe; they
 > will light up without needing to be redrawn.
 
-## 4. Gold (foil) variants — `art/ui/`
+## 4. Backdrops — `art/scene/`
+
+Full-bleed backgrounds. These are the **largest files in the game** and the only
+ones that are not lazy-loaded, so size matters more here than pixel count.
+
+| Name | Where | Source size | Format |
+|---|---|---|---|
+| `table` | behind the play field | **2560 × 1440** | `.webp`, lossy |
+| `menu` | behind every other page | **2560 × 1440** | `.webp`, lossy |
+
+**Why 2560 × 1440.** The board is height-locked to the viewport and the image is
+drawn with `cover`, so it is always scaled to fill rather than shown at native
+size. 2560 wide covers a 1280px-wide layout at 2× device pixel ratio, and
+downscales cleanly to the 1920 × 1080 most desktops actually use. Going to
+3840 × 2160 roughly doubles the file for a difference nobody will see through a
+vignette — do it only if a specific 4K display looks soft.
+
+**Two constraints that matter more than resolution:**
+
+- **Keep the centre quiet.** Cards, minions and the hero portraits sit in the
+  middle of the screen, over parchment-coloured text panels. A busy or bright
+  centre makes card text unreadable, and the existing `.vignette` overlay only
+  darkens the edges. Put the detail in the outer thirds and keep the middle dark
+  and low-contrast.
+- **Design for a 4:3 safe area.** The board runs from iPad portrait (768 × 1024,
+  taller than it is wide) to ultrawide desktop. A 16:9 image cropped to fill a
+  3:4 viewport loses about **44% of its width**, so anything essential must sit
+  inside the central 4:3 region. If a scene really needs the full width, supply
+  `table-portrait.webp` at 1536 × 2048 and it will be used below 820px wide.
+
+**Budget: aim for under 500 KB each**, which quality 78–85 comfortably allows for
+a dark painterly scene. This is a study tool that will be opened on school wifi;
+a 3 MB background is felt on every single page load.
+
+The current CSS gradient stays underneath as the fallback, so a missing or
+still-loading backdrop looks deliberate rather than blank.
+
+## 5. Gold (foil) variants — `art/ui/`
 
 Gold cards are a **treatment, not a second illustration.** They reuse the
 standard card's art. Two assets cover all 155 cards:
@@ -92,6 +129,35 @@ standard card's art. Two assets cover all 155 cards:
 **Do not draw 155 gold illustrations.** The current CSS treatment — a gold border
 plus an animated sheen — already works; these two files replace it with drawn
 versions.
+
+## 6. Is WebP the right format?
+
+**Yes, for all of it** — with one exception worth knowing.
+
+- **Backdrops and card art: lossy WebP, quality 78–85.** These are painterly,
+  full-colour images where lossy compression is invisible and the saving over PNG
+  is large — typically 4–8× smaller at the same perceived quality. This is the
+  case WebP is best at.
+- **UI elements and card backs: WebP too**, and it supports alpha, which those
+  need. But if an element is *flat* — hard edges, few colours, no gradients, like
+  a keyword mark — try **lossless WebP or PNG** as well and keep whichever is
+  smaller. Lossy compression puts soft halos around hard edges, and at 144 px a
+  halo is visible.
+- **`.svg` is accepted for `art/ui/` and is the better choice for the flat marks**
+  — it stays crisp at any zoom, including the inspector's 2.5× enlargement, and is
+  usually a fraction of the size.
+
+**Browser support is not a concern.** Every browser this game targets has
+supported WebP for years, and the app already loads `.webp` for card art.
+
+**AVIF would be roughly 20% smaller and is not worth it here** — slower to
+encode, more awkward tooling, and the saving is small against a 500 KB budget.
+Stay on WebP.
+
+**Export settings, concretely:** sRGB, 8-bit, no embedded colour profile beyond
+sRGB, and strip metadata. From most editors: *Export As → WebP → Quality 80*.
+If you are exporting from a PNG master, `cwebp -q 80 in.png -o out.webp` does the
+same job and reports the file size.
 
 ---
 

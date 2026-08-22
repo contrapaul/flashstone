@@ -151,3 +151,50 @@ Confirmed 2026-08-21.
   exists to stop worthless dupes, and a gold upgrade is not worthless.
 - Deck building uses whichever copies you own; if you own a gold copy it is the one shown.
   There is no "gold-only deck" mode and no way to opt out of showing gold.
+
+
+## 11. Classes
+
+Confirmed 2026-08-22. Built in `docs/plan/PHASE-6-CLASSES.md`.
+
+- Four classes, each loosely modelled on a Hearthstone archetype:
+  **Designer** (Shaman), **Engineer** (Warrior), **Consumer** (Warlock),
+  **Manufacturer** (Mage).
+- Each has **one hero power**, costing **2 mana, once per turn**, and never a card
+  in hand:
+
+  | Class | Power | Effect | Hearthstone original |
+  |---|---|---|---|
+  | Designer | **Summon a Design Idea** | Summons a random one of four 1-mana tokens | Totemic Call |
+  | Engineer | **Make it Stronger** | Gain 2 Armor | Armor Up! |
+  | Consumer | **Pay on Credit** | Draw a card, take 2 damage | Life Tap |
+  | Manufacturer | **Robotic Arm** | Deal 1 damage | Fireblast |
+
+- The four **Design Ideas** are renamed copies of Hearthstone's basic totems:
+
+  | Token | Original | Stats | Text |
+  |---|---|---|---|
+  | Rechargeable Battery | Healing Totem | 0/2 | At the end of your turn, restore 1 Health to all friendly minions |
+  | OLED Screen | Searing Totem | 1/1 | — |
+  | Reinforced Frame | Stoneclaw Totem | 0/2 | Taunt |
+  | Overclocked CPU | Wrath of Air Totem | 0/2 | Spell Damage +1 |
+
+  As in Hearthstone, the power summons one **not already on the board**, and does
+  nothing when all four are out.
+- Each class gets **10 class-specific cards**. Names are placeholders for Paul to
+  rename to fit the syllabus.
+- **All 155 existing SL cards stay Neutral.** They are syllabus terms, not class
+  identity, and reclassifying them would invalidate every saved deck.
+- A deck has a class and may hold **that class's cards plus Neutral cards**. The
+  per-card copy limits (2, or 1 for Legendary) are unchanged.
+
+## 12. Backdrop and menu art
+
+- Paul is drawing a **play-field backdrop** and a **menus backdrop** as well as
+  card art.
+- Both are **2560 × 1440 lossy WebP**, budgeted under 500 KB each, in
+  `static/art/scene/`. The existing CSS gradient stays underneath as the fallback.
+- The play field's **centre must stay dark and quiet** — cards and text sit there —
+  and the composition must survive a **4:3 crop**, because the board runs from
+  iPad portrait to ultrawide.
+- Full sizes, formats and export settings are in `static/art/README.md`.
