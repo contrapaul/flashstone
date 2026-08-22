@@ -41,21 +41,29 @@
     complete = ALL_CARDS.every((c) => (owned[c.id]?.copies ?? 0) >= 2);
   }
 
-  async function buyPack() {
+  /**
+   * Opening a pack, whether it was bought or awarded. The endpoint differs
+   * because what it spends differs — gold, or one of the packs the intro track
+   * granted — but everything after it is the same.
+   */
+  async function getPack(path: string) {
     if (busy) return;
     busy = true;
     error = null;
 
-    const res = await fetch('/api/shop/buy-pack', { method: 'POST' });
+    const res = await fetch(path, { method: 'POST' });
     if (res.ok) {
       const data = await res.json();
       opening = data.pack;
       await account.refresh();
     } else {
-      error = (await res.json().catch(() => ({}))).message ?? 'Could not buy a pack.';
+      error = (await res.json().catch(() => ({}))).message ?? 'Could not open a pack.';
     }
     busy = false;
   }
+
+  const buyPack = () => getPack('/api/shop/buy-pack');
+  const openOwned = () => getPack('/api/shop/open-pack');
 
   async function finishOpening() {
     opening = null;
@@ -81,6 +89,7 @@
   }
 
   $: gold = $account.gold;
+  $: packsHeld = $account.packs;
   $: canAffordPack = gold >= PACK_COST;
 </script>
 
@@ -107,7 +116,9 @@
   {:else}
     <header>
       <h1>Shop</h1>
-      <span class="balance">{gold} gold</span>
+      <span class="balance">
+        {gold} gold{#if packsHeld > 0} · {packsHeld} unopened{/if}
+      </span>
     </header>
 
     {#if error}<p class="error">{error}</p>{/if}
@@ -129,9 +140,21 @@
           <p class="note">{collected} of {ALL_CARDS.length} cards collected.</p>
         {/if}
 
-        <button on:click={buyPack} disabled={busy || !canAffordPack || complete}>
-          {busy ? 'Opening…' : `Buy a pack — ${PACK_COST}g`}
-        </button>
+        <div class="pack-actions">
+          {#if packsHeld > 0 && !complete}
+            <button on:click={openOwned} disabled={busy}>
+              {busy ? 'Opening…' : `Open a pack — ${packsHeld} waiting`}
+            </button>
+          {/if}
+
+          <button
+            class:ghost={packsHeld > 0 && !complete}
+            on:click={buyPack}
+            disabled={busy || !canAffordPack || complete}
+          >
+            {busy ? 'Opening…' : `Buy a pack — ${PACK_COST}g`}
+          </button>
+        </div>
         {#if !canAffordPack && !complete}
           <p class="short">{PACK_COST - gold} gold short. Win a game or finish a quest.</p>
         {/if}
@@ -158,6 +181,8 @@
                 <button class="ghost" on:click={() => backAction(backId, 'select')} disabled={busy}>
                   Wear
                 </button>
+              {:else if back.unlockOnly}
+                <span class="locked" title="Win three games to unlock it">Locked</span>
               {:else}
                 <button
                   class="ghost"
@@ -279,6 +304,13 @@
   }
   button:disabled { opacity: 0.5; cursor: default; }
 
+  .pack-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
   button.ghost {
     padding: 6px 12px;
     background: var(--ink-2);
@@ -326,5 +358,13 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--gold-bright);
+  }
+
+  .locked {
+    font-family: var(--display);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-faint);
   }
 </style>

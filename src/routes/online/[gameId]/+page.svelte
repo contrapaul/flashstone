@@ -9,6 +9,7 @@
   import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
   import type { MatchStatus } from '$lib/net/source';
   import { lobbyCall } from '$lib/net/client';
+  import { reportProgress } from '$lib/quests/client';
 
   /**
    * An online match.
@@ -24,6 +25,7 @@
   let status: MatchStatus = { kind: 'waiting' };
   let error: string | null = null;
   let joining = true;
+  let counted = false;
 
   $: gameId = $page.params.gameId ?? '';
 
@@ -84,6 +86,20 @@
 
   function onAttack(event: CustomEvent<{ instanceId: string; target: TargetRef }>) {
     source?.attack(event.detail.instanceId, event.detail.target);
+  }
+
+  /**
+   * Quest progress for an online match.
+   *
+   * The gold for an online win is paid by the match itself, server-side — but
+   * nothing was counting these towards quests, so "win 2 games, against the AI
+   * or online" only ever advanced against the AI. Reported here, once, when the
+   * result lands.
+   */
+  $: if (view.winner && !counted) {
+    counted = true;
+    reportProgress('matches', 1);
+    if (view.winner === view.you) reportProgress('wins', 1);
   }
 
   $: opponentName = status.opponent?.username ?? 'Opponent';

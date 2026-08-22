@@ -71,6 +71,8 @@ Awarded for logins, daily quests and winning games.
 - **3 quests active per day**, drawn from the 5 above, refreshing at UTC midnight.
 - Gold is spent on **packs (100)** and **card designs / card backs (300)**.
 - Gold, collection and quest progress are **server-authoritative** from Phase 3 on.
+- Gold is the only *ongoing* route to a pack. The **one-time** intro track (§13)
+  awards packs directly; nothing repeatable does.
 
 ## 5. Card art
 
@@ -218,9 +220,11 @@ Confirmed 2026-08-22.
   through the hero powers alone. Class cards deepen decks they can already field.
 - Because players collect toward **all four** classes rather than one, the
   meaningful acquisition figures are the spread, not the completion of any single
-  class: **one card of every class by 6 packs (~2 days), five of every class by 21
-  (~8 days)**, the whole 210-card collection by 78 (~29 days). Measured, and
-  guarded in `packs/pack.test.ts`.
+  class: **one card of every class within 4 packs, five of every class by ~16**,
+  the whole 210-card collection by 78 (~27 days). Measured after the class slot
+  began aiming at the thinnest class (§3), and guarded in `packs/pack.test.ts`.
+  With the new-player package (§13) the first of those lands on **day one** and
+  the second on **day 5**.
 
 ## 12. Backdrop and menu art
 
@@ -232,3 +236,44 @@ Confirmed 2026-08-22.
   and the composition must survive a **4:3 crop**, because the board runs from
   iPad portrait to ultrawide.
 - Full sizes, formats and export settings are in `static/art/README.md`.
+
+## 13. The new-player package
+
+A one-time runway, separate from the daily rhythm. Four intro quests, claimed
+once ever and never expiring:
+
+| Quest | Reward |
+|---|---|
+| Play your first match — **won or lost** | 100 gold + 1 pack |
+| Win a game | 1 pack |
+| Build a deck | 100 gold |
+| Win 3 games | 5 packs + the **Ascendant** card back |
+
+- **7 packs and 200 gold in total** — about 900 gold, or three and a half days of
+  income, inside the first session or two.
+- **Only the first quest is shown** until it is finished; four quests in front of
+  someone who has not played yet is a chore list rather than a welcome. Progress
+  on the hidden three still accrues, so a first match that is *won* completes two
+  quests at once.
+- The first quest pays for **finishing** a match either way. The moment a new
+  player is most likely to leave is the one where the game should be most
+  generous.
+- **Ascendant is not for sale.** It is the only thing in the shop gold cannot
+  buy, which is the whole reason it means anything.
+- Packs are held in an inventory (`profiles.packs`) and opened from the shop.
+  They are not consumed once the collection is complete — the shop stops offering
+  to open them rather than burning them on duplicates.
+- Payment is guarded by the `claimed` flag on `intro_quests`, set by a guarded
+  `UPDATE ... WHERE claimed = 0` before anything is granted. A `gold_awards` row
+  cannot do that job here: some rewards carry no gold at all.
+
+**What it does to the curve** (measured 2026-08-22, against the pack rule in §3):
+
+| Income | One of every class | Five of every class | Everything |
+|---|---|---|---|
+| Keen, ~265/day | day 2 → **day 1** | day 8 → **day 5** | day 30 → 27 |
+| Steady, ~150/day | day 4 → **day 1** | day 14 → **day 8** | day 52 → 46 |
+| Light, ~75/day | day 7 → **day 1** | day 27 → **day 15** | day 104 → 92 |
+
+It collapses the early game and barely moves the endgame, which is what an
+onboarding grant should do. The light player is helped most.

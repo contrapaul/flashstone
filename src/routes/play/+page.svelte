@@ -109,7 +109,7 @@
    */
   function onDrained() {
     if (!source) return;
-    if (view.winner) return void onWin();
+    if (view.winner) return void onMatchOver();
     if (view.turn !== 'ai') {
       aiThinking = false;
       return;
@@ -128,10 +128,17 @@
     if (card.type === 'Spell') reportProgress('spellsCast', 1);
   }
 
-  async function onWin() {
-    if (view.winner !== 'player' || rewarded) return;
+  async function onMatchOver() {
+    if (rewarded) return;
     rewarded = true;
+
+    // Reported win or lose: the intro track pays for finishing a first match
+    // either way (DECISIONS.md §13), and losing it is the moment a new player
+    // most needs something to have come of the game.
+    reportProgress('matches', 1);
+    if (view.winner !== 'player') return;
     reportProgress('wins', 1);
+
     try {
       const res = await fetch('/api/rewards/win', {
         method: 'POST',

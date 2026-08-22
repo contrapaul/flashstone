@@ -166,12 +166,12 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 | `src/lib/settings.ts` | Client-side settings store. Today: "show definitions in game" |
 | `src/lib/server/` | **Server-only.** Ported auth (`crypto`, `session`, `ratelimit`, `email`), plus `collection`, `gold` and the `api` helpers. SvelteKit forbids importing these from a component |
 | `src/lib/packs/pack.ts` | Pure, seeded pack generation — no duplicates, guaranteed Rare+, 5% gold |
-| `src/lib/quests/` | `quests.ts` (definitions, the daily three, increment clamps) and `client.ts` (fire-and-forget reporting) |
+| `src/lib/quests/` | `quests.ts` (definitions, the daily three, increment clamps), `intro.ts` (the one-time new-player track) and `client.ts` (fire-and-forget reporting) |
 | `src/lib/shop.ts` | Prices and the card-back catalogue. Shared by client and server so they cannot disagree |
 | `src/lib/net/` | `protocol.ts` (the wire, Zod-validated), `room.ts` (the rules, no sockets), `view.ts` (what the table may infer), `source.ts` (Local/Remote), `client.ts` (browser socket), `ticket.ts` (HMAC bridge) |
 | `src/lib/components/MatchTable.svelte` | **The** board. Both modes use it |
 | `workers/realtime/` | Separate wrangler project: `MatchRoom` and `Lobby` Durable Objects |
-| `src/lib/server/{shop,quests}.ts` | Purchases and quest progress. Every gold movement goes through `gold.ts` |
+| `src/lib/server/{shop,quests,intro}.ts` | Purchases, quest progress and the intro track. Every gold movement goes through `gold.ts`; intro rewards are guarded by `intro_quests.claimed`, because packs and card backs carry no gold |
 | `src/lib/collection/sync.ts` | The one place the app asks what a player owns — server when signed in, localStorage when not |
 | `src/lib/account.ts` | Client cache of `/api/profile` |
 | `src/hooks.server.ts` | Resolves the session cookie into `locals.user` |

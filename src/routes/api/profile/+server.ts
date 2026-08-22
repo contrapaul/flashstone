@@ -11,7 +11,7 @@ export const GET: RequestHandler = async (event) => {
   if (!user) return json({ user: null });
 
   const profile = await db(event)
-    .prepare('SELECT gold, card_back FROM profiles WHERE user_id = ?1')
+    .prepare('SELECT gold, packs, card_back FROM profiles WHERE user_id = ?1')
     .bind(user.id)
     .first();
 
@@ -23,6 +23,7 @@ export const GET: RequestHandler = async (event) => {
       emailVerified: !!user.email_verified
     },
     gold: (profile?.gold as number) ?? 0,
+    packs: (profile?.packs as number) ?? 0,
     cardBack: (profile?.card_back as string) ?? 'default'
   });
 };

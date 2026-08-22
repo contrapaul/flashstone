@@ -9,7 +9,13 @@
 export type QuestId = 'win2' | 'play30' | 'cast10' | 'build' | 'review5';
 
 /** What the client counts and reports. One counter per quest metric. */
-export type QuestMetric = 'wins' | 'cardsPlayed' | 'spellsCast' | 'decksBuilt' | 'reviewSeconds';
+export type QuestMetric =
+  | 'wins'
+  | 'matches'
+  | 'cardsPlayed'
+  | 'spellsCast'
+  | 'decksBuilt'
+  | 'reviewSeconds';
 
 export interface QuestDef {
   id: QuestId;
@@ -82,6 +88,9 @@ export const QUESTS_PER_DAY = 3;
  */
 export const MAX_INCREMENT: Record<QuestMetric, number> = {
   wins: 1,
+  // A finished match, won or lost. No daily quest uses it — it exists for the
+  // intro track, which pays for turning up rather than for winning.
+  matches: 1,
   cardsPlayed: 10,
   spellsCast: 10,
   decksBuilt: 1,

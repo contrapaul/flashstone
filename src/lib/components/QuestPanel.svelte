@@ -1,15 +1,22 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
-  import type { QuestRow } from '$lib/quests/client';
+  import type { IntroRow, QuestRow } from '$lib/quests/client';
   import { fetchQuests, claimQuest, nextRefreshIn } from '$lib/quests/client';
 
-  /** Today's three quests, with progress bars and a claim button. */
+  /**
+   * Two tracks, one panel each: the one-time intro quests that hand a new
+   * player their runway, and today's three dailies. The intro section
+   * disappears for good once every one of its quests is claimed.
+   */
   const dispatch = createEventDispatcher<{ claimed: number }>();
 
   let quests: QuestRow[] = [];
+  let intro: IntroRow[] = [];
   let loading = true;
   let busy = '';
   let error: string | null = null;
+  /** Which section the error belongs under, so it is not printed twice. */
+  let errorTrack: 'intro' | 'daily' | null = null;
   let countdown = '';
   let ticker: ReturnType<typeof setInterval>;
 
@@ -25,24 +32,79 @@
   }
 
   async function load() {
-    quests = await fetchQuests();
+    const tracks = await fetchQuests();
+    quests = tracks.quests;
+    intro = tracks.intro;
     loading = false;
   }
 
   async function claim(questId: string) {
     busy = questId;
     error = null;
+    errorTrack = intro.some((q) => q.id === questId) ? 'intro' : 'daily';
     const result = await claimQuest(questId);
+    if (result.quests) quests = result.quests;
+    if (result.intro) intro = result.intro;
     if (result.ok) {
-      quests = result.quests;
       dispatch('claimed', result.awarded);
     } else {
       error = result.reason ?? 'Could not claim that.';
-      quests = result.quests;
     }
     busy = '';
   }
+
+  /** "100g + 1 pack", "5 packs + a card back". Gold-only quests just say "40g". */
+  function introReward(quest: IntroRow): string {
+    const parts: string[] = [];
+    if (quest.gold > 0) parts.push(`${quest.gold}g`);
+    if (quest.packs > 0) parts.push(quest.packs === 1 ? '1 pack' : `${quest.packs} packs`);
+    if (quest.back) parts.push('a card back');
+    return parts.join(' + ');
+  }
 </script>
+
+{#if intro.length > 0}
+  <section class="panel">
+    <div class="head">
+      <h2>Getting started</h2>
+      <span class="countdown" title="These do not expire">One time</span>
+    </div>
+
+    {#if error && errorTrack === 'intro'}<p class="error">{error}</p>{/if}
+
+    <ul>
+      {#each intro as quest (quest.id)}
+        <li class:done={quest.claimed}>
+          <div class="row">
+            <span class="label">{quest.label}</span>
+            <span class="reward">{introReward(quest)}</span>
+          </div>
+          <p class="detail">{quest.detail}</p>
+
+          <div
+            class="bar"
+            role="progressbar"
+            aria-valuenow={quest.progress}
+            aria-valuemax={quest.target}
+          >
+            <span class="fill" style:width={`${(quest.progress / quest.target) * 100}%`}></span>
+          </div>
+
+          <div class="row foot">
+            <span class="count">{quest.progress} / {quest.target}</span>
+            {#if quest.claimed}
+              <span class="claimed">Claimed</span>
+            {:else if quest.complete}
+              <button on:click={() => claim(quest.id)} disabled={busy === quest.id}>
+                {busy === quest.id ? '…' : 'Claim'}
+              </button>
+            {/if}
+          </div>
+        </li>
+      {/each}
+    </ul>
+  </section>
+{/if}
 
 <section class="panel">
   <div class="head">
@@ -55,7 +117,7 @@
   {:else if quests.length === 0}
     <p class="muted">Quests are unavailable right now.</p>
   {:else}
-    {#if error}<p class="error">{error}</p>{/if}
+    {#if error && errorTrack === 'daily'}<p class="error">{error}</p>{/if}
 
     <ul>
       {#each quests as quest (quest.id)}

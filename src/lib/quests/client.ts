@@ -20,14 +20,35 @@ export interface QuestRow {
   complete: boolean;
 }
 
-export async function fetchQuests(): Promise<QuestRow[]> {
-  if (!browser) return [];
+/** A one-time intro quest. Pays packs and a card back, not only gold. */
+export interface IntroRow {
+  id: string;
+  label: string;
+  detail: string;
+  target: number;
+  gold: number;
+  packs: number;
+  back?: string;
+  progress: number;
+  claimed: boolean;
+  complete: boolean;
+}
+
+export interface QuestTracks {
+  quests: QuestRow[];
+  /** Empty once the new-player track is finished — the panel then hides it. */
+  intro: IntroRow[];
+}
+
+export async function fetchQuests(): Promise<QuestTracks> {
+  if (!browser) return { quests: [], intro: [] };
   try {
     const res = await fetch('/api/quests');
-    if (!res.ok) return [];
-    return (await res.json()).quests ?? [];
+    if (!res.ok) return { quests: [], intro: [] };
+    const data = await res.json();
+    return { quests: data.quests ?? [], intro: data.intro ?? [] };
   } catch {
-    return [];
+    return { quests: [], intro: [] };
   }
 }
 
@@ -43,9 +64,18 @@ export function reportProgress(metric: QuestMetric, amount = 1): void {
   });
 }
 
-export async function claimQuest(
-  questId: string
-): Promise<{ ok: boolean; reason?: string; awarded: number; quests: QuestRow[] }> {
+export interface ClaimResult {
+  ok: boolean;
+  reason?: string;
+  /** Gold paid. An intro quest may pay none and still succeed. */
+  awarded: number;
+  awardedPacks: number;
+  awardedBack?: string;
+  quests?: QuestRow[];
+  intro?: IntroRow[];
+}
+
+export async function claimQuest(questId: string): Promise<ClaimResult> {
   try {
     const res = await fetch('/api/quests/claim', {
       method: 'POST',
@@ -56,11 +86,15 @@ export async function claimQuest(
     return {
       ok: !!data.ok,
       reason: data.reason,
-      awarded: data.awarded ?? 0,
-      quests: data.quests ?? []
+      // Daily quests answer with `awarded`, intro quests with `awardedGold`.
+      awarded: data.awarded ?? data.awardedGold ?? 0,
+      awardedPacks: data.awardedPacks ?? 0,
+      awardedBack: data.awardedBack,
+      quests: data.quests,
+      intro: data.intro
     };
   } catch {
-    return { ok: false, reason: 'Could not reach the server.', awarded: 0, quests: [] };
+    return { ok: false, reason: 'Could not reach the server.', awarded: 0, awardedPacks: 0 };
   }
 }
 

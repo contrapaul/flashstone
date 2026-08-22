@@ -1,5 +1,5 @@
 import { PACK_COST, applyPack, openPack, type PackCard } from '$lib/packs/pack';
-import { allCardBackIds } from '$lib/shop';
+import { purchasableBackIds } from '$lib/shop';
 import { loadOwned } from './collection';
 
 /**
@@ -27,6 +27,27 @@ async function goldOf(DB: any, userId: string): Promise<number> {
 }
 
 /**
+ * Deals a pack against the player's collection and returns the statements that
+ * record it, ready to batch behind whichever guarded debit paid for it.
+ */
+async function dealPack(DB: any, userId: string, seed: number) {
+  const owned = await loadOwned(DB, userId);
+  const pack = openPack(owned, seed);
+  const next = applyPack(owned, pack);
+
+  // Only the cards the pack actually changed, so the write stays small.
+  const touched = [...new Set(pack.map((p) => p.card.id))];
+  const writes = touched.map((cardId) =>
+    DB.prepare(
+      `INSERT INTO owned_cards (user_id, card_id, copies, gold) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(user_id, card_id) DO UPDATE SET copies = ?3, gold = ?4`
+    ).bind(userId, cardId, next[cardId].copies, next[cardId].gold)
+  );
+
+  return { pack, writes };
+}
+
+/**
  * Buys and opens one pack.
  *
  * The debit is written as `gold = gold - cost WHERE gold >= cost`, so two
@@ -40,32 +61,50 @@ export async function buyPack(DB: any, userId: string, seed: number): Promise<Pu
     return { ok: false, reason: `A pack costs ${PACK_COST} gold. You have ${gold}.`, gold };
   }
 
-  const owned = await loadOwned(DB, userId);
-  const pack = openPack(owned, seed);
-  const next = applyPack(owned, pack);
+  const { pack, writes } = await dealPack(DB, userId, seed);
 
-  // Only the cards the pack actually changed, so the write stays small.
-  const touched = [...new Set(pack.map((p) => p.card.id))];
-
-  const statements = [
+  const results = await DB.batch([
     DB.prepare('UPDATE profiles SET gold = gold - ?1 WHERE user_id = ?2 AND gold >= ?1').bind(
       PACK_COST,
       userId
     ),
-    ...touched.map((cardId) =>
-      DB.prepare(
-        `INSERT INTO owned_cards (user_id, card_id, copies, gold) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT(user_id, card_id) DO UPDATE SET copies = ?3, gold = ?4`
-      ).bind(userId, cardId, next[cardId].copies, next[cardId].gold)
-    )
-  ];
+    ...writes
+  ]);
 
-  const results = await DB.batch(statements);
   // The guarded UPDATE is the authority: no rows changed means the balance went
   // between the read and the write, and the purchase did not happen.
   const debited = results?.[0]?.meta?.changes ?? 1;
   if (debited === 0) {
     return { ok: false, reason: 'Not enough gold.', gold: await goldOf(DB, userId) };
+  }
+
+  return { ok: true, gold: await goldOf(DB, userId), pack };
+}
+
+/**
+ * Opens a pack the player already holds — one awarded by the intro track rather
+ * than bought (DECISIONS.md §13).
+ *
+ * Guarded exactly like the gold debit, for the same reason: `packs = packs - 1
+ * WHERE packs >= 1` means two clicks that race cannot both open a pack the
+ * player owns once.
+ */
+export async function openOwnedPack(
+  DB: any,
+  userId: string,
+  seed: number
+): Promise<PurchaseResult> {
+  const { pack, writes } = await dealPack(DB, userId, seed);
+
+  const results = await DB.batch([
+    DB.prepare('UPDATE profiles SET packs = packs - 1 WHERE user_id = ?1 AND packs >= 1').bind(
+      userId
+    ),
+    ...writes
+  ]);
+
+  if ((results?.[0]?.meta?.changes ?? 1) === 0) {
+    return { ok: false, reason: 'You have no unopened packs.', gold: await goldOf(DB, userId) };
   }
 
   return { ok: true, gold: await goldOf(DB, userId), pack };
@@ -114,8 +153,10 @@ export async function buyBack(DB: any, userId: string, backId: string): Promise<
   if (backId === DEFAULT_BACK) {
     return { ...state, ok: false, reason: 'You already have that one.' };
   }
-  if (!allCardBackIds().includes(backId)) {
-    return { ...state, ok: false, reason: 'No such card back.' };
+  if (!purchasableBackIds().includes(backId)) {
+    // Covers both a made-up id and the unlock-only back, which is earned by
+    // winning three games and has no price at all.
+    return { ...state, ok: false, reason: 'That card back is not for sale.' };
   }
   if (state.owned.includes(backId)) {
     return { ...state, ok: false, reason: 'You already own that card back.' };

@@ -20,10 +20,18 @@ export interface AccountState {
   loading: boolean;
   user: Account | null;
   gold: number;
+  /** Unopened packs, awarded by the intro track rather than bought. */
+  packs: number;
   cardBack: string;
 }
 
-const initial: AccountState = { loading: true, user: null, gold: 0, cardBack: 'default' };
+const initial: AccountState = {
+  loading: true,
+  user: null,
+  gold: 0,
+  packs: 0,
+  cardBack: 'default'
+};
 
 function createAccount() {
   const { subscribe, set } = writable<AccountState>(initial);
@@ -58,6 +66,7 @@ function createAccount() {
         loading: false,
         user: data.user ?? null,
         gold: data.gold ?? 0,
+        packs: data.packs ?? 0,
         cardBack: data.cardBack ?? 'default'
       };
       set(next);
