@@ -188,6 +188,21 @@ Confirmed 2026-08-22. Built in `docs/plan/PHASE-6-CLASSES.md`.
 - A deck has a class and may hold **that class's cards plus Neutral cards**. The
   per-card copy limits (2, or 1 for Legendary) are unchanged.
 
+### How classes are acquired
+
+Confirmed 2026-08-22.
+
+- **All four classes are unlocked from the start.** There is no gate, no purchase
+  and no progression to choosing one; a player may build a deck of any class on
+  first run and switch freely.
+- **Class cards are not granted.** The 40 class cards join the general card pool
+  and are unlocked **organically, through packs** — bought with gold or earned.
+- The consequence is worth stating, because it is what makes this work: **picking
+  a class gives you a hero power, not cards.** A deck of nothing but Neutral cards
+  is legal for every class, so a new player can play any of the four immediately
+  with the starter 15; the class cards deepen a deck they can already field.
+  Nobody is ever locked out of a class they have not collected.
+
 ## 12. Backdrop and menu art
 
 - Paul is drawing a **play-field backdrop** and a **menus backdrop** as well as

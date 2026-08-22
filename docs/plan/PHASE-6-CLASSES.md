@@ -67,11 +67,18 @@ hits your whole board — which *Rechargeable Battery* needs.
       this should be free — confirm it is.
       → **verify:** a `curl` posting a mixed-class deck is refused 400.
 
-- [ ] **1.4** Decide what a player starts with (`OPEN-QUESTIONS.md` #15). Today it
-      is 15 Neutral cards, two copies each — exactly one deck. With classes that
-      is one deck of *no* class.
-      → **verify:** a new account can build and play a legal deck of at least one
-      class without opening a pack.
+- [ ] **1.4** **All four classes are unlocked from the start, and no class cards
+      are granted** (`DECISIONS.md` §11). The starter collection is unchanged: the
+      same 15 Neutral cards at two copies. The 40 class cards join the pack pool
+      and are earned.
+
+      This works because **a class deck may be entirely Neutral**. Picking a class
+      gives you a hero power, not cards — so a new player can field any of the
+      four immediately with the starter 15, and class cards deepen a deck they can
+      already play. Nothing about class choice may be gated on ownership.
+      → **verify:** a brand-new account, having opened no packs, can build and play
+      a legal 30-card deck in **each** of the four classes, and the only difference
+      between them is the hero power.
 
 ## 2. Hero powers
 
@@ -175,11 +182,20 @@ phase is heavy enough without new mechanics hiding in the card list.
       → **verify:** play one match with each class deck and write down whether it
       felt distinct. This one is a judgement, not an assertion.
 
-- [ ] **4.3** Packs must deal class cards. Decide whether a pack is class-weighted
-      or fully random (`OPEN-QUESTIONS.md` #16) and make `openPack` respect it.
-      The no-duplicates and guaranteed-Rare rules apply unchanged.
-      → **verify:** the existing pack tests still pass; a new one asserts whatever
-      class rule is chosen.
+- [ ] **4.3** Packs are the **only** source of class cards, so how often they turn
+      up is the whole progression curve. Read `OPEN-QUESTIONS.md` #16 and its
+      arithmetic before implementing: fully random puts a full 2-of set of your own
+      class about **84 packs — roughly 32 days of daily play** away, which may be
+      longer than a school term.
+
+      The default is to **reserve one of a pack's five slots for a class card**
+      (of any class), which cuts that to about a week. Whichever is chosen, the
+      no-duplicates, never-deal-a-third-copy and guaranteed-Rare rules apply
+      unchanged, and the reserved slot must not break the Rare guarantee.
+      → **verify:** every existing pack test still passes; a new one asserts the
+      class rule chosen; and a simulation over many packs reports how many are
+      needed for one class's full set, so the number is measured rather than
+      assumed.
 
 ## 5. UI
 

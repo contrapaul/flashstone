@@ -19,8 +19,33 @@ if no answer arrives — so **no phase stalls waiting on this file.**
 | 12 | Is 5% per card the rate **per card in a pack** (≈23% of packs contain one) or per pack? Follow-up 5 says "per card". | 4 §4.1b | Per card, as stated. |
 | ~~14~~ | ~~Allocate rarities exactly instead of rolling them, to fix the thin 2-Epic / 4-Legendary top end?~~ **Answered 2026-08-21: no.** Paul will author additional Legendary and Rare cards by hand after this pass. Leave the weights alone. | — | Resolved |
 | 13 | Weapons need `HeroPortrait`'s currently-dead `armor` slot decided one way or the other. Weapon durability beside armor, or drop armor? | 1B §3.5 | Show the weapon; leave armor hidden until something grants it. |
-| 15 | With classes, what does a new account start with? Today it is 15 Neutral cards ×2 — exactly one deck, but of no class. Grant every class's 10 cards at one copy? One chosen class in full? Keep neutral-only and make classes a pack unlock? | 6 §1.4 | Grant the Neutral 15 as now, **plus the 10 cards of one class the player picks on first run** at two copies. That is one legal class deck on day one without a shop visit, and the other three are something to collect. |
-| 16 | Should packs be class-weighted, or fully random across all 195 cards? | 6 §4.3 | Fully random, as now. A pack that knows your class makes the other three classes unreachable, and the collection screen already shows what you are missing. Revisit if collecting a second class feels too slow. |
+| ~~15~~ | ~~With classes, what does a new account start with?~~ **Answered 2026-08-22: all four classes unlocked from the start; class cards are *not* granted and are unlocked organically through packs.** Recorded in `DECISIONS.md` §11. | — | Resolved |
+| **16** | **At what rate do class cards arrive?** Decided: organic, via packs. Undecided: whether packs are fully random or reserve a slot. **The arithmetic is worth reading before choosing** — see the note below this table. | 6 §4.3 | **Reserve one of a pack's five slots for a class card of any class.** Still purely organic — you buy packs, you unlock cards — but it brings a full 2-of set of your own class from ~32 days of daily play to ~7. If Paul prefers fully random, say so and the default flips. |
 | 17 | Does `Spell Damage +1` apply to hero powers? In Hearthstone it does. | 6 §3.5 | Yes — it applies to spells **and** hero powers, and to nothing else. Battlecries and weapons are explicitly unaffected. |
 | 18 | Are the four classes drafted as hero portraits, or does the existing Ψ/Ω glyph stay with a class colour? | 6 §5.4 | Paul draws four portraits; the current glyph is the fallback until they exist, like all other art. |
+
+---
+
+### Note on #16 — how long a class set actually takes
+
+Computed 2026-08-22 against the real numbers, not estimated:
+
+- Pool after Phase 6: **210 cards** (155 SL + 15 Phase 1B + 40 class).
+- Your own class is **10 of them — 4.8%**.
+- A 5-card pack therefore yields about **0.24** of your class's cards.
+- A full 2-of set of your class is 20 cards → **~84 packs → 8,400 gold**.
+- At a rough 265 gold/day for a player doing the daily bonus, three quests and a
+  couple of wins, that is **~32 days of committed daily play**.
+
+That is a long time for a tool used over a school term — a student could
+reasonably never see their class's cards before the topic moves on. Reserving one
+slot per pack for a class card divides it by roughly five (~7 days), without
+changing the principle that cards are earned rather than given.
+
+The counter-argument is real too: a slower drip makes the collection last longer,
+and the Neutral starter deck is fully playable in every class from day one, so
+nobody is blocked — only their class deck is thinner for a while.
+
+**This is a tuning knob, not a design change.** It lives in `openPack` and can be
+adjusted after watching one class actually play.
 
