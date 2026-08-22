@@ -18,14 +18,22 @@ The illustration inside a card's art window.
 |---|---|
 | **Filename** | the card's id, exactly — `ergonomics.webp`, `user-centred-design-ucd.webp` |
 | **Format** | `.webp` preferred, `.png` accepted |
-| **Aspect ratio** | **2.36 : 1** (landscape) |
-| **Source size** | **708 × 300 px** — 6× the 118 × 50 CSS window, which covers the card at 2.5× in the inspector on a 2× display |
+| **Aspect ratio** | **4 : 3** (landscape) |
+| **Source size** | **640 × 480 px** — just over 6× the 104 × 78 CSS window, which covers the card at 2.5× in the inspector on a 2× display |
 | **Transparency** | not needed; the window is fully covered |
 | **Colour** | sRGB |
 
-The window is a wide letterbox strip across the upper half of the card, and it is
-filled with `cover` — so the image is **cropped to fill**, centred, if its ratio
-differs. Keep anything essential away from the outer 6%.
+The window sits in the upper half of the card with a mount of frame around it,
+and is filled with `cover` — so the image is **cropped to fill**, centred, if its
+ratio differs. Keep anything essential away from the outer 6%.
+
+It was a 2.36:1 letterbox until playtesting, which is a cinematic crop and a poor
+one for a single subject: one object or one figure had to be squeezed into a band.
+**Art drawn to the old 708 × 300 will still work** — it is cropped to fill, so it
+loses its left and right ends rather than breaking.
+
+The **nameplate overlaps the bottom of the window**, as a nameplate on a real card
+does. Keep the lower ~18% clear of anything that must be read.
 
 **`FILENAMES.md` next to this file lists every filename to draw**, in the order
 that pays off fastest, with each card's rarity, type and syllabus section. Card
@@ -61,7 +69,6 @@ the frame**, and leave the outer 8% clear.
 | `cost-crystal` | the mana gem on a card's top-left corner | 228 × 252 px | **yes** |
 | `attack-gem` | the attack diamond, bottom-left of a card | 138 × 138 px | **yes** |
 | `health-gem` | the health drop, bottom-right of a card | 138 × 138 px | **yes** |
-| `rarity-gem` | the small rarity lozenge on the nameplate | 66 × 66 px | **yes** |
 | `mana-crystal` | one crystal in the mana tray | 132 × 132 px | **yes** |
 | `mana-crystal-spent` | a spent crystal in the tray | 132 × 132 px | **yes** |
 | `taunt` | the Taunt shield behind a minion | 480 × 480 px | **yes** |
@@ -76,9 +83,12 @@ the frame**, and leave the outer 8% clear.
 Sizes are 6× the CSS size the element occupies, which covers a 2× display with
 the card inspected at 2.5×.
 
-> **Currently wired:** `cost-crystal`, `attack-gem`, `health-gem` and
-> `rarity-gem`, on the card face. The rest are specified and indexed but not yet
-> read by a component — the board and tray elements get wired when the table is
+> There was a `rarity-gem` here, an 11px lozenge on the nameplate. It has been
+> removed: **rarity is the card's border colour now**, which can be read across a
+> board rather than only up close. Nothing needs drawing for it.
+
+> **Currently wired:** `cost-crystal`, `attack-gem` and `health-gem`, on the card
+> face. The rest are specified and indexed but not yet read by a component — the board and tray elements get wired when the table is
 > rebuilt (`docs/plan/PHASE-2-TABLE-UX.md` §6). Drawing them now is safe; they
 > will light up without needing to be redrawn.
 

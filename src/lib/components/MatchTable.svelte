@@ -137,7 +137,7 @@
       const event = events.shift() as GameEvent;
       events = events;
       await play(event);
-      await sleep(EVENT_BEAT[event.type] * 0.6);
+      await sleep(EVENT_BEAT[event.type]);
     }
     draining = false;
     dispatch('drained');
@@ -152,7 +152,9 @@
     switch (event.type) {
       case 'summon':
         summoningId = event.instanceId;
-        setTimeout(() => (summoningId = null), 260);
+        // Matches the .62s summon animation. It used to clear at 260ms, which
+        // cut the arrival off less than half way through it.
+        setTimeout(() => (summoningId = null), 620);
         break;
       case 'draw': {
         if (sideOf(event.owner) !== 'me') break;
@@ -163,7 +165,7 @@
             const next = new Set(drawnCards);
             next.delete(card);
             drawnCards = next;
-          }, 460);
+          }, 500);
         }
         break;
       }
@@ -173,7 +175,7 @@
           const next = new Set(struckIds);
           next.delete(event.instanceId);
           struckIds = next;
-        }, 260);
+        }, 500);
         break;
       case 'damage': {
         if (event.target.kind === 'hero') {
@@ -182,7 +184,7 @@
           setTimeout(() => {
             hitHero = null;
             quaking = false;
-          }, 380);
+          }, 500);
           floatAt(heroPos(sideOf(event.target.owner)), `-${event.amount}`, 'var(--blood)');
         } else {
           const id = event.target.instanceId;
@@ -191,7 +193,7 @@
             const next = new Set(struckIds);
             next.delete(id);
             struckIds = next;
-          }, 300);
+          }, 500);
           floatAt(positions.get(id), `-${event.amount}`, 'var(--blood)');
         }
         break;
@@ -202,7 +204,7 @@
           const next = new Set(dyingIds);
           next.delete(event.instanceId);
           dyingIds = next;
-        }, 420);
+        }, 700);
         break;
       case 'turn':
         banner = sideOf(event.owner) === 'me' ? 'Your turn' : "Opponent's turn";
@@ -689,10 +691,19 @@
     {/each}
   </section>
 
+  <!--
+    The centre line is where the turn is handed over, so it is where the button
+    that hands it over lives. It used to sit under your own hero row, which put
+    the single most-pressed control in the match a full board away from the
+    board it acts on. The phase label keeps its place at the end of the line.
+  -->
   <div class="centre">
     <span class="rule"></span>
-    <span class="phase">{phase}</span>
+    <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
+      {myTurn ? 'End Turn' : 'Waiting'}
+    </button>
     <span class="rule"></span>
+    <span class="phase">{phase}</span>
   </div>
 
   {#if aiming || aimingPower}
@@ -754,9 +765,6 @@
       />
     </div>
 
-    <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
-      {myTurn ? 'End Turn' : 'Waiting'}
-    </button>
   </section>
 
   <section class="hand" style:transform={`scale(${handScale.toFixed(3)})`}>
@@ -875,17 +883,16 @@
   }
 
   .hero-row.foe {
-    padding: 16px 28px 0;
+    padding: 13px 28px 0;
     grid-template-columns: 1fr auto 1fr;
     /* The fan hangs above this row; .table clips it to the viewport edge. */
     overflow: visible;
   }
-  .hero-row.you { padding: 6px 28px 0; }
+  .hero-row.you { padding: 3px 28px 0; }
 
   .hero-row.foe > .hero-block { grid-column: 2; }
   .hero-row.foe > .deck-pile { grid-column: 3; justify-self: end; }
   .hero-row.you > .hero-block { grid-column: 2; }
-  .hero-row.you > .end-turn { grid-column: 3; justify-self: end; }
 
   /*
    * The opponent's hand, at the same size as yours.
@@ -1075,20 +1082,31 @@
   .table { user-select: none; }
 
   /* A hero taking 7+ shakes the table, not just the portrait. */
-  .table.quaking { animation: fs-quake .36s ease-out; }
+  .table.quaking { animation: fs-quake .5s ease-out; }
 
+  /*
+   * Three tracks, so the button is centred on the table's own midline rather
+   * than on whatever space the phase label leaves over. The label is taken out
+   * of flow for the same reason.
+   */
   .centre {
     position: relative;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 16px;
-    height: 32px;
+    /* Just tall enough for the button. The row is inside a height-locked
+       column, so every pixel here comes off the boards or pushes the hand's
+       stat gems past the bottom edge. */
+    height: 42px;
     padding: 0 28px;
   }
 
   .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #6b512f, transparent); }
 
   .phase {
+    position: absolute;
+    right: 28px;
     font-family: var(--display);
     font-size: 10px;
     letter-spacing: .3em;
@@ -1098,7 +1116,7 @@
   }
 
   .end-turn {
-    padding: 13px 26px;
+    padding: 10px 24px;
     border: 1px solid var(--rule);
     border-radius: 5px;
     background: linear-gradient(180deg, #2a2118, #1a1410);

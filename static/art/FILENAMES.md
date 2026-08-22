@@ -1,7 +1,7 @@
 # Art filenames to draw
 
 Generated from the shipped card set on 2026-08-22. **210 cards, 5 card backs,
-2 backdrops, 14 UI marks.** Every one is optional — a missing file keeps the
+2 backdrops, 13 UI marks.** Every one is optional — a missing file keeps the
 generated gradient, so this list can be worked through in any order and the
 game never breaks partway.
 
@@ -14,13 +14,12 @@ match **exactly**, lowercase, no spaces — the id *is* the filename.
 
 | What | Folder | Pixels | Alpha |
 |---|---|---|---|
-| Card illustration | `art/cards/` | **708 × 300** (2.36:1) | no |
+| Card illustration | `art/cards/` | **640 × 480** (4:3) | no |
 | Card back | `art/backs/` | **536 × 672** (1:1.254) | no |
 | Backdrop | `art/scene/` | **2560 × 1440** (16:9) | no |
 | Portrait backdrop (optional) | `art/scene/` | **1536 × 2048** (3:4) | no |
 | Cost crystal | `art/ui/` | **228 × 252** | **yes** |
 | Attack / health gem | `art/ui/` | **138 × 138** | **yes** |
-| Rarity gem | `art/ui/` | **66 × 66** | **yes** |
 | Mana crystal | `art/ui/` | **132 × 132** | **yes** |
 | Keyword marks | `art/ui/` | **144 × 144** | **yes** |
 | Taunt / Divine Shield | `art/ui/` | **480 × 480** | **yes** |
@@ -29,7 +28,7 @@ match **exactly**, lowercase, no spaces — the id *is* the filename.
 
 ---
 
-## Tier 1 — 21 files, and the game looks drawn
+## Tier 1 — 25 files, and the game looks drawn
 
 Everything here is seen constantly, by everyone, on the first screen.
 
@@ -50,7 +49,7 @@ Everything here is seen constantly, by everyone, on the first screen.
 - [ ] `ascendant.webp` — **not for sale.** Unlocked by winning 3 games, so it
       should read as earned rather than bought.
 
-### The four wired UI gems — `art/ui/` · transparent
+### The three wired UI gems — `art/ui/` · transparent
 
 These are the only UI files a component reads today; the rest are indexed but
 not yet drawn on screen. Draw the face, not the frame — the CSS still draws the
@@ -59,11 +58,10 @@ border, so leave the outer 8% clear.
 - [ ] `cost-crystal.webp` — 228 × 252 · the mana gem, top-left of every card
 - [ ] `attack-gem.webp` — 138 × 138 · bottom-left
 - [ ] `health-gem.webp` — 138 × 138 · bottom-right
-- [ ] `rarity-gem.webp` — 66 × 66 · the lozenge on the nameplate
 
 `.svg` is accepted here and is the better choice for flat marks.
 
-### The starter 15 — `art/cards/` · 708 × 300
+### The starter 15 — `art/cards/` · 640 × 480
 
 Two copies of each are granted to every new account, so these are the first
 fifteen cards anyone sees and the deck they play their first match with.
@@ -363,15 +361,16 @@ file of anything in the set.
 
 | Tier | Files |
 |---|---|
-| 1 — backdrops, backs, gems, starter 15 | 26 |
+| 1 — backdrops, backs, gems, starter 15 | 25 |
 | 2 — class cards | 40 |
 | 3 — Neutral Legendaries | 5 |
 | 4 — remaining Neutral cards | 150 |
 | **Card illustrations total** | **210** |
-| **Everything** | **221** |
+| **Everything** | **220** |
 
 Plus ten further `art/ui/` marks that are specified and indexed but not yet
 read by any component — `mana-crystal`, `mana-crystal-spent`, `taunt`,
 `divine-shield`, `charge`, `windfury`, `stealth`, `deathrattle`, `spell-mark`,
-`weapon-mark` — and the two foil files. Sizes are in `README.md` §3 and §5.
+`weapon-mark` — and the two foil files. The `rarity-gem` that used to be listed
+here is **gone**: rarity is the card's border colour now. Sizes are in `README.md` §3 and §5.
 Drawing them now is safe; they light up when the table work wires them.

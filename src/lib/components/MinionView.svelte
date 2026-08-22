@@ -128,9 +128,9 @@
     box-shadow: 0 10px 22px rgba(0, 0, 0, .6), 0 0 22px rgba(226, 96, 74, .6);
   }
 
-  .minion.summoning { animation: fs-summon .48s cubic-bezier(.2, 1.3, .4, 1); }
-  .minion.struck { animation: fs-shake .34s ease-out; }
-  .minion.dying { animation: fs-shatter .4s ease-in forwards; }
+  .minion.summoning { animation: fs-summon .62s cubic-bezier(.2, 1.3, .4, 1); }
+  .minion.struck { animation: fs-shake .5s ease-out; }
+  .minion.dying { animation: fs-shatter .6s ease-in forwards; }
 
   .halo {
     position: absolute;

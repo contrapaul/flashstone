@@ -40,7 +40,7 @@
 </script>
 
 <div
-  class="card"
+  class={`card rare-${card.rarity}`}
   class:playable
   class:drawn
   class:gold
@@ -49,7 +49,6 @@
   style:--ui-cost={ui('cost-crystal')}
   style:--ui-attack={ui('attack-gem')}
   style:--ui-health={ui('health-gem')}
-  style:--ui-rarity={ui('rarity-gem')}
   on:click
   on:keydown
   on:pointerdown
@@ -67,7 +66,6 @@
 
   <div class="plate">
     <span>{card.name}</span>
-    <div class="gem" aria-hidden="true"></div>
   </div>
 
   <div class="rules">
@@ -108,7 +106,18 @@
     flex-direction: column;
     padding: 0 0 8px;
     border-radius: 13px;
-    border: 2px solid #5a4429;
+    /*
+     * The frame is the rarity marker. It replaced a small gem on the nameplate,
+     * which read as decoration rather than information — at hand size it was
+     * 11px of colour on a busy card, and the one thing rarity has going for it
+     * is that it should be readable without looking for it.
+     *
+     * How much of the colour reaches the frame rises with rarity (see the
+     * `.rare-*` rules below), so the scale reads as a scale rather than as four
+     * arbitrary hues. This is the Common end of it: barely tinted, because a
+     * Common should still look like a card rather than one outlined in bone.
+     */
+    border: 2px solid color-mix(in srgb, var(--rarity) 30%, #5a4429);
     background: linear-gradient(180deg, #5a422a 0%, #332415 12%, #241810 100%);
     box-shadow: 0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
     opacity: .62;
@@ -119,7 +128,8 @@
   .card.playable {
     opacity: 1;
     cursor: pointer;
-    border-color: var(--good);
+    /* The green halo and the orbit below carry "you can play this"; the border
+       is spoken for by rarity now. */
     box-shadow: 0 0 0 1px rgba(205, 255, 215, .55), inset 0 0 16px rgba(126, 214, 140, .3),
       0 0 20px rgba(224, 190, 118, .35), 0 14px 26px rgba(0, 0, 0, .6),
       inset 0 1px 0 rgba(255, 232, 180, .28);
@@ -154,7 +164,21 @@
     .card:hover { transform: none; z-index: auto; }
   }
 
-  .card.drawn { animation: fs-draw .42s cubic-bezier(.2, .9, .3, 1); }
+  .card.rare-Uncommon { border-color: color-mix(in srgb, var(--rarity) 62%, #5a4429); }
+  .card.rare-Rare { border-color: color-mix(in srgb, var(--rarity) 80%, #5a4429); }
+
+  /* The top two take the colour neat and add a ring of it outside the frame.
+     Epic and Legendary are singular enough that they should carry across a
+     board, not reward a close look. */
+  .card.rare-Epic,
+  .card.rare-Legendary {
+    border-color: var(--rarity);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--rarity) 55%, transparent),
+      0 0 14px color-mix(in srgb, var(--rarity) 30%, transparent),
+      0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
+  }
+
+  .card.drawn { animation: fs-draw .5s cubic-bezier(.2, .9, .3, 1); }
 
   /* Gold variant. Deliberately a frame-and-sheen treatment rather than separate
      art: one gold frame and one shimmer serve all 155 cards. */
@@ -225,12 +249,21 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, .7);
   }
 
+  /*
+   * The art window is **4:3**, near enough — 104 x 78 inside a 134-wide card.
+   *
+   * It was 118 x 50, a 2.36:1 letterbox, which is a cinematic crop and a poor
+   * one for a single subject: an illustration of one object or one figure has
+   * to be cropped to a slot until nothing of it survives but a band. Squaring
+   * it up costs 28px of width and buys 28px of height, and the wider side
+   * margins read as a mount around a picture rather than as wasted frame.
+   *
+   * The rules panel gives up 3px for it (see `.rules`), which is inside the
+   * slack the five-line clamp already had.
+   */
   .art {
-    margin: 8px 8px 0;
-    /* Grows to fill the space the nameplate no longer occupies now that the
-       plate is docked to the description box instead of sitting right below
-       the art. */
-    height: 50px;
+    margin: 8px 15px 0;
+    height: 78px;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -260,7 +293,7 @@
     z-index: 2;
     left: 9px;
     right: 9px;
-    bottom: 50%;
+    bottom: 48.5%;
     min-height: 13px;
     padding: 1px 0;
     display: flex;
@@ -298,7 +331,7 @@
    */
   .rules {
     position: absolute;
-    top: 50%;
+    top: 51.5%;
     left: 9px;
     right: 9px;
     bottom: 9px;
@@ -354,23 +387,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  /* Rarity marker. Pokes up out of the plate into the art above it — it
-     moved here with the plate, off the top of the description panel. */
-  .gem {
-    position: absolute;
-    top: -6px;
-    left: 50%;
-    width: 11px;
-    height: 11px;
-    margin-left: -5.5px;
-    transform: rotate(45deg);
-    border-radius: 2px;
-    border: 1px solid rgba(255, 240, 210, .7);
-    background: var(--ui-rarity, none) center / contain no-repeat,
-      linear-gradient(135deg, var(--rarity), rgba(0, 0, 0, .45));
-    box-shadow: 0 0 8px color-mix(in srgb, var(--rarity) 60%, transparent);
   }
 
   .foot { height: 26px; }

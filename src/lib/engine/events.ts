@@ -32,21 +32,45 @@ export type GameEvent =
   | { type: 'armor'; owner: PlayerId }
   | { type: 'heroPower'; owner: PlayerId };
 
-/** Milliseconds the UI should hold on each cue before applying the next. */
+/**
+ * Milliseconds the UI holds on each cue before applying the next.
+ *
+ * **These are the real numbers.** They used to be multiplied by 0.6 where they
+ * were consumed, which made the table here a lie and the game far too fast to
+ * follow: a spell resolved, its damage landed and a minion died inside about
+ * 400ms total, so a player saw the aftermath rather than the sequence.
+ *
+ * The pacing rule is that **a cue is held long enough for its own animation to
+ * finish, plus a moment to read the result.** Something that changes the board
+ * permanently — a death, a summon, a hero power — gets a longer beat than
+ * something that only flashes a number.
+ *
+ * There is no separate cue for casting a spell, a battlecry or a deathrattle:
+ * each is seen through the events it emits, which is exactly why those events
+ * have to breathe. A battlecry that deals 3 and kills a minion is a `damage`
+ * beat then a `death` beat, and both have to land before the next thing starts.
+ */
 export const EVENT_BEAT: Record<GameEvent['type'], number> = {
+  // Frequent and low-stakes: several land in a row at the start of a turn.
   draw: 420,
-  summon: 480,
-  attack: 230,
-  damage: 260,
-  shield: 260,
-  death: 400,
-  freeze: 300,
-  silence: 300,
-  buff: 260,
+  // A minion arriving is a board change worth watching land.
+  summon: 620,
+  // The lunge itself. Was 138ms after the multiplier — barely a twitch.
+  attack: 520,
+  damage: 500,
+  shield: 480,
+  // The longest of the board changes: the shatter plays out, then a moment of
+  // the emptier board before whatever comes next.
+  death: 720,
+  freeze: 520,
+  silence: 520,
+  buff: 480,
+  // Unchanged — the turn banner already had room.
   turn: 1300,
-  equip: 320,
-  heroAttack: 260,
-  weaponBreak: 320,
-  armor: 260,
-  heroPower: 340
+  equip: 540,
+  heroAttack: 520,
+  weaponBreak: 620,
+  armor: 460,
+  // A hero power is a deliberate, once-a-turn act; it should read as one.
+  heroPower: 680
 };

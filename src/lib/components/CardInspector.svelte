@@ -126,11 +126,16 @@
     transform-origin: center;
   }
 
-  /* Nothing about an inspected card is interactive, and its hover lift would
-     fight the scale transform. */
-  .card-slot :global(.card:hover) {
-    transform: scale(2.5);
-    box-shadow: 0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
+  /*
+   * Nothing about an inspected card is interactive, so it does not take the
+   * pointer at all. Overriding the hover rules was not enough: `.card:hover`
+   * also switches `transform-origin` to bottom centre, and against the 2.5x
+   * scale here that alone shifted the card bodily up the screen the moment the
+   * cursor crossed it. Refusing the hover outright is both the smaller rule and
+   * the correct one — you cannot hover something you cannot click.
+   */
+  .card-slot :global(.card) {
+    pointer-events: none;
   }
   .card-slot :global(.card.playable) { animation: none; }
 
