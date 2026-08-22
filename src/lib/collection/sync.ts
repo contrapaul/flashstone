@@ -63,7 +63,9 @@ export async function loadPlayer(): Promise<PlayerState> {
     owned,
     // Prune on arrival: a deck saved before a card left the set, or before
     // copies were spent, must not make the play route think it is illegal.
-    deck: first ? pruneDeck({ name: first.name, cardIds: first.cardIds }, owned) : null,
+    deck: first
+      ? pruneDeck({ name: first.name, cardIds: first.cardIds, class: first.class }, owned)
+      : null,
     deckId: first?.id ?? null,
     signedIn: true
   };
@@ -91,7 +93,12 @@ export async function savePlayerDeck(
     const res = await fetch('/api/decks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: deckId, name: deck.name, cardIds: deck.cardIds })
+      body: JSON.stringify({
+        id: deckId,
+        name: deck.name,
+        cardIds: deck.cardIds,
+        class: deck.class
+      })
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

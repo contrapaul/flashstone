@@ -65,8 +65,10 @@ describe('every card', () => {
     }
   });
 
+  // Generated cards only. Hand-authored class cards are tuned by hand and are
+  // deliberately not constrained to the template table.
   it('sits on a real template statline', () => {
-    const minions = ALL_CARDS.filter((c) => c.type === 'Minion');
+    const minions = SL_CARDS.filter((c) => c.type === 'Minion');
     for (const card of minions) {
       const match = TEMPLATES.some(
         (t) =>

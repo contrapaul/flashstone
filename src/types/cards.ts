@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────
-// CARD SCHEMA & VALIDATION RULES v0.4
+// CARD SCHEMA & VALIDATION RULES v0.5
 // Designed for: Flashcard import, early-Hearthstone pacing,
 // deterministic fallbacks, rarity-weighted drafting
 //
@@ -10,10 +10,29 @@
 //   term's meaning without ever putting it on the card face.
 // v0.4 adds spells you aim and weapons you swing: Target 'Chosen', CardType
 //   'Weapon' with `durability`, and Action 'SwapStats'.
+// v0.5 adds classes: `CardClass`, a `class` field, `GainArmor`, the `AllFriendly`
+//   and `SelfHero` targets, and per-card `spellDamage`.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
 export type CardType = 'Minion' | 'Spell' | 'HeroPower' | 'Weapon';
+
+/**
+ * Which class may field a card.
+ *
+ * Every syllabus card is `Neutral` and stays that way — a term is not class
+ * identity, and reclassifying them would invalidate every saved deck. A deck of
+ * class X may hold X's cards and Neutral cards, nothing else.
+ */
+export type CardClass = 'Neutral' | 'Designer' | 'Engineer' | 'Consumer' | 'Manufacturer';
+
+/** The four playable classes, in display order. `Neutral` is not one of them. */
+export const PLAYABLE_CLASSES = [
+  'Designer',
+  'Engineer',
+  'Consumer',
+  'Manufacturer'
+] as const satisfies readonly CardClass[];
 export type Rarity = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
 export type Keyword = 'Taunt' | 'Charge' | 'DivineShield' | 'Windfury' | 'Stealth';
 export type Trigger =
@@ -41,7 +60,9 @@ export type Action =
   | 'Freeze'
   | 'Silence'
   /** Swaps a minion's Attack and Health. */
-  | 'SwapStats';
+  | 'SwapStats'
+  /** Adds armor to the caster's hero. Armor is spent before health. */
+  | 'GainArmor';
 export type Target =
   | 'Self'
   | 'EnemyMinion'
@@ -49,6 +70,16 @@ export type Target =
   | 'Hero'
   | 'RandomEnemy'
   | 'AllEnemies'
+  /** Every friendly minion. Does not include the hero. */
+  | 'AllFriendly'
+  /**
+   * The caster's own hero, explicitly.
+   *
+   * Distinct from `Hero`, which resolves to *the enemy* for harmful actions —
+   * so a card that damages you on purpose (the Consumer's Pay on Credit) cannot
+   * be expressed with `Hero` at all.
+   */
+  | 'SelfHero'
   /**
    * Aimed by the player rather than picked by the engine.
    *
@@ -90,6 +121,16 @@ export interface Card {
    * Checked server-side too; the UI only uses it to decide what to light up.
    */
   targeting?: 'any' | 'enemy' | 'friendly';
+
+  /** Which class may field this. Absent means Neutral. */
+  class?: CardClass;
+
+  /**
+   * Spell Damage. While this minion is on the board, its controller's spells and
+   * hero power deal this much extra damage — and **nothing else does**. Minion
+   * Battlecries, Deathrattles and weapons are deliberately unaffected.
+   */
+  spellDamage?: number;
 
   keywords: Keyword[];
   effects: Effect[]; // Structured effect array (parsed or manual)

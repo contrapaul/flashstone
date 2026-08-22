@@ -1,3 +1,4 @@
+import type { CardClass } from '../../types/cards';
 import type { Owned } from '../collection/owned';
 import { emptyDeck, type Deck } from '../decks/deck';
 
@@ -44,13 +45,21 @@ export function starterCollection(): Owned {
   return owned;
 }
 
+/** The class a new player's deck starts as, until they choose otherwise. */
+export const DEFAULT_CLASS: CardClass = 'Designer';
+
 /**
  * The starter deck itself — both copies of all fifteen, in curve order. Used
  * for signed-out practice and as the fallback whenever no deck is saved.
+ *
+ * Every starter card is Neutral, so this deck is legal in **all four classes**;
+ * the class only decides the hero power. That is what lets every class be
+ * unlocked from the start without granting any class cards (DECISIONS.md §11).
  */
-export function starterDeck(): Deck {
+export function starterDeck(heroClass: CardClass = DEFAULT_CLASS): Deck {
   return {
     ...emptyDeck('Starter deck'),
+    class: heroClass,
     cardIds: STARTER_CARD_IDS.flatMap((id) => [id, id])
   };
 }

@@ -25,8 +25,8 @@ npm install && npx svelte-kit sync && npm test && npm run check
 ```
 
    Baseline after Phase 1B (2026-08-22): **313 tests pass, `svelte-check` reports 0 errors.**
-   Phases 1–5 and 1B are complete. **Phase 6 (classes) is the outstanding work**,
-   and it is where hero powers — deferred twice — finally get built.
+   **Every phase is complete**, including hero powers, which were deferred twice
+   before Phase 6 built them.
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -52,7 +52,7 @@ ticked, and continue.
 | [3](PHASE-3-ACCOUNTS.md) | Accounts & server state | (enables 3, 4, 6) | 1 | **Done** 2026-08-22 |
 | [4](PHASE-4-ECONOMY.md) | Gold, packs, quests, card backs | 3, 4, 6, 12, 14 + follow-up 5 | 1, 1B, 2, 3 | **Done** 2026-08-22 |
 | [5](PHASE-5-MULTIPLAYER.md) | Play Online | 1 | 1B, 3 | **Done** 2026-08-22 |
-| [6](PHASE-6-CLASSES.md) | Classes & hero powers | new 2026-08-22 | 1, 1B, 3, 4 | Not started |
+| [6](PHASE-6-CLASSES.md) | Classes & hero powers | new 2026-08-22 | 1, 1B, 3, 4 | **Done** 2026-08-22 |
 
 "Follow-ups" are the five clarifications Paul added on 2026-08-21, recorded in
 `DECISIONS.md` §8–§10 and in the Phase 1 and 1B steps: table text is game-text only,

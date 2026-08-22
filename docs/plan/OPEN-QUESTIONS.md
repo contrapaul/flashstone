@@ -28,6 +28,20 @@ if no answer arrives — so **no phase stalls waiting on this file.**
 
 ### Note on #16 — how long a class set actually takes
 
+> **Updated 2026-08-22 with a measured figure, replacing the estimate below.**
+> With one reserved class slot per pack, completing one class's ten cards at two
+> copies takes **57 packs — 5,700 gold, roughly three weeks of daily play**.
+> Asserted in `pack.test.ts` as a regression guard.
+>
+> My earlier estimate of "about a week" was wrong: it ignored that the reserved
+> slot deals a class card of **any** class, so only about a quarter of them are
+> the player's own. The remaining lever, if three weeks is still too slow, is to
+> weight the reserved slot toward the player's own class — `openPack` would need
+> to be told which class that is. **Not done, because it is a design decision
+> about whether packs should know who is opening them.**
+
+### Original estimate (superseded)
+
 Computed 2026-08-22 against the real numbers, not estimated:
 
 - Pool after Phase 6: **210 cards** (155 SL + 15 Phase 1B + 40 class).

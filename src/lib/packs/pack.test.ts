@@ -171,3 +171,69 @@ describe('applying a pack', () => {
     expect(Object.keys(owned)).toHaveLength(ALL_CARDS.length);
   });
 });
+
+describe('class cards in packs', () => {
+  const CLASS_CARDS = ALL_CARDS.filter((c) => (c.class ?? 'Neutral') !== 'Neutral');
+
+  it('the set has class cards to deal', () => {
+    expect(CLASS_CARDS.length).toBe(40);
+  });
+
+  it('reserves a slot, so every pack carries one', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const pack = openPack({}, seed);
+      const classCards = pack.filter((p) => (p.card.class ?? 'Neutral') !== 'Neutral');
+      expect(classCards.length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('still guarantees the last slot is Rare or better', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const pack = openPack({}, seed);
+      expect(RARE_OR_BETTER, `seed ${seed}`).toContain(pack[PACK_SIZE - 1].card.rarity);
+    }
+  });
+
+  it('still never repeats a card within a pack', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const ids = openPack({}, seed).map((p) => p.card.id);
+      expect(new Set(ids).size, `seed ${seed}`).toBe(PACK_SIZE);
+    }
+  });
+
+  it('falls back gracefully once every class card is owned', () => {
+    const owned: Owned = {};
+    for (const card of CLASS_CARDS) owned[card.id] = { copies: 2, gold: 0 };
+    const pack = openPack(owned, 5);
+    expect(pack).toHaveLength(PACK_SIZE);
+    expect(pack.every((p) => (p.card.class ?? 'Neutral') === 'Neutral')).toBe(true);
+  });
+
+  // The number that decides whether collecting a class feels reasonable.
+  // Measured, not estimated — see OPEN-QUESTIONS.md #16.
+  it('delivers one class’s full set in a sane number of packs', () => {
+    const target = 'Designer';
+    const wanted = CLASS_CARDS.filter((c) => c.class === target).map((c) => c.id);
+
+    let owned: Owned = {};
+    let packs = 0;
+    while (packs < 400) {
+      const complete = wanted.every((id) => (owned[id]?.copies ?? 0) >= 2);
+      if (complete) break;
+      owned = applyPack(owned, openPack(owned, packs + 1));
+      packs++;
+    }
+
+    expect(wanted.every((id) => (owned[id]?.copies ?? 0) >= 2), 'never completed').toBe(true);
+
+    // **Measured at 57 packs**, and worth knowing rather than estimating: the
+    // reserved slot deals a class card of *any* class, so only about a quarter
+    // of them are yours. 57 packs is 5,700 gold — roughly three weeks of daily
+    // play, down from about a month with no reservation.
+    //
+    // This assertion is a regression guard, not a target. If it starts failing,
+    // something changed the pool or the reservation, and the number below should
+    // be re-measured rather than nudged.
+    expect(packs, `took ${packs} packs`).toBeLessThan(70);
+  });
+});

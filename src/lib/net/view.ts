@@ -58,7 +58,7 @@ export function turnIsSpent(view: PlayerView): boolean {
   if (!isMyTurn(view)) return false;
   const canPlay = view.me.hand.some((_, i) => canPlayFromView(view, i));
   const canSwing = view.me.board.some(canAttackFromView);
-  return !canPlay && !canSwing && !view.me.canHeroAttack;
+  return !canPlay && !canSwing && !view.me.canHeroAttack && !view.me.canUseHeroPower;
 }
 
 /**
@@ -92,14 +92,17 @@ export function emptyView(): PlayerView {
     maxMana: 0,
     deckCount: 0,
     board: [],
-    weapon: null
+    weapon: null,
+    heroClass: 'Neutral' as const,
+    heroPowerUsed: false,
+    spellDamage: 0
   };
   return {
     you: 'player',
     turn: 'player',
     turnNumber: 0,
     winner: null,
-    me: { ...side, hand: [], canHeroAttack: false },
+    me: { ...side, hand: [], canHeroAttack: false, canUseHeroPower: false },
     foe: { ...side, handCount: 0 },
     log: [],
     turnEndsIn: 0

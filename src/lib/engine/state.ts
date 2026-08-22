@@ -1,4 +1,4 @@
-import type { Card } from '../../types/cards';
+import type { Card, CardClass } from '../../types/cards';
 
 export const HERO_HEALTH = 30;
 export const MAX_MANA = 10;
@@ -47,6 +47,10 @@ export interface PlayerState {
   weapon: WeaponInstance | null;
   /** Hero swings taken this turn. One per turn, and only with a weapon. */
   heroAttacksThisTurn: number;
+  /** Which class this hero is, and therefore which hero power they have. */
+  heroClass: CardClass;
+  /** Hero power used this turn. Cleared at the start of its controller's turn. */
+  heroPowerUsedThisTurn: boolean;
 }
 
 export interface MatchState {
@@ -97,6 +101,29 @@ export function canAttack(minion: MinionInstance): boolean {
 /** Stealth minions cannot be picked as a target — including as a Taunt. */
 export function isTargetable(minion: MinionInstance): boolean {
   return !minion.keywords.includes('Stealth');
+}
+
+export const HERO_POWER_COST = 2;
+
+/**
+ * Spell Damage on a player's board.
+ *
+ * Summed from `card.spellDamage`, skipping silenced minions — silence strips a
+ * minion's text, and Spell Damage is text.
+ */
+export function spellPowerOf(player: PlayerState): number {
+  return player.board.reduce(
+    (total, minion) => total + (minion.silenced ? 0 : (minion.card.spellDamage ?? 0)),
+    0
+  );
+}
+
+/** Whether the hero power is available right now. */
+export function canUseHeroPower(state: MatchState, id: PlayerId): boolean {
+  const p = state.players[id];
+  if (state.winner || state.current !== id) return false;
+  if (p.heroPowerUsedThisTurn) return false;
+  return p.mana >= HERO_POWER_COST;
 }
 
 /**

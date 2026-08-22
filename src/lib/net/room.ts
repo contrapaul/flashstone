@@ -1,4 +1,4 @@
-import type { Card } from '../../types/cards';
+import type { Card, CardClass } from '../../types/cards';
 import {
   attack,
   canPlayCard,
@@ -6,12 +6,16 @@ import {
   endTurn,
   heroAttack,
   isLegalChosenTarget,
+  isLegalHeroPowerTarget,
   needsTarget,
-  playCard
+  playCard,
+  useHeroPower
 } from '../engine/engine';
 import type { GameEvent } from '../engine/events';
 import {
   canHeroAttack,
+  canUseHeroPower,
+  spellPowerOf,
   findMinion,
   opponentOf,
   type Character,
@@ -51,8 +55,13 @@ export interface ApplyResult {
   events: GameEvent[];
 }
 
-export function createRoomState(playerDeck: Card[], foeDeck: Card[], seed: number): MatchState {
-  return createMatch(playerDeck, foeDeck, seed);
+export function createRoomState(
+  playerDeck: Card[],
+  foeDeck: Card[],
+  seed: number,
+  classes: { player?: CardClass; ai?: CardClass } = {}
+): MatchState {
+  return createMatch(playerDeck, foeDeck, seed, classes);
 }
 
 /** Turns a wire-level spell target into the engine's `Character`. */
@@ -136,6 +145,20 @@ export function applyMessage(
       return played
         ? { ok: true, events: drain() }
         : { ok: false, error: 'That play was rejected.', events: [] };
+    }
+
+    case 'heroPower': {
+      if (!canUseHeroPower(state, from)) {
+        return { ok: false, error: 'You cannot use your hero power right now.', events: [] };
+      }
+      // Aimed powers are re-checked here, exactly as aimed cards are.
+      const chosen = resolveChosen(state, from, message.target);
+      if (chosen && !isLegalHeroPowerTarget(state, from, chosen)) {
+        return { ok: false, error: 'That is not a legal target.', events: [] };
+      }
+      return useHeroPower(state, from, chosen)
+        ? { ok: true, events: drain() }
+        : { ok: false, error: 'That hero power was rejected.', events: [] };
     }
 
     case 'heroAttack': {
@@ -238,6 +261,10 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       deckCount: me.deck.length,
       board: me.board.map(serialiseMinion),
       weapon: serialiseWeapon(me.weapon),
+      heroClass: me.heroClass,
+      canUseHeroPower: canUseHeroPower(state, viewer),
+      heroPowerUsed: me.heroPowerUsedThisTurn,
+      spellDamage: spellPowerOf(me),
       // Computed here rather than re-derived from the view: the rule involves
       // the weapon's attack, which the view deliberately flattens.
       canHeroAttack: state.current === viewer && !state.winner && canHeroAttack(me)
@@ -250,7 +277,10 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       handCount: foe.hand.length,
       deckCount: foe.deck.length,
       board: foe.board.map(serialiseMinion),
-      weapon: serialiseWeapon(foe.weapon)
+      weapon: serialiseWeapon(foe.weapon),
+      heroClass: foe.heroClass,
+      heroPowerUsed: foe.heroPowerUsedThisTurn,
+      spellDamage: spellPowerOf(foe)
     },
     log: state.log,
     turnEndsIn

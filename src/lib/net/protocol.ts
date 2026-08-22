@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Card } from '../../types/cards';
+import type { Card, CardClass } from '../../types/cards';
 import type { GameEvent } from '../engine/events';
 import type { PlayerId } from '../engine/state';
 
@@ -52,6 +52,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   }),
   /** The hero swinging an equipped weapon. */
   z.object({ type: z.literal('heroAttack'), target: TargetRefSchema }),
+  /** Using the class hero power. `target` only for powers that are aimed. */
+  z.object({ type: z.literal('heroPower'), target: ChosenRefSchema.optional() }),
   z.object({ type: z.literal('endTurn') }),
   z.object({ type: z.literal('concede') }),
   /** Asks for the full state again — used after a reconnect. */
@@ -87,6 +89,11 @@ export interface PlayerView {
     board: SerialisedMinion[];
     weapon: SerialisedWeapon | null;
     canHeroAttack: boolean;
+    heroClass: CardClass;
+    /** Enough mana, right turn, not yet used, and it would actually do something. */
+    canUseHeroPower: boolean;
+    heroPowerUsed: boolean;
+    spellDamage: number;
   };
   foe: {
     health: number;
@@ -97,6 +104,9 @@ export interface PlayerView {
     deckCount: number;
     board: SerialisedMinion[];
     weapon: SerialisedWeapon | null;
+    heroClass: CardClass;
+    heroPowerUsed: boolean;
+    spellDamage: number;
   };
   log: string[];
   /** Seconds left on the current turn, so both clients show the same clock. */

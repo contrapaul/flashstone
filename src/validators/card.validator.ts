@@ -16,10 +16,21 @@ const EffectSchema = z.object({
     'GainMana',
     'Freeze',
     'Silence',
-    'SwapStats'
+    'SwapStats',
+    'GainArmor'
   ]),
   target: z
-    .enum(['Self', 'EnemyMinion', 'FriendlyMinion', 'Hero', 'RandomEnemy', 'AllEnemies', 'Chosen'])
+    .enum([
+      'Self',
+      'EnemyMinion',
+      'FriendlyMinion',
+      'Hero',
+      'RandomEnemy',
+      'AllEnemies',
+      'AllFriendly',
+      'SelfHero',
+      'Chosen'
+    ])
     .optional(),
   value: z.number().int().min(0).max(99).optional(),
   // v0.3: GainKeyword's keyword, first-class. `condition` still carries it on
@@ -51,6 +62,8 @@ export const CardSchema = z.object({
   attack: z.number().int().min(1).max(9).optional(),
   health: z.number().int().min(1).max(9).optional(),
   durability: z.number().int().min(1).max(8).optional(),
+  class: z.enum(['Neutral', 'Designer', 'Engineer', 'Consumer', 'Manufacturer']).optional(),
+  spellDamage: z.number().int().min(1).max(3).optional(),
   targeting: z.enum(['any', 'enemy', 'friendly']).optional(),
   keywords: z.array(KeywordSchema).default([]),
   effects: z.array(EffectSchema).max(3),

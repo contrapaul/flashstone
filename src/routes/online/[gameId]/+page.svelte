@@ -78,6 +78,10 @@
     source?.heroAttack(event.detail.target);
   }
 
+  function onHeroPower(event: CustomEvent<{ target?: ChosenRef }>) {
+    source?.heroPower(event.detail.target);
+  }
+
   function onAttack(event: CustomEvent<{ instanceId: string; target: TargetRef }>) {
     source?.attack(event.detail.instanceId, event.detail.target);
   }
@@ -135,6 +139,7 @@
     on:playCard={onPlayCard}
     on:attack={onAttack}
     on:heroAttack={onHeroAttack}
+    on:heroPower={onHeroPower}
     on:endTurn={() => source?.endTurn()}
     on:overAction={() => (location.href = '/online')}
   />

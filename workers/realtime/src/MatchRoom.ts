@@ -1,4 +1,4 @@
-import type { Card } from '../../../src/types/cards';
+import type { Card, CardClass } from '../../../src/types/cards';
 import type { MatchState, PlayerId } from '../../../src/lib/engine/state';
 import { resolveDeck, type Deck } from '../../../src/lib/decks/deck';
 import { cardById } from '../../../src/lib/data/cards';
@@ -125,37 +125,46 @@ export class MatchRoom {
 
     // An empty deck is not a playable match — say so rather than dealing a
     // fatigue-only game neither player understands.
-    const short = decks.findIndex((d) => d.length === 0);
+    const short = decks.findIndex((d) => d.cards.length === 0);
     if (short >= 0) throw new Error(`player ${seats[short][0]} has no saved deck`);
 
-    const bySide = new Map<PlayerId, Card[]>();
+    const bySide = new Map<PlayerId, { cards: Card[]; heroClass: CardClass }>();
     seats.forEach(([, side], i) => bySide.set(side, decks[i]));
 
     this.match = createRoomState(
-      bySide.get('player') ?? [],
-      bySide.get('ai') ?? [],
-      Math.floor(Math.random() * 100000)
+      bySide.get('player')?.cards ?? [],
+      bySide.get('ai')?.cards ?? [],
+      Math.floor(Math.random() * 100000),
+      {
+        player: bySide.get('player')?.heroClass,
+        ai: bySide.get('ai')?.heroClass
+      }
     );
     this.resetTurnClock();
   }
 
-  private async loadDeck(userId: string): Promise<Card[]> {
+  private async loadDeck(userId: string): Promise<{ cards: Card[]; heroClass: CardClass }> {
     const row = await this.env.DB.prepare(
-      'SELECT name, card_ids FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1'
+      'SELECT name, card_ids, class FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC LIMIT 1'
     )
       .bind(userId)
       .first();
 
-    if (!row) return [];
+    if (!row) return { cards: [], heroClass: 'Neutral' };
     try {
       const cardIds = JSON.parse(String(row.card_ids));
-      if (!Array.isArray(cardIds)) return [];
+      if (!Array.isArray(cardIds)) return { cards: [], heroClass: 'Neutral' };
       const deck: Deck = { name: String(row.name), cardIds: cardIds.map(String) };
-      // Resolved through the registry, so an id that no longer exists is simply
-      // dropped rather than becoming an undefined card mid-match.
-      return resolveDeck(deck).filter((c) => cardById(c.id));
+      return {
+        // Resolved through the registry, so an id that no longer exists is
+        // simply dropped rather than becoming an undefined card mid-match.
+        cards: resolveDeck(deck).filter((c) => cardById(c.id)),
+        // The class comes from the saved deck, never from the client — it
+        // decides the hero power, which is a real advantage to lie about.
+        heroClass: (row.class as CardClass) ?? 'Neutral'
+      };
     } catch {
-      return [];
+      return { cards: [], heroClass: 'Neutral' };
     }
   }
 

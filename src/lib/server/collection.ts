@@ -46,7 +46,7 @@ export async function grantStarterCollection(DB: any, userId: string): Promise<v
 
 export async function loadDecks(DB: any, userId: string): Promise<(Deck & { id: string })[]> {
   const { results } = await DB.prepare(
-    'SELECT id, name, card_ids FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC'
+    'SELECT id, name, card_ids, class FROM decks WHERE user_id = ?1 ORDER BY updated_at DESC'
   )
     .bind(userId)
     .all();
@@ -55,7 +55,14 @@ export async function loadDecks(DB: any, userId: string): Promise<(Deck & { id: 
     try {
       const cardIds = JSON.parse(row.card_ids);
       if (!Array.isArray(cardIds)) return [];
-      return [{ id: String(row.id), name: String(row.name), cardIds: cardIds.map(String) }];
+      return [
+        {
+          id: String(row.id),
+          name: String(row.name),
+          cardIds: cardIds.map(String),
+          class: (row.class as Deck['class']) ?? undefined
+        }
+      ];
     } catch {
       // A corrupt row should cost the player one deck, not the whole list.
       return [];

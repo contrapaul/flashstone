@@ -34,7 +34,7 @@ From the app directory:
 npm install && npx svelte-kit sync && npm test && npm run build && npm run check
 ```
 
-Expected: **313 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
+Expected: **364 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
 reports **0 errors**. That was the verified state at handover. `svelte-kit sync` must run
 before `check` on a fresh clone or `tsconfig.json` fails to resolve its `extends`.
 
@@ -59,6 +59,17 @@ the `make` repo — that name should not reappear).
   (answer-to-play, quiz-for-mana, answer-to-attack).
 - **A card that must be aimed is refused without a target**, never fizzled — a misclick
   must never burn the card and its mana. `Taunt does not restrict spells`; Stealth does.
+- **Four classes, each with one 2-mana once-per-turn hero power.** All four are
+  unlocked from the start; class *cards* are earned from packs. A class deck may
+  be entirely Neutral, so picking a class gives you a **hero power, not cards** —
+  nobody is ever locked out of a class they have not collected.
+- **Hero powers are data, not engine branches.** `data/classes.ts` gives each a
+  list of `Effect`s that resolve through the same `resolveEffect` cards use, so a
+  power can never do something a card could not.
+- **Spell Damage applies to spells and hero powers only** — never a Battlecry, a
+  Deathrattle or a weapon. `resolveEffect` takes an explicit `spellPowered` flag
+  rather than inferring it, because the inference is right today and would break
+  silently the first time anything else resolves an effect without a source.
 - **Weapons are hero-side.** `heroAttack` is deliberately separate from `canAttack`, which
   is minion-shaped. Equipping replaces; it never stacks.
 - **Drag is the only way to play a card.** A pointer tap opens the inspector instead, so
@@ -280,14 +291,11 @@ hash without changing both.
 - One collection, one deck, and the mirror match are all gone.
 
 ### Smaller known issues
-- Nothing grants `armor`. The slot now hides at zero rather than showing a permanent 0,
-  so it no longer looks broken, but no card produces armor.
-- **Hero powers are unbuilt.** `'HeroPower'` is in `CardType` and the Zod enum and
-  appears nowhere else — no engine code, no UI, no once-per-turn tracking.
-  `docs/plan/PHASE-6-CLASSES.md` builds them, along with the three other systems
-  classes need and the codebase lacks: **spell damage** (no such concept today),
-  **named tokens** (`SummonToken` can only summon one hardcoded 1/1), and a
-  **source of armor**.
+- Armor now has sources (the Engineer's power and several of its cards), and the
+  slot hides at zero. The long-standing gap here is closed.
+- **The `'HeroPower'` CardType is still unused.** Hero powers exist, but as
+  *class* powers in `data/classes.ts`, never as cards — that union member is
+  vestigial.
 - **Seven self-hosted `.woff2` files are missing**, so every page logs 404s and falls
   back to Georgia. See `static/fonts/README.md`.
 - **No card uses `Freeze`, `Silence` or `Stealth`.** The mechanics are implemented
@@ -317,7 +325,7 @@ hash without changing both.
 ```bash
 npm run dev      # http://localhost:5173
 npm run cards    # regenerate src/lib/data/slTerms.ts from slcards.txt
-npm test         # vitest, 313 tests
+npm test         # vitest, 364 tests
 npm run realtime # the Durable Object Worker on :8787 (needed for online play)
 npm run check    # svelte-check, expect 0 errors
 npm run build    # production build via adapter-cloudflare

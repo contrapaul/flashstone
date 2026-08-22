@@ -1,4 +1,4 @@
-import type { Card, Rarity } from '../../types/cards';
+import type { Card, CardClass, Rarity } from '../../types/cards';
 import { cardById } from '../data/cards';
 import { ownedCount, type Owned } from '../collection/owned';
 import { createRng, shuffle } from '../engine/rng';
@@ -21,6 +21,22 @@ export const LEGENDARY_COPIES = 1;
 export interface Deck {
   name: string;
   cardIds: string[];
+  /**
+   * The deck's class, which decides its hero power.
+   *
+   * Optional on the type only so decks saved before classes existed still parse.
+   * `deckProblems` requires a playable one, so a legacy deck surfaces as
+   * "choose a class" — a one-click fix — rather than silently playing without a
+   * hero power.
+   */
+  class?: CardClass;
+}
+
+/** A card is fieldable in a deck of this class if it is that class or Neutral. */
+export function cardFitsClass(card: Card, deckClass: CardClass | undefined): boolean {
+  const cardClass = card.class ?? 'Neutral';
+  if (cardClass === 'Neutral') return true;
+  return cardClass === deckClass;
 }
 
 export function emptyDeck(name = 'New deck'): Deck {
@@ -50,6 +66,8 @@ export function allowedCopies(owned: Owned, cardId: string): number {
 
 export function canAdd(deck: Deck, owned: Owned, cardId: string): boolean {
   if (deck.cardIds.length >= DECK_SIZE) return false;
+  const card = cardById(cardId);
+  if (!card || !cardFitsClass(card, deck.class)) return false;
   return countOf(deck, cardId) < allowedCopies(owned, cardId);
 }
 
@@ -93,6 +111,22 @@ export function deckProblems(deck: Deck, owned: Owned): string[] {
     problems.push(`Deck uses ${unowned.length} card(s) you don't own enough copies of.`);
   }
 
+  if (!deck.class || deck.class === 'Neutral') {
+    problems.push('Choose a class for this deck.');
+  } else {
+    const wrongClass = [...counts.keys()].filter((id) => {
+      const card = cardById(id);
+      return card ? !cardFitsClass(card, deck.class) : false;
+    });
+    if (wrongClass.length > 0) {
+      const names = wrongClass.slice(0, 3).map((id) => cardById(id)!.name);
+      problems.push(
+        `${wrongClass.length} card(s) belong to another class: ${names.join(', ')}` +
+          (wrongClass.length > 3 ? '…' : '') + '.'
+      );
+    }
+  }
+
   const overLimit = [...counts.entries()].filter(([id, n]) => {
     const card = cardById(id);
     return card ? n > copyLimitFor(card.rarity) : false;
@@ -114,8 +148,12 @@ export function deckProblems(deck: Deck, owned: Owned): string[] {
  * Bounded by the per-card limits, so a collection of Legendaries alone cannot
  * fill a deck however many copies it holds.
  */
-export function maxDeckSize(owned: Owned): number {
-  const total = Object.keys(owned).reduce((sum, id) => sum + allowedCopies(owned, id), 0);
+export function maxDeckSize(owned: Owned, deckClass?: CardClass): number {
+  const total = Object.keys(owned).reduce((sum, id) => {
+    const card = cardById(id);
+    if (deckClass && card && !cardFitsClass(card, deckClass)) return sum;
+    return sum + allowedCopies(owned, id);
+  }, 0);
   return Math.min(DECK_SIZE, total);
 }
 
@@ -130,10 +168,14 @@ export function distinctCount(owned: Owned): number {
  * rather than silently producing junk. Seeded so tests are stable, but defaults
  * to varying per click.
  */
-export function autoBuild(owned: Owned, seed = Date.now()): Deck {
+export function autoBuild(
+  owned: Owned,
+  seed = Date.now(),
+  deckClass: CardClass = 'Designer'
+): Deck {
   const rng = createRng(seed >>> 0);
   const pool = shuffle(rng, Object.keys(owned).filter((id) => allowedCopies(owned, id) > 0));
-  let deck = emptyDeck('Auto-built deck');
+  let deck: Deck = { ...emptyDeck('Auto-built deck'), class: deckClass };
 
   // Two passes, so the deck spreads across distinct cards before doubling up.
   for (let copy = 0; copy < MAX_COPIES; copy++) {
@@ -173,6 +215,9 @@ export function pruneDeck(deck: Deck, owned: Owned): Deck {
   for (const id of deck.cardIds) {
     const n = used.get(id) ?? 0;
     if (n >= allowedCopies(owned, id)) continue;
+    // A deck that changed class drops the cards that no longer fit.
+    const card = cardById(id);
+    if (card && !cardFitsClass(card, deck.class)) continue;
     used.set(id, n + 1);
     kept.push(id);
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_CARDS, cardById } from '../data/cards';
 import { STARTER_CARD_IDS, starterCollection, starterDeck } from '../data/starter';
+import { PLAYABLE_CLASSES } from '../../types/cards';
 import { addCopies, ownedCount, type Owned } from '../collection/owned';
 import {
   DECK_SIZE,
@@ -137,6 +138,46 @@ describe('deck size', () => {
   it('counts a Legendary once toward what can be fielded', () => {
     const owned = { [LEGENDARY.id]: { copies: 2 as const, gold: 0 as const } };
     expect(maxDeckSize(owned)).toBe(1);
+  });
+});
+
+describe('classes', () => {
+  it('accepts the starter deck in every class, since its cards are all Neutral', () => {
+    for (const heroClass of PLAYABLE_CLASSES) {
+      expect(deckProblems(starterDeck(heroClass), starterCollection()), heroClass).toEqual([]);
+    }
+  });
+
+  it('refuses a deck with no class', () => {
+    const deck = { ...starterDeck(), class: undefined };
+    expect(deckProblems(deck, starterCollection()).join(' ')).toMatch(/choose a class/i);
+  });
+
+  it('refuses a card belonging to another class', () => {
+    const classCard = ALL_CARDS.find((c) => c.class && c.class !== 'Neutral');
+    if (!classCard) return; // No class cards authored yet.
+    const owned: Owned = { [classCard.id]: { copies: 2, gold: 0 } };
+    const other = PLAYABLE_CLASSES.find((c) => c !== classCard.class)!;
+    const deck = { name: 'x', cardIds: [classCard.id], class: other };
+    expect(deckProblems(deck, owned).join(' ')).toMatch(/another class/i);
+  });
+
+  it('refuses to add a card of the wrong class', () => {
+    const classCard = ALL_CARDS.find((c) => c.class && c.class !== 'Neutral');
+    if (!classCard) return;
+    const owned: Owned = { [classCard.id]: { copies: 2, gold: 0 } };
+    const other = PLAYABLE_CLASSES.find((c) => c !== classCard.class)!;
+    expect(canAdd({ ...emptyDeck(), class: other }, owned, classCard.id)).toBe(false);
+    expect(canAdd({ ...emptyDeck(), class: classCard.class }, owned, classCard.id)).toBe(true);
+  });
+
+  it('drops off-class cards when a deck changes class', () => {
+    const classCard = ALL_CARDS.find((c) => c.class && c.class !== 'Neutral');
+    if (!classCard) return;
+    const owned: Owned = { [classCard.id]: { copies: 2, gold: 0 } };
+    const other = PLAYABLE_CLASSES.find((c) => c !== classCard.class)!;
+    const deck = { name: 'x', cardIds: [classCard.id], class: other };
+    expect(pruneDeck(deck, owned).cardIds).toEqual([]);
   });
 });
 

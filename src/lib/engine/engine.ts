@@ -1,4 +1,6 @@
-import type { Card, Effect, Trigger } from '../../types/cards';
+import type { Card, CardClass, Effect, Trigger } from '../../types/cards';
+import { HERO_POWERS } from '../data/classes';
+import { STUDY_NOTE, tokenById } from '../data/tokens';
 import type { GameEvent } from './events';
 import { createRng, pick, shuffle, type Rng } from './rng';
 import {
@@ -6,8 +8,11 @@ import {
   HAND_LIMIT,
   HERO_HEALTH,
   MAX_MANA,
+  HERO_POWER_COST,
   canAttack,
   canHeroAttack,
+  canUseHeroPower,
+  spellPowerOf,
   legalTargets,
   opponentOf,
   silence,
@@ -18,19 +23,6 @@ import {
   type PlayerId,
   type PlayerState
 } from './state';
-
-const TOKEN_CARD: Card = {
-  id: '00000000-0000-4000-8000-000000000001',
-  name: 'Study Note',
-  cost: 1,
-  type: 'Minion',
-  rarity: 'Common',
-  attack: 1,
-  health: 1,
-  keywords: [],
-  effects: [],
-  description: 'A scrap of revision.'
-};
 
 /** Compensation for going second. Not part of any deck — dealt at match start. */
 export const COIN_CARD: Card = {
@@ -46,7 +38,7 @@ export const COIN_CARD: Card = {
 
 // ── Setup ──────────────────────────────────────────────────────
 
-function createPlayer(id: PlayerId, deck: Card[]): PlayerState {
+function createPlayer(id: PlayerId, deck: Card[], heroClass: CardClass = 'Neutral'): PlayerState {
   return {
     id,
     health: HERO_HEALTH,
@@ -58,16 +50,24 @@ function createPlayer(id: PlayerId, deck: Card[]): PlayerState {
     board: [],
     fatigue: 0,
     weapon: null,
-    heroAttacksThisTurn: 0
+    heroAttacksThisTurn: 0,
+    heroClass,
+    heroPowerUsedThisTurn: false
   };
 }
 
-export function createMatch(playerDeck: Card[], aiDeck: Card[], seed = 1): MatchState {
+export function createMatch(
+  playerDeck: Card[],
+  aiDeck: Card[],
+  seed = 1,
+  /** Each side's class, which is what decides their hero power. */
+  classes: { player?: CardClass; ai?: CardClass } = {}
+): MatchState {
   const rng = createRng(seed);
   const state: MatchState = {
     players: {
-      player: createPlayer('player', shuffle(rng, playerDeck)),
-      ai: createPlayer('ai', shuffle(rng, aiDeck))
+      player: createPlayer('player', shuffle(rng, playerDeck), classes.player ?? 'Neutral'),
+      ai: createPlayer('ai', shuffle(rng, aiDeck), classes.ai ?? 'Neutral')
     },
     current: 'player',
     turnNumber: 0,
@@ -106,6 +106,7 @@ function startTurn(state: MatchState, id: PlayerId): void {
   p.maxMana = Math.min(MAX_MANA, p.maxMana + 1);
   p.mana = p.maxMana;
   p.heroAttacksThisTurn = 0;
+  p.heroPowerUsedThisTurn = false;
   for (const minion of p.board) {
     minion.summonedThisTurn = false;
     minion.attacksThisTurn = 0;
@@ -203,11 +204,62 @@ export function playCard(
   // card does nothing when cast. Nothing here enforces it — the card set does,
   // in the generator, guarded by a test in slCards.test.ts.
   for (const effect of card.effects) {
-    if (effect.trigger === 'Battlecry') resolveEffect(state, id, summoned, effect, chosen);
+    if (effect.trigger === 'Battlecry') {
+      resolveEffect(state, id, summoned, effect, chosen, card.type === 'Spell');
+    }
   }
 
   checkDeaths(state);
   return true;
+}
+
+/**
+ * Uses the hero power.
+ *
+ * Shaped like `heroAttack` on purpose: returns false for illegal use rather than
+ * throwing, so a client that asks twice gets a refusal, not a crashed room.
+ * Effects resolve through the **same `resolveEffect`** cards use, and count as
+ * spell-powered — Spell Damage applies to hero powers, as in Hearthstone.
+ */
+export function useHeroPower(
+  state: MatchState,
+  id: PlayerId,
+  chosen?: Character
+): boolean {
+  if (!canUseHeroPower(state, id)) return false;
+
+  const power = HERO_POWERS[state.players[id].heroClass];
+  if (!power) return false;
+
+  // Refused before any mana is spent when it needs a target and has none, or
+  // when it simply cannot do anything — the Designer with all four ideas out.
+  if (power.needsTarget && (!chosen || !isLegalHeroPowerTarget(state, id, chosen))) return false;
+  if (power.isUseless?.(state, id)) return false;
+
+  const p = state.players[id];
+  p.mana -= HERO_POWER_COST;
+  p.heroPowerUsedThisTurn = true;
+  state.log.push(`${id} uses ${power.name}.`);
+  emit(state, { type: 'heroPower', owner: id });
+
+  for (const effect of power.effects(state, id)) {
+    resolveEffect(state, id, undefined, effect, chosen, true);
+  }
+
+  checkDeaths(state);
+  return true;
+}
+
+export function isLegalHeroPowerTarget(
+  state: MatchState,
+  caster: PlayerId,
+  chosen: Character
+): boolean {
+  return spellTargets(state, caster, 'any').some((t) =>
+    t.kind === 'hero'
+      ? chosen.kind === 'hero' && chosen.owner === t.owner
+      : chosen.kind === 'minion' && chosen.minion.instanceId === t.minion.instanceId
+  );
 }
 
 /** True when any of the card's Battlecry effects must be aimed by the player. */
@@ -478,6 +530,12 @@ function resolveTargets(
       return c ? [c] : [];
     }
 
+    case 'AllFriendly':
+      return friendlyBoard.map((minion) => ({ kind: 'minion' as const, owner, minion }));
+
+    case 'SelfHero':
+      return [{ kind: 'hero' as const, owner }];
+
     case 'AllEnemies':
       return [
         ...enemyBoard.map((minion) => ({ kind: 'minion' as const, owner: foe, minion })),
@@ -494,10 +552,21 @@ function resolveEffect(
   owner: PlayerId,
   source: MinionInstance | undefined,
   effect: Effect,
-  chosen?: Character
+  chosen?: Character,
+  /**
+   * True when this effect came from a **spell or a hero power**.
+   *
+   * Spell Damage applies to exactly those and nothing else — not a minion's
+   * Battlecry, not a Deathrattle, not a weapon. Passing this explicitly rather
+   * than inferring it from `source === undefined` is deliberate: the inference
+   * happens to be right today and would silently break the first time anything
+   * else resolves an effect without a source.
+   */
+  spellPowered = false
 ): void {
   const rng = rngFor(state);
-  const value = effect.value ?? 1;
+  const bonus = spellPowered && effect.action === 'DealDamage' ? spellPowerOf(state.players[owner]) : 0;
+  const value = (effect.value ?? 1) + bonus;
 
   // These act on the owner directly and need no target.
   if (effect.action === 'DrawCard') {
@@ -505,7 +574,16 @@ function resolveEffect(
     return;
   }
   if (effect.action === 'SummonToken') {
-    for (let i = 0; i < value; i++) summon(state, owner, TOKEN_CARD);
+    // `condition` names a specific token; without one it is the generic 1/1, so
+    // every card written before tokens existed behaves exactly as it did.
+    const token = (effect.condition && tokenById(effect.condition)) || STUDY_NOTE;
+    for (let i = 0; i < value; i++) summon(state, owner, token);
+    return;
+  }
+
+  if (effect.action === 'GainArmor') {
+    state.players[owner].armor += value;
+    emit(state, { type: 'armor', owner });
     return;
   }
   if (effect.action === 'GainMana') {

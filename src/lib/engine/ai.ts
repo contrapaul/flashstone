@@ -1,7 +1,17 @@
-import { attack, canPlayCard, endTurn, heroAttack, needsTarget, playCard } from './engine';
 import {
+  attack,
+  canPlayCard,
+  endTurn,
+  heroAttack,
+  needsTarget,
+  playCard,
+  useHeroPower
+} from './engine';
+import {
+  HERO_POWER_COST,
   canAttack,
   canHeroAttack,
+  canUseHeroPower,
   legalTargets,
   opponentOf,
   spellTargets,
@@ -10,6 +20,7 @@ import {
   type MinionInstance
 } from './state';
 import type { Card } from '../../types/cards';
+import { heroPowerFor } from '../data/classes';
 
 /**
  * Heuristic opponent: spend the curve, clear Taunts, take free trades,
@@ -17,8 +28,16 @@ import type { Card } from '../../types/cards';
  */
 export function playAiTurn(state: MatchState): void {
   if (state.winner || state.current !== 'ai') return;
+  // Twice, guarded by the once-per-turn flag so the second is a no-op if the
+  // first fired. A card is usually the better use of two mana, so the power only
+  // goes first when there is enough mana that it will not cost a card play;
+  // otherwise it mops up whatever the curve leaves behind. Calling it only at
+  // the end meant a curving-out AI never used it at all, which makes for a
+  // duller opponent and hides the mechanic from the player.
+  usePower(state, true);
   spendMana(state);
   swing(state);
+  usePower(state, false);
   if (!state.winner) endTurn(state);
 }
 
@@ -106,6 +125,48 @@ function chooseSpellTarget(state: MatchState, card: Card): Character | undefined
     .filter((t) => value >= t.minion.health)
     .sort((a, b) => b.minion.attack - a.minion.attack)[0];
   return killable ?? enemyHero ?? enemyMinions[0];
+}
+
+/**
+ * Spends leftover mana on the hero power.
+ *
+ * The one non-obvious rule is the health floor: the Consumer's power costs 2
+ * life, and an AI that greedily draws every turn will happily kill itself. It
+ * stops well clear rather than calculating whether it can afford one more.
+ */
+const CONSUMER_HEALTH_FLOOR = 12;
+
+function usePower(state: MatchState, early: boolean): void {
+  const me = state.players.ai;
+  if (!canUseHeroPower(state, 'ai')) return;
+  if (me.mana < HERO_POWER_COST) return;
+
+  if (early) {
+    // Only go first if a card can still be played afterwards.
+    const cheapest = Math.min(
+      ...me.hand.filter((c) => c.name !== 'The Coin').map((c) => c.cost),
+      Infinity
+    );
+    if (me.mana - HERO_POWER_COST < cheapest) return;
+  }
+
+  const power = heroPowerFor(me.heroClass);
+  if (!power) return;
+
+  if (me.heroClass === 'Consumer' && me.health - 2 <= CONSUMER_HEALTH_FLOOR) return;
+
+  if (power.needsTarget) {
+    // Damage: the biggest enemy minion it kills outright, else the face.
+    const enemies = state.players.player.board.filter((m) => !m.keywords.includes('Stealth'));
+    const kill = enemies.filter((m) => m.health <= 1).sort((a, b) => b.attack - a.attack)[0];
+    const target: Character = kill
+      ? { kind: 'minion', owner: 'player', minion: kill }
+      : { kind: 'hero', owner: 'player' };
+    useHeroPower(state, 'ai', target);
+    return;
+  }
+
+  useHeroPower(state, 'ai');
 }
 
 function swing(state: MatchState): void {

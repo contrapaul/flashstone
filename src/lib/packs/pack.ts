@@ -19,6 +19,22 @@ export const GOLD_CHANCE = 0.05;
 /** The guaranteed slot is Rare or better — the reason a pack always feels worth it. */
 const RARE_OR_BETTER: Rarity[] = ['Rare', 'Epic', 'Legendary'];
 
+/**
+ * One slot per pack is reserved for a class card of any class.
+ *
+ * Class cards are only obtainable from packs, and they are a small share of a
+ * large pool: without this, a full two-copy set of your own class is around 84
+ * packs — over a month of daily play, likely longer than the topic is taught.
+ * Reserving a slot cuts that to about a week without changing the principle
+ * that cards are earned rather than granted. See OPEN-QUESTIONS.md #16; the
+ * measured figure is asserted in pack.test.ts rather than trusted.
+ */
+const RESERVE_CLASS_SLOT = true;
+
+function isClassCard(card: Card): boolean {
+  return (card.class ?? 'Neutral') !== 'Neutral';
+}
+
 export interface PackCard {
   card: Card;
   gold: boolean;
@@ -70,12 +86,20 @@ export function openPack(owned: Owned, seed: number): PackCard[] {
     // when the second copy is legitimately useful.
     const remaining = source.filter((c) => !chosen.includes(c));
     const guaranteed = slot === PACK_SIZE - 1;
+    // The class slot is the first, so it can never collide with the guaranteed
+    // Rare in the last — the two reservations stay independent.
+    const classSlot = RESERVE_CLASS_SLOT && slot === 0;
 
     let pool = remaining;
     if (guaranteed) {
       const good = remaining.filter((c) => RARE_OR_BETTER.includes(c.rarity));
       // Only fall back to the full pool if the set genuinely has no Rare left.
       if (good.length > 0) pool = good;
+    } else if (classSlot) {
+      const classCards = remaining.filter(isClassCard);
+      // Falls back to the whole pool once every class card is collected, rather
+      // than dealing a short pack.
+      if (classCards.length > 0) pool = classCards;
     }
 
     const rarity = weightedRarity(rng, pool);

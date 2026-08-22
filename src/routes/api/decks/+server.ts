@@ -20,7 +20,8 @@ export const POST: RequestHandler = async (event) => {
 
   const deck = {
     name: String(body.name ?? '').trim(),
-    cardIds: Array.isArray(body.cardIds) ? body.cardIds.map(String) : []
+    cardIds: Array.isArray(body.cardIds) ? body.cardIds.map(String) : [],
+    class: typeof body.class === 'string' ? (body.class as never) : undefined
   };
 
   // A cheap guard before touching the database at all: nothing legal is ever
@@ -42,10 +43,10 @@ export const POST: RequestHandler = async (event) => {
   if (existing && existing.user_id !== user.id) error(403, 'That deck is not yours.');
 
   await DB.prepare(
-    `INSERT INTO decks (id, user_id, name, card_ids, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
-     ON CONFLICT(id) DO UPDATE SET name = ?3, card_ids = ?4, updated_at = ?5`
+    `INSERT INTO decks (id, user_id, name, card_ids, class, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT(id) DO UPDATE SET name = ?3, card_ids = ?4, class = ?5, updated_at = ?6`
   )
-    .bind(id, user.id, deck.name, JSON.stringify(deck.cardIds), now)
+    .bind(id, user.id, deck.name, JSON.stringify(deck.cardIds), deck.class ?? null, now)
     .run();
 
   return json({ deck: { id, ...deck }, isNew: !existing });

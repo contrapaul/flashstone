@@ -2,7 +2,8 @@
   import { onDestroy, onMount } from 'svelte';
   import MatchTable from '$lib/components/MatchTable.svelte';
   import { buildAiDeck } from '$lib/data/aiDeck';
-  import { starterDeck } from '$lib/data/starter';
+  import { DEFAULT_CLASS, starterDeck } from '$lib/data/starter';
+  import { PLAYABLE_CLASSES, type CardClass } from '../../types/cards';
   import { isLegal, resolveDeck } from '$lib/decks/deck';
   import { loadPlayer } from '$lib/collection/sync';
   import { playAiTurn } from '$lib/engine/ai';
@@ -24,6 +25,9 @@
 
   let deckCards: Card[] = resolveDeck(starterDeck());
   let deckName = 'Starter deck';
+  let heroClass: CardClass = DEFAULT_CLASS;
+  /** The opponent rotates class per match, so all four get seen in practice. */
+  let aiClass: CardClass = 'Manufacturer';
   const aiCards: Card[] = buildAiDeck();
 
   let view: PlayerView = emptyView();
@@ -43,6 +47,7 @@
       if (player.deck && isLegal(player.deck, player.owned)) {
         deckCards = resolveDeck(player.deck);
         deckName = player.deck.name;
+        heroClass = player.deck.class ?? DEFAULT_CLASS;
         if (view.turnNumber <= 1 && view.me.board.length === 0) start();
       }
     });
@@ -56,7 +61,11 @@
     goldWon = 0;
     aiThinking = false;
     source?.destroy();
-    source = new LocalSource(deckCards, aiCards, handlers, playAiTurn);
+    aiClass = PLAYABLE_CLASSES[Math.floor(Math.random() * PLAYABLE_CLASSES.length)];
+    source = new LocalSource(deckCards, aiCards, handlers, playAiTurn, {
+      player: heroClass,
+      ai: aiClass
+    });
   }
 
   const handlers = {
@@ -76,6 +85,10 @@
 
   function onHeroAttack(event: CustomEvent<{ target: TargetRef }>) {
     source?.heroAttack(event.detail.target);
+  }
+
+  function onHeroPower(event: CustomEvent<{ target?: ChosenRef }>) {
+    source?.heroPower(event.detail.target);
   }
 
   function onAttack(event: CustomEvent<{ instanceId: string; target: TargetRef }>) {
@@ -157,6 +170,7 @@
   on:playCard={onPlayCard}
   on:attack={onAttack}
   on:heroAttack={onHeroAttack}
+  on:heroPower={onHeroPower}
   on:endTurn={onEndTurn}
   on:drained={onDrained}
   on:overAction={start}

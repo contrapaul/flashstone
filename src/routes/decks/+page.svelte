@@ -2,7 +2,11 @@
   import { onMount } from 'svelte';
   import CardPreview from '$lib/components/CardPreview.svelte';
   import CardInspector from '$lib/components/CardInspector.svelte';
-  import type { Card, Rarity } from '../../types/cards';
+  import type { Card, CardClass, Rarity } from '../../types/cards';
+  import { PLAYABLE_CLASSES } from '../../types/cards';
+  import { heroPowerFor } from '$lib/data/classes';
+  import { cardFitsClass } from '$lib/decks/deck';
+  import { DEFAULT_CLASS } from '$lib/data/starter';
   import { ALL_CARDS } from '$lib/data/cards';
   import { ownedCount, isGold, type Owned } from '$lib/collection/owned';
   import {
@@ -32,6 +36,31 @@
   let deckId: string | null = null;
   let signedIn = false;
   let saveError: string | null = null;
+
+  $: deckClass = deck.class ?? DEFAULT_CLASS;
+  $: heroPower = heroPowerFor(deckClass);
+
+  /**
+   * Switching class drops cards that no longer fit, so it warns first — losing
+   * a built deck to a mis-click is exactly the kind of thing that makes people
+   * stop trusting a builder.
+   */
+  function setClass(next: CardClass) {
+    if (next === deck.class) return;
+    const losing = deck.cardIds.filter((id) => {
+      const card = ALL_CARDS.find((c) => c.id === id);
+      return card ? !cardFitsClass(card, next) : false;
+    }).length;
+
+    if (losing > 0) {
+      const ok = confirm(
+        `Switching to ${next} removes ${losing} card${losing === 1 ? '' : 's'} that ${next} cannot use. Continue?`
+      );
+      if (!ok) return;
+    }
+    deck = pruneDeck({ ...deck, class: next }, owned);
+    saved = false;
+  }
 
   let search = '';
   let costFilter = 'all';
@@ -70,12 +99,15 @@
     if (rarityFilter !== 'all' && card.rarity !== rarityFilter) return false;
     if (sectionFilter !== 'all' && !(card.sections ?? []).includes(sectionFilter)) return false;
     if (ownedOnly && ownedCount(owned, card.id) === 0) return false;
+    // Cards of another class are not shown at all — a collection screen that
+    // lists what you can never field in this deck is just noise.
+    if (!cardFitsClass(card, deckClass)) return false;
     return true;
   });
 
   $: entries = deckEntries(deck);
   $: problems = deckProblems(deck, owned);
-  $: capacity = maxDeckSize(owned);
+  $: capacity = maxDeckSize(owned, deckClass);
   $: distinct = distinctCount(owned);
 
   function add(id: string) {
@@ -89,7 +121,7 @@
   }
 
   function build() {
-    deck = autoBuild(owned);
+    deck = autoBuild(owned, Date.now(), deckClass);
     saved = false;
   }
 
@@ -144,6 +176,23 @@
       {distinct} of {ALL_CARDS.length} cards collected. Two copies of a card per deck —
       Legendaries one.
     </p>
+
+    <div class="classes" role="group" aria-label="Deck class">
+      {#each PLAYABLE_CLASSES as option (option)}
+        <button
+          class="class-pick"
+          class:active={deckClass === option}
+          on:click={() => setClass(option)}
+        >
+          {option}
+        </button>
+      {/each}
+      {#if heroPower}
+        <span class="power-note">
+          <strong>{heroPower.name}</strong> — {heroPower.description}
+        </span>
+      {/if}
+    </div>
   </header>
 
   <div class="layout">
@@ -619,6 +668,41 @@
     color: var(--gold);
   }
   .owned-count.none { color: var(--text-faint); }
+
+  .classes {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .class-pick {
+    padding: 6px 14px;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--ink-2);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .class-pick:hover { border-color: var(--frame-lit); color: var(--text); }
+  .class-pick.active {
+    border-color: #8a6c3c;
+    background: linear-gradient(180deg, #4a3620, #2a1d10);
+    color: var(--gold-bright);
+  }
+
+  .power-note {
+    margin-left: 6px;
+    font-family: var(--body);
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+  .power-note strong { color: var(--gold); font-weight: 600; }
 
   .owned-only {
     display: flex;

@@ -9,6 +9,8 @@
   import FloatingNumber from './FloatingNumber.svelte';
   import Chronicle from './Chronicle.svelte';
   import CardInspector from './CardInspector.svelte';
+  import HeroPowerButton from './HeroPowerButton.svelte';
+  import { heroPowerFor } from '../data/classes';
   import { settings } from '../settings';
   import { EVENT_BEAT, type GameEvent } from '../engine/events';
   import type { PlayerView, SerialisedMinion, TargetRef } from '../net/protocol';
@@ -51,6 +53,7 @@
     playCard: { handIndex: number; slot?: number; target?: ChosenRef };
     attack: { instanceId: string; target: TargetRef };
     heroAttack: { target: TargetRef };
+    heroPower: { target?: ChosenRef };
     endTurn: void;
     drained: void;
     overAction: void;
@@ -285,7 +288,11 @@
    */
   let aiming: { handIndex: number; card: Card } | null = null;
 
-  $: chosenTargets = aiming ? chosenTargetsFromView(view, aiming.card) : [];
+  $: chosenTargets = aiming
+    ? chosenTargetsFromView(view, aiming.card)
+    : aimingPower
+      ? chosenTargetsFromView(view, { targeting: 'any' } as Card)
+      : [];
   $: chosenMinionIds = new Set(
     chosenTargets.flatMap((t) => (t.kind === 'minion' ? [t.instanceId] : []))
   );
@@ -294,6 +301,7 @@
 
   function cancelAim() {
     aiming = null;
+    aimingPower = false;
   }
 
   /** Escape backs out of aiming or an armed hero without spending anything. */
@@ -466,6 +474,11 @@
 
   function onMyMinion(minion: SerialisedMinion) {
     if (swallowClick) return;
+    if (aimingPower) {
+      if (chosenMinionIds.has(minion.instanceId)) castPowerAt({ kind: 'minion', instanceId: minion.instanceId });
+      else cancelAim();
+      return;
+    }
     if (aiming) {
       if (chosenMinionIds.has(minion.instanceId)) castAt({ kind: 'minion', instanceId: minion.instanceId });
       else cancelAim();
@@ -480,6 +493,11 @@
 
   function onEnemyMinion(minion: SerialisedMinion) {
     if (swallowClick) return;
+    if (aimingPower) {
+      if (chosenMinionIds.has(minion.instanceId)) castPowerAt({ kind: 'minion', instanceId: minion.instanceId });
+      else cancelAim();
+      return;
+    }
     if (aiming) {
       if (chosenMinionIds.has(minion.instanceId)) castAt({ kind: 'minion', instanceId: minion.instanceId });
       else cancelAim();
@@ -507,6 +525,11 @@
 
   function onEnemyHero() {
     if (swallowClick) return;
+    if (aimingPower) {
+      if (canAimFoeHero) castPowerAt({ kind: 'hero', side: 'foe' });
+      else cancelAim();
+      return;
+    }
     if (aiming) {
       if (canAimFoeHero) castAt({ kind: 'hero', side: 'foe' });
       else cancelAim();
@@ -529,8 +552,38 @@
   /** Tapping your own hero arms it; the next click on a legal target swings. */
   let heroSelected = false;
 
+  /**
+   * A hero power waiting to be aimed.
+   *
+   * Reuses the spell-aiming machinery whole rather than growing a second mode —
+   * the Manufacturer's Robotic Arm is a targeted effect like any other.
+   */
+  let aimingPower = false;
+
+  $: myPower = heroPowerFor(view.me.heroClass);
+
+  function onHeroPower() {
+    if (!myTurn || !view.me.canUseHeroPower) return;
+    if (myPower?.needsTarget) {
+      aimingPower = true;
+      aiming = null;
+      return;
+    }
+    dispatch('heroPower', {});
+  }
+
+  function castPowerAt(target: ChosenRef) {
+    dispatch('heroPower', { target });
+    aimingPower = false;
+  }
+
   function onMyHero() {
     if (swallowClick) return;
+    if (aimingPower) {
+      if (canAimMyHero) castPowerAt({ kind: 'hero', side: 'me' });
+      else cancelAim();
+      return;
+    }
     if (aiming) {
       if (canAimMyHero) castAt({ kind: 'hero', side: 'me' });
       else cancelAim();
@@ -600,7 +653,7 @@
         health={view.foe.health}
         armor={view.foe.armor}
         weapon={view.foe.weapon}
-        targetable={heroTargetable || (aiming !== null && canAimFoeHero)}
+        targetable={heroTargetable || ((aiming !== null || aimingPower) && canAimFoeHero)}
         hit={hitHero === 'foe'}
         on:click={onEnemyHero}
       />
@@ -608,6 +661,12 @@
         <span>Opponent</span>
         <span>Mana {view.foe.mana}/{view.foe.maxMana}</span>
       </div>
+
+      <HeroPowerButton
+        heroClass={view.foe.heroClass}
+        used={view.foe.heroPowerUsed}
+        mine={false}
+      />
     </div>
 
     <div class="deck-pile">
@@ -621,7 +680,7 @@
       <MinionView
         minion={minion}
         targetable={targetableIds.has(minion.instanceId) ||
-          (aiming !== null && chosenMinionIds.has(minion.instanceId))}
+          ((aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId))}
         summoning={summoningId === minion.instanceId}
         struck={struckIds.has(minion.instanceId)}
         dying={dyingIds.has(minion.instanceId)}
@@ -636,10 +695,10 @@
     <span class="rule"></span>
   </div>
 
-  {#if aiming}
-    <!-- The card is not spent until a target lands, so cancelling costs nothing. -->
+  {#if aiming || aimingPower}
+    <!-- Nothing is spent until a target lands, so cancelling costs nothing. -->
     <div class="aiming">
-      <span>Choose a target for {aiming.card.name}</span>
+      <span>Choose a target for {aiming ? aiming.card.name : (myPower?.name ?? 'your hero power')}</span>
       <button on:click={cancelAim}>Cancel</button>
     </div>
   {/if}
@@ -652,7 +711,7 @@
       <MinionView
         minion={minion}
         ready={myTurn && canAttackFromView(minion)}
-        targetable={aiming !== null && chosenMinionIds.has(minion.instanceId)}
+        targetable={(aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId)}
         selected={selectedId === minion.instanceId ||
           (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
         summoning={summoningId === minion.instanceId}
@@ -675,6 +734,13 @@
         <span>{deckName || 'You'}</span>
         <span>Deck {view.me.deckCount}</span>
       </div>
+      <HeroPowerButton
+        heroClass={view.me.heroClass}
+        usable={myTurn && view.me.canUseHeroPower}
+        used={view.me.heroPowerUsed}
+        on:click={onHeroPower}
+      />
+
       <HeroPortrait
         label="You"
         side="you"
@@ -682,7 +748,7 @@
         armor={view.me.armor}
         weapon={view.me.weapon}
         armed={myTurn && view.me.canHeroAttack}
-        targetable={aiming !== null && canAimMyHero}
+        targetable={(aiming !== null || aimingPower) && canAimMyHero}
         hit={hitHero === 'me'}
         on:click={onMyHero}
       />

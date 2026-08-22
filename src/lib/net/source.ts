@@ -1,11 +1,12 @@
-import type { Card } from '../../types/cards';
+import type { Card, CardClass } from '../../types/cards';
 import {
   attack,
   canPlayCard,
   createMatch,
   endTurn,
   heroAttack,
-  playCard
+  playCard,
+  useHeroPower
 } from '../engine/engine';
 import type { GameEvent } from '../engine/events';
 import { findMinion, opponentOf, type Character, type MatchState, type PlayerId } from '../engine/state';
@@ -27,6 +28,7 @@ export interface MatchSource {
   playCard(handIndex: number, slot?: number, target?: ChosenRef): void;
   attack(instanceId: string, target: TargetRef): void;
   heroAttack(target: TargetRef): void;
+  heroPower(target?: ChosenRef): void;
   endTurn(): void;
   concede(): void;
   /** Local only — online matches restart by making a new game. */
@@ -63,18 +65,21 @@ export class LocalSource implements MatchSource {
   private deck: Card[];
   private foeDeck: Card[];
   private takeAiTurn: (state: MatchState) => void;
+  private classes: { player: CardClass; ai: CardClass };
 
   constructor(
     deck: Card[],
     foeDeck: Card[],
     handlers: SourceHandlers,
-    takeAiTurn: (state: MatchState) => void
+    takeAiTurn: (state: MatchState) => void,
+    classes: { player: CardClass; ai: CardClass } = { player: 'Designer', ai: 'Manufacturer' }
   ) {
     this.deck = deck;
     this.foeDeck = foeDeck;
     this.handlers = handlers;
     this.takeAiTurn = takeAiTurn;
-    this.state = createMatch(deck, foeDeck, Date.now() % 100000);
+    this.classes = classes;
+    this.state = createMatch(deck, foeDeck, Date.now() % 100000, classes);
     this.publish();
   }
 
@@ -129,6 +134,10 @@ export class LocalSource implements MatchSource {
     if (resolved && heroAttack(this.state, 'player', resolved)) this.publish();
   }
 
+  heroPower(target?: ChosenRef) {
+    if (useHeroPower(this.state, 'player', this.resolveChosen(target))) this.publish();
+  }
+
   endTurn() {
     endTurn(this.state);
     this.publish();
@@ -147,7 +156,7 @@ export class LocalSource implements MatchSource {
   }
 
   restart() {
-    this.state = createMatch(this.deck, this.foeDeck, Date.now() % 100000);
+    this.state = createMatch(this.deck, this.foeDeck, Date.now() % 100000, this.classes);
     this.handlers.onStatus({ kind: 'playing' });
     this.publish();
   }
@@ -188,6 +197,10 @@ export class RemoteSource implements MatchSource {
 
   heroAttack(target: TargetRef) {
     this.connection.send({ type: 'heroAttack', target });
+  }
+
+  heroPower(target?: ChosenRef) {
+    this.connection.send({ type: 'heroPower', target });
   }
 
   endTurn() {

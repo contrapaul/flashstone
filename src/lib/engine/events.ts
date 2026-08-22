@@ -28,7 +28,9 @@ export type GameEvent =
   /** A weapon was equipped, swung, or destroyed. */
   | { type: 'equip'; owner: PlayerId }
   | { type: 'heroAttack'; owner: PlayerId }
-  | { type: 'weaponBreak'; owner: PlayerId };
+  | { type: 'weaponBreak'; owner: PlayerId }
+  | { type: 'armor'; owner: PlayerId }
+  | { type: 'heroPower'; owner: PlayerId };
 
 /** Milliseconds the UI should hold on each cue before applying the next. */
 export const EVENT_BEAT: Record<GameEvent['type'], number> = {
@@ -44,5 +46,7 @@ export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   turn: 1300,
   equip: 320,
   heroAttack: 260,
-  weaponBreak: 320
+  weaponBreak: 320,
+  armor: 260,
+  heroPower: 340
 };
