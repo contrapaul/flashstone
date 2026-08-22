@@ -5,6 +5,8 @@ import type { Rarity } from '../../types/cards';
 import { TEMPLATES } from './templates';
 import { SL_TERMS } from './slTerms';
 import { ALL_CARDS, allCardIds, cardById } from './cards';
+import { SL_CARDS } from './slCards';
+import { CUSTOM_CARDS } from './customCards';
 
 const RARITIES = Object.keys(RARITY_WEIGHTS) as Rarity[];
 
@@ -77,10 +79,29 @@ describe('every card', () => {
     }
   });
 
-  it('carries its definition, and never puts it on the card face', () => {
-    for (const card of ALL_CARDS) {
+  // Only syllabus cards have a definition. The hand-authored spells and weapons
+  // in customCards.ts are game pieces, not terms, and correctly have none.
+  it('carries its definition when it is a syllabus term', () => {
+    for (const card of SL_CARDS) {
       expect(card.definition, card.id).toBeTruthy();
-      expect(card.description, card.id).not.toContain(card.definition as string);
+    }
+  });
+
+  it('never puts a definition on the card face', () => {
+    for (const card of ALL_CARDS) {
+      if (!card.definition) continue;
+      expect(card.description, card.id).not.toContain(card.definition);
+    }
+  });
+
+  it('gives hand-authored cards no definition, and text only when they do something', () => {
+    for (const card of CUSTOM_CARDS) {
+      expect(card.definition, card.id).toBeUndefined();
+      // The same rule as everywhere else: a card whose whole story is its stats
+      // — a vanilla weapon — carries no text (DECISIONS.md §8).
+      if (card.effects.length > 0) {
+        expect(card.description.length, card.id).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -94,14 +115,16 @@ describe('every card', () => {
     }
   });
 
-  it('has empty text when it has no ability', () => {
-    for (const card of ALL_CARDS) {
+  it('has empty text when a generated card has no ability', () => {
+    // Hand-authored cards may carry text without effects — a weapon's text
+    // describes what it is, not what it triggers.
+    for (const card of SL_CARDS) {
       if (card.effects.length === 0) expect(card.description, card.id).toBe('');
     }
   });
 
   it('has text whenever it has an ability', () => {
-    for (const card of ALL_CARDS) {
+    for (const card of SL_CARDS) {
       if (card.effects.length > 0) expect(card.description.length, card.id).toBeGreaterThan(0);
     }
   });
@@ -116,7 +139,7 @@ describe('every card', () => {
 });
 
 describe('spells', () => {
-  const spells = ALL_CARDS.filter((c) => c.type === 'Spell');
+  const spells = SL_CARDS.filter((c) => c.type === 'Spell');
 
   it('make up a usable share of the set', () => {
     expect(spells.length).toBeGreaterThanOrEqual(15);

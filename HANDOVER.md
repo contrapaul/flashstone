@@ -34,7 +34,7 @@ From the app directory:
 npm install && npx svelte-kit sync && npm test && npm run build && npm run check
 ```
 
-Expected: **278 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
+Expected: **313 tests pass**, build succeeds via `@sveltejs/adapter-cloudflare`, check
 reports **0 errors**. That was the verified state at handover. `svelte-kit sync` must run
 before `check` on a fresh clone or `tsconfig.json` fails to resolve its `extends`.
 
@@ -57,6 +57,10 @@ the `make` repo — that name should not reappear).
 - **There is NO in-match quizzing.** The match is plain Hearthstone; the studying
   happens by reading your own cards. This was chosen over three alternatives
   (answer-to-play, quiz-for-mana, answer-to-attack).
+- **A card that must be aimed is refused without a target**, never fizzled — a misclick
+  must never burn the card and its mana. `Taunt does not restrict spells`; Stealth does.
+- **Weapons are hero-side.** `heroAttack` is deliberately separate from `canAttack`, which
+  is minion-shaped. Equipping replaces; it never stacks.
 - **Drag is the only way to play a card.** A pointer tap opens the inspector instead, so
   a tap can never spend mana by mistake. Enter on the keyboard still picks up and places.
 - **One card component, scaled — never re-laid out.** `CardInspector` renders the
@@ -276,10 +280,10 @@ hash without changing both.
 - One collection, one deck, and the mirror match are all gone.
 
 ### Smaller known issues
-- Nothing grants `armor`, so `HeroPortrait` shows a permanent 0. Wire a source or
-  drop the slot. Phase 1B §3.5 decides this alongside weapons.
-- **Manual targeting still does not exist** — effects auto-resolve their targets. This
-  is the main thing blocking real spells; it is Phase 1B §1.
+- Nothing grants `armor`. The slot now hides at zero rather than showing a permanent 0,
+  so it no longer looks broken, but no card produces armor.
+- **Hero powers are unbuilt and deliberately deferred.** `CardType` carries `'HeroPower'`
+  and the engine treats such a card as a Spell.
 - **Seven self-hosted `.woff2` files are missing**, so every page logs 404s and falls
   back to Georgia. See `static/fonts/README.md`.
 - **No card uses `Freeze`, `Silence` or `Stealth`.** The mechanics are implemented
@@ -309,7 +313,7 @@ hash without changing both.
 ```bash
 npm run dev      # http://localhost:5173
 npm run cards    # regenerate src/lib/data/slTerms.ts from slcards.txt
-npm test         # vitest, 278 tests
+npm test         # vitest, 313 tests
 npm run realtime # the Durable Object Worker on :8787 (needed for online play)
 npm run check    # svelte-check, expect 0 errors
 npm run build    # production build via adapter-cloudflare

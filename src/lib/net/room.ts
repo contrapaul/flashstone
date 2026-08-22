@@ -1,8 +1,32 @@
 import type { Card } from '../../types/cards';
-import { attack, canPlayCard, createMatch, endTurn, playCard } from '../engine/engine';
+import {
+  attack,
+  canPlayCard,
+  createMatch,
+  endTurn,
+  heroAttack,
+  isLegalChosenTarget,
+  needsTarget,
+  playCard
+} from '../engine/engine';
 import type { GameEvent } from '../engine/events';
-import { findMinion, type MatchState, type MinionInstance, type PlayerId } from '../engine/state';
-import type { ClientMessage, PlayerView, SerialisedMinion, TargetRef } from './protocol';
+import {
+  canHeroAttack,
+  findMinion,
+  opponentOf,
+  type Character,
+  type MatchState,
+  type MinionInstance,
+  type PlayerId
+} from '../engine/state';
+import type {
+  ChosenRef,
+  ClientMessage,
+  PlayerView,
+  SerialisedMinion,
+  SerialisedWeapon,
+  TargetRef
+} from './protocol';
 
 /**
  * The rules of an online match, with no sockets in sight.
@@ -29,6 +53,21 @@ export interface ApplyResult {
 
 export function createRoomState(playerDeck: Card[], foeDeck: Card[], seed: number): MatchState {
   return createMatch(playerDeck, foeDeck, seed);
+}
+
+/** Turns a wire-level spell target into the engine's `Character`. */
+function resolveChosen(
+  state: MatchState,
+  caster: PlayerId,
+  ref: ChosenRef | undefined
+): Character | undefined {
+  if (!ref) return undefined;
+  if (ref.kind === 'hero') {
+    const owner = ref.side === 'me' ? caster : opponentOf(caster);
+    return { kind: 'hero', owner };
+  }
+  const found = findMinion(state, ref.instanceId);
+  return found ? { kind: 'minion', owner: found.owner, minion: found.minion } : undefined;
 }
 
 /** The engine's own target shape — a hero target carries no owner; it is the defender. */
@@ -81,10 +120,40 @@ export function applyMessage(
       if (!canPlayCard(state, from, message.handIndex)) {
         return { ok: false, error: 'You cannot play that card.', events: [] };
       }
-      const played = playCard(state, from, message.handIndex, message.slot);
+
+      // An aimed card's target is resolved and re-checked here. The client's
+      // idea of what is legal is never taken on trust.
+      const card = state.players[from].hand[message.handIndex];
+      let chosen: Character | undefined;
+      if (card && needsTarget(card)) {
+        chosen = resolveChosen(state, from, message.target);
+        if (!chosen || !isLegalChosenTarget(state, from, card, chosen)) {
+          return { ok: false, error: 'That is not a legal target.', events: [] };
+        }
+      }
+
+      const played = playCard(state, from, message.handIndex, message.slot, chosen);
       return played
         ? { ok: true, events: drain() }
         : { ok: false, error: 'That play was rejected.', events: [] };
+    }
+
+    case 'heroAttack': {
+      if (!canHeroAttack(state.players[from])) {
+        return { ok: false, error: 'Your hero cannot attack right now.', events: [] };
+      }
+      const engineTarget = resolveTarget(state, message.target);
+      if (!engineTarget) return { ok: false, error: 'No such target.', events: [] };
+
+      const foe = opponentOf(from);
+      const target: Character =
+        engineTarget.kind === 'hero'
+          ? { kind: 'hero', owner: foe }
+          : { kind: 'minion', owner: foe, minion: findMinion(state, engineTarget.instanceId)!.minion };
+
+      return heroAttack(state, from, target)
+        ? { ok: true, events: drain() }
+        : { ok: false, error: 'That attack was rejected.', events: [] };
     }
 
     case 'attack': {
@@ -119,6 +188,12 @@ export function forceEndTurn(state: MatchState): GameEvent[] {
   const events = [...(state.events ?? [])];
   state.events = [];
   return events;
+}
+
+function serialiseWeapon(weapon: MatchState['players']['player']['weapon']): SerialisedWeapon | null {
+  return weapon
+    ? { name: weapon.card.name, attack: weapon.attack, durability: weapon.durability }
+    : null;
 }
 
 function serialiseMinion(minion: MinionInstance): SerialisedMinion {
@@ -161,7 +236,11 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       maxMana: me.maxMana,
       hand: me.hand,
       deckCount: me.deck.length,
-      board: me.board.map(serialiseMinion)
+      board: me.board.map(serialiseMinion),
+      weapon: serialiseWeapon(me.weapon),
+      // Computed here rather than re-derived from the view: the rule involves
+      // the weapon's attack, which the view deliberately flattens.
+      canHeroAttack: state.current === viewer && !state.winner && canHeroAttack(me)
     },
     foe: {
       health: foe.health,
@@ -170,7 +249,8 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       maxMana: foe.maxMana,
       handCount: foe.hand.length,
       deckCount: foe.deck.length,
-      board: foe.board.map(serialiseMinion)
+      board: foe.board.map(serialiseMinion),
+      weapon: serialiseWeapon(foe.weapon)
     },
     log: state.log,
     turnEndsIn

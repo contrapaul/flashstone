@@ -1,9 +1,16 @@
 import type { Card } from '../../types/cards';
-import { attack, canPlayCard, createMatch, endTurn, playCard } from '../engine/engine';
+import {
+  attack,
+  canPlayCard,
+  createMatch,
+  endTurn,
+  heroAttack,
+  playCard
+} from '../engine/engine';
 import type { GameEvent } from '../engine/events';
-import type { MatchState, PlayerId } from '../engine/state';
+import { findMinion, opponentOf, type Character, type MatchState, type PlayerId } from '../engine/state';
 import { viewFor } from './room';
-import type { PlayerView, TargetRef } from './protocol';
+import type { ChosenRef, PlayerView, TargetRef } from './protocol';
 import { connectToMatch, type OnlineConnection } from './client';
 
 /**
@@ -17,8 +24,9 @@ import { connectToMatch, type OnlineConnection } from './client';
  */
 
 export interface MatchSource {
-  playCard(handIndex: number, slot?: number, target?: TargetRef): void;
+  playCard(handIndex: number, slot?: number, target?: ChosenRef): void;
   attack(instanceId: string, target: TargetRef): void;
+  heroAttack(target: TargetRef): void;
   endTurn(): void;
   concede(): void;
   /** Local only — online matches restart by making a new game. */
@@ -85,9 +93,20 @@ export class LocalSource implements MatchSource {
     if (this.state.winner) this.handlers.onStatus({ kind: 'over' });
   }
 
-  playCard(handIndex: number, slot?: number) {
+  playCard(handIndex: number, slot?: number, target?: ChosenRef) {
     if (!canPlayCard(this.state, 'player', handIndex)) return;
-    if (playCard(this.state, 'player', handIndex, slot)) this.publish();
+    const chosen = this.resolveChosen(target);
+    if (playCard(this.state, 'player', handIndex, slot, chosen)) this.publish();
+  }
+
+  /** Turns a UI-level target into the engine's `Character`. */
+  private resolveChosen(ref: ChosenRef | undefined): Character | undefined {
+    if (!ref) return undefined;
+    if (ref.kind === 'hero') {
+      return { kind: 'hero', owner: ref.side === 'me' ? 'player' : 'ai' };
+    }
+    const found = findMinion(this.state, ref.instanceId);
+    return found ? { kind: 'minion', owner: found.owner, minion: found.minion } : undefined;
   }
 
   attack(instanceId: string, target: TargetRef) {
@@ -96,6 +115,18 @@ export class LocalSource implements MatchSource {
         ? ({ kind: 'hero' } as const)
         : ({ kind: 'minion', instanceId: target.instanceId } as const);
     if (attack(this.state, 'player', instanceId, engineTarget)) this.publish();
+  }
+
+  heroAttack(target: TargetRef) {
+    const foe = opponentOf('player');
+    const resolved: Character | undefined =
+      target.kind === 'hero'
+        ? { kind: 'hero', owner: foe }
+        : (() => {
+            const found = findMinion(this.state, target.instanceId);
+            return found ? { kind: 'minion' as const, owner: found.owner, minion: found.minion } : undefined;
+          })();
+    if (resolved && heroAttack(this.state, 'player', resolved)) this.publish();
   }
 
   endTurn() {
@@ -147,12 +178,16 @@ export class RemoteSource implements MatchSource {
     });
   }
 
-  playCard(handIndex: number, slot?: number, target?: TargetRef) {
+  playCard(handIndex: number, slot?: number, target?: ChosenRef) {
     this.connection.send({ type: 'playCard', handIndex, slot, target });
   }
 
   attack(instanceId: string, target: TargetRef) {
     this.connection.send({ type: 'attack', instanceId, target });
+  }
+
+  heroAttack(target: TargetRef) {
+    this.connection.send({ type: 'heroAttack', target });
   }
 
   endTurn() {

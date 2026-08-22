@@ -1,5 +1,6 @@
 import { BOARD_LIMIT, maxAttacksFor } from '../engine/state';
-import type { PlayerView, SerialisedMinion, TargetRef } from './protocol';
+import type { Card } from '../../types/cards';
+import type { ChosenRef, PlayerView, SerialisedMinion, TargetRef } from './protocol';
 
 /**
  * Reading a `PlayerView`.
@@ -57,18 +58,48 @@ export function turnIsSpent(view: PlayerView): boolean {
   if (!isMyTurn(view)) return false;
   const canPlay = view.me.hand.some((_, i) => canPlayFromView(view, i));
   const canSwing = view.me.board.some(canAttackFromView);
-  return !canPlay && !canSwing;
+  return !canPlay && !canSwing && !view.me.canHeroAttack;
+}
+
+/**
+ * What an aimed card may be pointed at, as wire references.
+ *
+ * Mirrors `spellTargets` in state.ts: **Taunt does not restrict spells**, but
+ * Stealth still hides a minion. Highlighting only — the engine re-checks.
+ */
+export function chosenTargetsFromView(view: PlayerView, card: Card): ChosenRef[] {
+  const side = card.targeting ?? 'any';
+  const out: ChosenRef[] = [];
+
+  const add = (board: SerialisedMinion[], which: 'me' | 'foe') => {
+    for (const m of board) {
+      if (!m.keywords.includes('Stealth')) out.push({ kind: 'minion', instanceId: m.instanceId });
+    }
+    out.push({ kind: 'hero', side: which });
+  };
+
+  if (side !== 'friendly') add(view.foe.board, 'foe');
+  if (side !== 'enemy') add(view.me.board, 'me');
+  return out;
 }
 
 /** A view of a match that has not started, so the table has something to draw. */
 export function emptyView(): PlayerView {
-  const side = { health: 30, armor: 0, mana: 0, maxMana: 0, deckCount: 0, board: [] };
+  const side = {
+    health: 30,
+    armor: 0,
+    mana: 0,
+    maxMana: 0,
+    deckCount: 0,
+    board: [],
+    weapon: null
+  };
   return {
     you: 'player',
     turn: 'player',
     turnNumber: 0,
     winner: null,
-    me: { ...side, hand: [] },
+    me: { ...side, hand: [], canHeroAttack: false },
     foe: { ...side, handCount: 0 },
     log: [],
     turnEndsIn: 0

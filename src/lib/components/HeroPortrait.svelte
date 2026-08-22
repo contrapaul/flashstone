@@ -3,6 +3,11 @@
 
   export let label: string;
   export let health: number;
+  /**
+   * Armor. Still nothing grants it — the slot is hidden at zero rather than
+   * showing a permanent 0, which is the smaller half of the fix HANDOVER §7
+   * asked for. Weapons now occupy the visual space it was reserving.
+   */
   export let armor = 0;
   /** 'you' | 'foe' — only changes the portrait tint. */
   export let side: 'you' | 'foe' = 'you';
@@ -11,23 +16,40 @@
   export let targetable = false;
   /** Just took damage — shake once. */
   export let hit = false;
+  /** The equipped weapon, if any. */
+  export let weapon: { name: string; attack: number; durability: number } | null = null;
+  /** This hero can swing its weapon right now — green pulse, like a ready minion. */
+  export let armed = false;
 </script>
 
-<div class="hero" class:hit>
+<div class="hero" class:hit class:armed>
+  <!--
+    Enabled when the hero is a legal target OR is armed and can swing. Gating on
+    `targetable` alone left an armed hero unclickable, because that prop is
+    about being attacked, not about attacking.
+  -->
   <button
     class="ring"
     class:targetable
-    disabled={!targetable}
+    disabled={!targetable && !armed}
     on:click
-    aria-label={targetable ? `Attack ${label}` : label}
+    aria-label={targetable ? `Attack ${label}` : armed ? `Attack with ${weapon?.name ?? 'weapon'}` : label}
   >
     <span class="portrait {side}">{glyph}</span>
   </button>
 
   <div class="gems">
-    <span class="armor" class:none={armor === 0}>{armor}</span>
+    {#if armor > 0}<span class="armor">{armor}</span>{/if}
     <span class="hp" title={`${health} of ${HERO_HEALTH}`}>{health}</span>
   </div>
+
+  {#if weapon}
+    <div class="weapon" title={`${weapon.name} — ${weapon.attack} attack, ${weapon.durability} left`}>
+      <span class="w-attack">{weapon.attack}</span>
+      <span class="w-name">{weapon.name}</span>
+      <span class="w-durability">{weapon.durability}</span>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -88,6 +110,55 @@
     gap: 6px;
   }
 
+  /* Armed and able to swing — the same green language a ready minion uses. */
+  .hero.armed .ring {
+    box-shadow: 0 0 0 2px rgba(126, 214, 140, .7), 0 0 22px rgba(126, 214, 140, .45);
+    cursor: pointer;
+  }
+
+  .weapon {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid #7d8fa0;
+    background: linear-gradient(180deg, rgba(60, 74, 88, .95), rgba(28, 36, 44, .95));
+    font-family: var(--display);
+    font-size: 9.5px;
+    letter-spacing: .06em;
+    color: #dbe6ef;
+    white-space: nowrap;
+  }
+
+  .w-name {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    color: #a9bccd;
+  }
+
+  .w-attack,
+  .w-durability {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 15px;
+    height: 15px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .w-attack {
+    background: linear-gradient(135deg, var(--attack), #a9741a);
+    color: #fff6e6;
+  }
+  .w-durability {
+    background: linear-gradient(150deg, #9fb0c0, #4a5c6c);
+    color: #f2f7fb;
+  }
+
   .armor {
     width: 30px;
     height: 32px;
@@ -100,11 +171,6 @@
     font-weight: 700;
     font-size: 13px;
     color: #1a1f24;
-  }
-
-  .armor.none {
-    background: linear-gradient(160deg, #2e2a24, #1a1712);
-    color: #4a4238;
   }
 
   .hp {

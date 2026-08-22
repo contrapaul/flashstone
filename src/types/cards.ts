@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────────
-// CARD SCHEMA & VALIDATION RULES v0.3
+// CARD SCHEMA & VALIDATION RULES v0.4
 // Designed for: Flashcard import, early-Hearthstone pacing,
 // deterministic fallbacks, rarity-weighted drafting
 //
@@ -8,10 +8,12 @@
 // v0.3 adds what the SL card set needs: a first-class `keyword` field on
 //   Effect, and the study fields (`definition`, `sections`, `hl`) that carry a
 //   term's meaning without ever putting it on the card face.
+// v0.4 adds spells you aim and weapons you swing: Target 'Chosen', CardType
+//   'Weapon' with `durability`, and Action 'SwapStats'.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
-export type CardType = 'Minion' | 'Spell' | 'HeroPower';
+export type CardType = 'Minion' | 'Spell' | 'HeroPower' | 'Weapon';
 export type Rarity = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
 export type Keyword = 'Taunt' | 'Charge' | 'DivineShield' | 'Windfury' | 'Stealth';
 export type Trigger =
@@ -37,14 +39,24 @@ export type Action =
   | 'GainKeyword'
   | 'GainMana'
   | 'Freeze'
-  | 'Silence';
+  | 'Silence'
+  /** Swaps a minion's Attack and Health. */
+  | 'SwapStats';
 export type Target =
   | 'Self'
   | 'EnemyMinion'
   | 'FriendlyMinion'
   | 'Hero'
   | 'RandomEnemy'
-  | 'AllEnemies';
+  | 'AllEnemies'
+  /**
+   * Aimed by the player rather than picked by the engine.
+   *
+   * A card with a `Chosen` effect cannot be played without a target — `playCard`
+   * refuses it rather than fizzling, so a misclick never silently burns the card
+   * and its mana.
+   */
+  | 'Chosen';
 
 export interface Effect {
   trigger: Trigger;
@@ -67,9 +79,17 @@ export interface Card {
   type: CardType;
   rarity: Rarity;
 
-  // Minion-only fields (undefined for Spells/HeroPowers)
+  // Minion and Weapon fields (undefined for Spells and HeroPowers)
   attack?: number; // 1-9
-  health?: number; // 1-9
+  health?: number; // 1-9, Minions only
+  /** Weapons only — swings remaining before the weapon breaks. */
+  durability?: number;
+
+  /**
+   * Which side a `Chosen` effect may be aimed at. Absent means either.
+   * Checked server-side too; the UI only uses it to decide what to light up.
+   */
+  targeting?: 'any' | 'enemy' | 'friendly';
 
   keywords: Keyword[];
   effects: Effect[]; // Structured effect array (parsed or manual)

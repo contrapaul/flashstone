@@ -9,7 +9,7 @@
   import type { GameEvent } from '$lib/engine/events';
   import { LocalSource } from '$lib/net/source';
   import { emptyView } from '$lib/net/view';
-  import type { PlayerView, TargetRef } from '$lib/net/protocol';
+  import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
   import { reportProgress } from '$lib/quests/client';
   import { account } from '$lib/account';
   import type { Card } from '../../types/cards';
@@ -68,10 +68,14 @@
     onError() {}
   };
 
-  function onPlayCard(event: CustomEvent<{ handIndex: number; slot?: number }>) {
+  function onPlayCard(event: CustomEvent<{ handIndex: number; slot?: number; target?: ChosenRef }>) {
     const card = view.me.hand[event.detail.handIndex];
-    source?.playCard(event.detail.handIndex, event.detail.slot);
+    source?.playCard(event.detail.handIndex, event.detail.slot, event.detail.target);
     countCardPlayed(card);
+  }
+
+  function onHeroAttack(event: CustomEvent<{ target: TargetRef }>) {
+    source?.heroAttack(event.detail.target);
   }
 
   function onAttack(event: CustomEvent<{ instanceId: string; target: TargetRef }>) {
@@ -152,6 +156,7 @@
   overAction="Play again"
   on:playCard={onPlayCard}
   on:attack={onAttack}
+  on:heroAttack={onHeroAttack}
   on:endTurn={onEndTurn}
   on:drained={onDrained}
   on:overAction={start}

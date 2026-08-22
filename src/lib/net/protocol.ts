@@ -25,20 +25,33 @@ const TargetRefSchema = z.union([
   z.object({ kind: z.literal('minion'), instanceId: z.string().max(32) })
 ]);
 
+/** A spell target, which may be on either side of the table. */
+const ChosenRefSchema = z.union([
+  z.object({ kind: z.literal('hero'), side: z.enum(['me', 'foe']) }),
+  z.object({ kind: z.literal('minion'), instanceId: z.string().max(32) })
+]);
+
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), version: z.number().int() }),
   z.object({
     type: z.literal('playCard'),
     handIndex: z.number().int().min(0).max(9),
     slot: z.number().int().min(0).max(7).optional(),
-    /** Phase 1B's `Chosen` spells. Re-validated against spellTargets server-side. */
-    target: TargetRefSchema.optional()
+    /**
+     * Where an aimed spell points. **Re-validated against `spellTargets`
+     * server-side** — the client decides what to light up, never what is legal.
+     * Unlike an attack target this may name a friendly character, so it carries
+     * an owner.
+     */
+    target: ChosenRefSchema.optional()
   }),
   z.object({
     type: z.literal('attack'),
     instanceId: z.string().max(32),
     target: TargetRefSchema
   }),
+  /** The hero swinging an equipped weapon. */
+  z.object({ type: z.literal('heroAttack'), target: TargetRefSchema }),
   z.object({ type: z.literal('endTurn') }),
   z.object({ type: z.literal('concede') }),
   /** Asks for the full state again — used after a reconnect. */
@@ -47,6 +60,7 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 export type TargetRef = z.infer<typeof TargetRefSchema>;
+export type ChosenRef = z.infer<typeof ChosenRefSchema>;
 
 // ── Server → client ──────────────────────────────────────────
 
@@ -71,6 +85,8 @@ export interface PlayerView {
     hand: Card[];
     deckCount: number;
     board: SerialisedMinion[];
+    weapon: SerialisedWeapon | null;
+    canHeroAttack: boolean;
   };
   foe: {
     health: number;
@@ -80,10 +96,17 @@ export interface PlayerView {
     handCount: number;
     deckCount: number;
     board: SerialisedMinion[];
+    weapon: SerialisedWeapon | null;
   };
   log: string[];
   /** Seconds left on the current turn, so both clients show the same clock. */
   turnEndsIn: number;
+}
+
+export interface SerialisedWeapon {
+  name: string;
+  attack: number;
+  durability: number;
 }
 
 export interface SerialisedMinion {

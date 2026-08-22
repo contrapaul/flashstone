@@ -7,9 +7,11 @@ import {
   HERO_HEALTH,
   MAX_MANA,
   canAttack,
+  canHeroAttack,
   legalTargets,
   opponentOf,
   silence,
+  spellTargets,
   type Character,
   type MatchState,
   type MinionInstance,
@@ -54,7 +56,9 @@ function createPlayer(id: PlayerId, deck: Card[]): PlayerState {
     deck,
     hand: [],
     board: [],
-    fatigue: 0
+    fatigue: 0,
+    weapon: null,
+    heroAttacksThisTurn: 0
   };
 }
 
@@ -101,6 +105,7 @@ function startTurn(state: MatchState, id: PlayerId): void {
   state.turnNumber++;
   p.maxMana = Math.min(MAX_MANA, p.maxMana + 1);
   p.mana = p.maxMana;
+  p.heroAttacksThisTurn = 0;
   for (const minion of p.board) {
     minion.summonedThisTurn = false;
     minion.attacksThisTurn = 0;
@@ -169,16 +174,27 @@ export function playCard(
   state: MatchState,
   id: PlayerId,
   handIndex: number,
-  slot?: number
+  slot?: number,
+  chosen?: Character
 ): boolean {
   if (!canPlayCard(state, id, handIndex)) return false;
+  const card = state.players[id].hand[handIndex];
+  if (!card) return false;
+
+  // A card that has to be aimed is refused outright without a legal target,
+  // rather than fizzling — a misclick must never burn the card and the mana.
+  if (needsTarget(card)) {
+    if (!chosen || !isLegalChosenTarget(state, id, card, chosen)) return false;
+  }
+
   const p = state.players[id];
-  const [card] = p.hand.splice(handIndex, 1);
+  p.hand.splice(handIndex, 1);
   p.mana -= card.cost;
   state.log.push(`${id} plays ${card.name}.`);
 
   let summoned: MinionInstance | undefined;
   if (card.type === 'Minion') summoned = summon(state, id, card, slot);
+  else if (card.type === 'Weapon') equipWeapon(state, id, card);
 
   // Battlecry-triggered effects fire on play, for minions and spells alike.
   //
@@ -187,7 +203,80 @@ export function playCard(
   // card does nothing when cast. Nothing here enforces it — the card set does,
   // in the generator, guarded by a test in slCards.test.ts.
   for (const effect of card.effects) {
-    if (effect.trigger === 'Battlecry') resolveEffect(state, id, summoned, effect);
+    if (effect.trigger === 'Battlecry') resolveEffect(state, id, summoned, effect, chosen);
+  }
+
+  checkDeaths(state);
+  return true;
+}
+
+/** True when any of the card's Battlecry effects must be aimed by the player. */
+export function needsTarget(card: Card): boolean {
+  return card.effects.some((e) => e.trigger === 'Battlecry' && e.target === 'Chosen');
+}
+
+/** Re-checked here, not just in the UI — an online client sends whatever it likes. */
+export function isLegalChosenTarget(
+  state: MatchState,
+  caster: PlayerId,
+  card: Card,
+  chosen: Character
+): boolean {
+  const legal = spellTargets(state, caster, card.targeting ?? 'any');
+  return legal.some((t) =>
+    t.kind === 'hero'
+      ? chosen.kind === 'hero' && chosen.owner === t.owner
+      : chosen.kind === 'minion' && chosen.minion.instanceId === t.minion.instanceId
+  );
+}
+
+/** Equipping replaces whatever was held; weapons never stack. */
+function equipWeapon(state: MatchState, id: PlayerId, card: Card): void {
+  const p = state.players[id];
+  if (p.weapon) state.log.push(`${p.weapon.card.name} is discarded.`);
+  p.weapon = { card, attack: card.attack ?? 0, durability: card.durability ?? 1 };
+  emit(state, { type: 'equip', owner: id });
+}
+
+/**
+ * The hero swings.
+ *
+ * Trades damage both ways like a minion attack, spends a point of durability,
+ * and destroys the weapon at zero. Taunt applies exactly as it does to minions,
+ * which is why this routes through `legalTargets` rather than reimplementing it.
+ */
+export function heroAttack(state: MatchState, id: PlayerId, target: Character): boolean {
+  if (state.winner || state.current !== id) return false;
+  const p = state.players[id];
+  if (!canHeroAttack(p) || !p.weapon) return false;
+
+  const foe = opponentOf(id);
+  const legal = legalTargets(state, foe);
+  const match = legal.find((t) =>
+    t.kind === 'hero'
+      ? target.kind === 'hero'
+      : target.kind === 'minion' && t.minion.instanceId === target.minion.instanceId
+  );
+  if (!match) return false;
+
+  p.heroAttacksThisTurn++;
+  emit(state, { type: 'heroAttack', owner: id });
+
+  const damage = p.weapon.attack;
+  if (match.kind === 'hero') {
+    damageHero(state, foe, damage);
+  } else {
+    const defender = match.minion;
+    damageMinion(state, defender, damage);
+    // The hero takes the defender's attack back, the same as a minion trade.
+    if (defender.attack > 0) damageHero(state, id, defender.attack);
+  }
+
+  p.weapon.durability--;
+  if (p.weapon.durability <= 0) {
+    state.log.push(`${p.weapon.card.name} breaks.`);
+    p.weapon = null;
+    emit(state, { type: 'weaponBreak', owner: id });
   }
 
   checkDeaths(state);
@@ -404,7 +493,8 @@ function resolveEffect(
   state: MatchState,
   owner: PlayerId,
   source: MinionInstance | undefined,
-  effect: Effect
+  effect: Effect,
+  chosen?: Character
 ): void {
   const rng = rngFor(state);
   const value = effect.value ?? 1;
@@ -424,7 +514,17 @@ function resolveEffect(
     return;
   }
 
-  for (const target of resolveTargets(state, owner, source, effect, rng)) {
+  // A `Chosen` effect resolves against what the player aimed at; everything else
+  // is picked by the engine. playCard has already refused the card if the target
+  // is missing or illegal, so this can never silently do nothing.
+  const targets =
+    effect.target === 'Chosen'
+      ? chosen
+        ? [chosen]
+        : []
+      : resolveTargets(state, owner, source, effect, rng);
+
+  for (const target of targets) {
     switch (effect.action) {
       case 'DealDamage':
         damageCharacter(state, target, value);
@@ -473,6 +573,19 @@ function resolveEffect(
 
       case 'Destroy':
         if (target.kind === 'minion') target.minion.health = 0;
+        break;
+
+      case 'SwapStats':
+        if (target.kind === 'minion') {
+          const m = target.minion;
+          const wasAttack = m.attack;
+          m.attack = m.health;
+          m.health = wasAttack;
+          // maxHealth follows, or the minion reads as damaged the moment it swaps.
+          m.maxHealth = Math.max(wasAttack, 1);
+          m.buffed = true;
+          emit(state, { type: 'buff', instanceId: m.instanceId });
+        }
         break;
 
       case 'GainKeyword': {

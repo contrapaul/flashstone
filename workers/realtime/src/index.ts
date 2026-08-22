@@ -13,15 +13,51 @@ export { Lobby } from './Lobby';
 
 const LOBBY_KEY = 'public';
 
+/**
+ * Which browser origins may talk to this Worker.
+ *
+ * `APP_ORIGIN` is a comma-separated allowlist rather than one value, because
+ * there are legitimately several: local development, the production domain, and
+ * `*.pages.dev`. Pages preview deployments get a per-build subdomain
+ * (`<hash>.flashstone.pages.dev`) that cannot be enumerated ahead of time, so
+ * exact entries are matched literally and a leading `*.` matches one level of
+ * subdomain — never a bare wildcard.
+ */
+function allowedOrigins(env: any): string[] {
+  return String(env.APP_ORIGIN ?? 'http://localhost:5173')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function isAllowed(origin: string | null, env: any): boolean {
+  if (!origin) return false;
+  return allowedOrigins(env).some((allowed) => {
+    if (allowed === origin) return true;
+    if (!allowed.startsWith('*.')) return false;
+    // `*.example.com` matches `https://anything.example.com`, and nothing deeper.
+    const suffix = allowed.slice(1);
+    try {
+      const host = new URL(origin).host;
+      const rest = host.slice(0, host.length - suffix.length);
+      return host.endsWith(suffix) && rest.length > 0 && !rest.includes('.');
+    } catch {
+      return false;
+    }
+  });
+}
+
 function cors(origin: string | null, env: any): Record<string, string> {
-  // The Pages app is the only browser origin allowed to talk to this Worker.
-  const allowed = env.APP_ORIGIN ?? 'http://localhost:5173';
-  return {
-    'Access-Control-Allow-Origin': origin === allowed ? origin : allowed,
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Headers': 'Content-Type, X-Ticket',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Allow-Credentials': 'true',
+    Vary: 'Origin'
   };
+  // Echoing an unrecognised origin back would defeat the check entirely, so an
+  // origin that is not on the list simply gets no allow header.
+  if (isAllowed(origin, env)) headers['Access-Control-Allow-Origin'] = origin as string;
+  return headers;
 }
 
 /** A verified ticket from the query string or the X-Ticket header, or null. */

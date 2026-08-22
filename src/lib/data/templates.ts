@@ -422,6 +422,7 @@ export function abilityForHash(
 // ──────────────────────────────────────────────────────────────
 
 const TARGET_PHRASE: Partial<Record<Target, string>> = {
+  Chosen: 'a chosen target',
   EnemyMinion: 'a random enemy minion',
   FriendlyMinion: 'a friendly minion',
   RandomEnemy: 'a random enemy',
@@ -465,7 +466,13 @@ function phrase(effect: Effect): string {
       return `Give ${target} ${KEYWORD_TEXT[effect.keyword ?? 'Taunt']}`;
     case 'GainMana':
       return `Gain ${value} Mana Crystal${value === 1 ? '' : 's'} this turn`;
+    case 'SwapStats':
+      return `Swap ${target}'s Attack and Health`;
   }
+  // Exhaustive: adding an Action without a case here is a type error, which is
+  // how a new action gets caught before it ships as a blank card.
+  const never: never = effect.action;
+  throw new Error(`No card text for action ${never}`);
 }
 
 /**

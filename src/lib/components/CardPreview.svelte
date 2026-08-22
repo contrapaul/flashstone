@@ -15,6 +15,7 @@
   export let gold = false;
 
   $: isMinion = card.type === 'Minion';
+  $: isWeapon = card.type === 'Weapon';
 
   /** Board/hand abbreviations spell keywords solid; the card face reads them out. */
   const KEYWORD_LABEL: Record<Keyword, string> = {
@@ -81,6 +82,13 @@
   {#if isMinion}
     <div class="attack"><span>{card.attack}</span></div>
     <div class="health">{card.health}</div>
+  {:else if isWeapon}
+    <!-- Same two corners as a minion, so the numbers read in the same places.
+         Durability wears the steel gem rather than the blood one — it is not
+         health, and a player must not read it as something that heals. -->
+    <div class="attack"><span>{card.attack}</span></div>
+    <div class="durability">{card.durability}</div>
+    <div class="type weapon-line">Weapon</div>
   {:else}
     <div class="type">{card.type}</div>
   {/if}
@@ -396,6 +404,27 @@
   }
 
   .attack span { transform: rotate(-45deg); }
+
+  .durability {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 23px;
+    height: 23px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    border: 2px solid #cfd8e0;
+    background: linear-gradient(150deg, #9fb0c0, #4a5c6c 70%);
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 17px;
+    color: #f2f7fb;
+    text-shadow: 0 2px 3px rgba(0, 0, 0, .65);
+  }
+
+  .weapon-line { bottom: 26px; }
 
   .health {
     right: -4px;

@@ -33,8 +33,15 @@ tag = "v1"
 new_sqlite_classes = ["MatchRoom", "Lobby"]
 
 [vars]
-# TICKET_SECRET is a secret, not a var. Set it on both projects with the SAME
-# value, or every connection will be rejected:
+# Browser origins allowed to reach this Worker, comma-separated. `*.` matches one
+# level of subdomain, which is what covers Pages preview builds
+# (<hash>.flashstone.pages.dev). An origin not on this list gets no CORS header.
+APP_ORIGIN = "https://flashstone.contrapaul.com,https://flashstone.pages.dev,*.flashstone.pages.dev,http://localhost:5173"
+
+# TICKET_SECRET is a SECRET, not a var — it must never be committed. Set the same
+# value on both projects, or every connection is rejected:
 #   npx wrangler secret put TICKET_SECRET --config workers/realtime/wrangler.toml
 #   npx wrangler pages secret put TICKET_SECRET
-APP_ORIGIN = "http://localhost:5173"
+#
+# The Pages app also needs REALTIME_URL pointing at this Worker's deployed origin:
+#   npx wrangler pages secret put REALTIME_URL

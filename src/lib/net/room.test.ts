@@ -4,6 +4,7 @@ import { starterDeck } from '../data/starter';
 import { buildAiDeck } from '../data/aiDeck';
 import { applyMessage, createRoomState, forceEndTurn, viewFor } from './room';
 import { parseClientMessage } from './protocol';
+import { cardById } from '../data/cards';
 import type { MatchState } from '../engine/state';
 
 function room(): MatchState {
@@ -112,6 +113,92 @@ describe('attacking', () => {
       target: { kind: 'minion', instanceId: 'm998' }
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('weapons and aimed spells over the wire', () => {
+  const equip = (state: MatchState) => {
+    state.players.player.hand.push({ ...cardById('drafting-blade')! });
+    state.players.player.mana = 10;
+    applyMessage(state, 'player', {
+      type: 'playCard',
+      handIndex: state.players.player.hand.length - 1
+    });
+  };
+
+  it('lets an armed hero swing', () => {
+    const state = room();
+    equip(state);
+    const before = state.players.ai.health;
+    const result = applyMessage(state, 'player', { type: 'heroAttack', target: { kind: 'hero' } });
+    expect(result.ok).toBe(true);
+    expect(state.players.ai.health).toBe(before - 2);
+  });
+
+  it('refuses a hero swing with no weapon', () => {
+    const state = room();
+    const result = applyMessage(state, 'player', { type: 'heroAttack', target: { kind: 'hero' } });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/cannot attack/i);
+  });
+
+  it('refuses a hero swing on the other player’s turn', () => {
+    const state = room();
+    equip(state);
+    applyMessage(state, 'player', { type: 'endTurn' });
+    const result = applyMessage(state, 'player', { type: 'heroAttack', target: { kind: 'hero' } });
+    expect(result.ok).toBe(false);
+  });
+
+  // The client's idea of a legal target is never trusted.
+  it('refuses an aimed spell with no target', () => {
+    const state = room();
+    state.players.player.mana = 10;
+    state.players.player.hand.push({ ...cardById('fireball')! });
+    const result = applyMessage(state, 'player', {
+      type: 'playCard',
+      handIndex: state.players.player.hand.length - 1
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/legal target/i);
+  });
+
+  it('refuses an aimed spell pointed at a minion that does not exist', () => {
+    const state = room();
+    state.players.player.mana = 10;
+    state.players.player.hand.push({ ...cardById('fireball')! });
+    const result = applyMessage(state, 'player', {
+      type: 'playCard',
+      handIndex: state.players.player.hand.length - 1,
+      target: { kind: 'minion', instanceId: 'm999' }
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('resolves an aimed spell against the chosen hero', () => {
+    const state = room();
+    state.players.player.mana = 10;
+    state.players.player.hand.push({ ...cardById('fireball')! });
+    const before = state.players.ai.health;
+    const result = applyMessage(state, 'player', {
+      type: 'playCard',
+      handIndex: state.players.player.hand.length - 1,
+      target: { kind: 'hero', side: 'foe' }
+    });
+    expect(result.ok).toBe(true);
+    expect(state.players.ai.health).toBe(before - 6);
+  });
+
+  it('reports the weapon in both views, and only arms its owner', () => {
+    const state = room();
+    equip(state);
+    const mine = viewFor(state, 'player');
+    const theirs = viewFor(state, 'ai');
+
+    expect(mine.me.weapon?.attack).toBe(2);
+    expect(mine.me.canHeroAttack).toBe(true);
+    expect(theirs.foe.weapon?.attack).toBe(2);
+    expect(theirs.me.canHeroAttack).toBe(false);
   });
 });
 

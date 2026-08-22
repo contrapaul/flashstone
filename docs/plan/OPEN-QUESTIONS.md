@@ -13,7 +13,7 @@ if no answer arrives — so **no phase stalls waiting on this file.**
 | 6 | Pages + separate realtime Worker, or migrate to Workers static assets? | 5 §1 | Option A (Pages + separate Worker), unless the §1.1 spike shows the adapter bump is clean. |
 | 7 | Is there a spectate or rematch flow? Neither is in the list. | 5 | Out of scope. Do not build it. |
 | 8 | Should packs ever be earned rather than bought (e.g. a first-win-of-the-day pack)? | 4 | No. Gold is the only path, per item 4. |
-| 9 | "Ability cards" — does that mean spells and weapons only, or also **hero powers**? Hero powers are a once-per-turn button, not a card, and the engine has no UI for them. | 1B §4 | Spells and weapons only. Hero powers out of scope. |
+| ~~9~~ | ~~"Ability cards" — spells and weapons only, or also hero powers?~~ **Answered 2026-08-22: "we'll get to hero powers later."** Spells and weapons shipped; hero powers deferred. | — | Resolved |
 | ~~10~~ | ~~Does the in-game definitions setting survive follow-up 1?~~ **Built as: setting survives, defaults on, affects matches only.** The collection and review always show definitions regardless. Verified both ways. Say the word if you would rather it always showed and the toggle went. | — | Resolved |
 | 11 | Gold variants: should a duplicate gold roll on a card already owned as 2 gold be re-rolled to a different card, or simply not roll gold? | 4 §4.1b | Excluded from the pool like any other fully-owned card; no gold roll happens. |
 | 12 | Is 5% per card the rate **per card in a pack** (≈23% of packs contain one) or per pack? Follow-up 5 says "per card". | 4 §4.1b | Per card, as stated. |

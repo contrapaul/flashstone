@@ -25,10 +25,17 @@ export interface MinionInstance {
   buffed: boolean;
 }
 
+/** An equipped weapon. Replaced, never stacked — equipping destroys the old one. */
+export interface WeaponInstance {
+  card: Card;
+  attack: number;
+  durability: number;
+}
+
 export interface PlayerState {
   id: PlayerId;
   health: number;
-  /** Absorbs hero damage before health. Nothing grants it yet — see OVERHAUL.md. */
+  /** Absorbs hero damage before health. Nothing grants it yet — see HANDOVER §7. */
   armor: number;
   mana: number;
   maxMana: number;
@@ -36,6 +43,10 @@ export interface PlayerState {
   hand: Card[];
   board: MinionInstance[];
   fatigue: number;
+  /** The equipped weapon, or null. A hero can only attack while armed. */
+  weapon: WeaponInstance | null;
+  /** Hero swings taken this turn. One per turn, and only with a weapon. */
+  heroAttacksThisTurn: number;
 }
 
 export interface MatchState {
@@ -86,6 +97,45 @@ export function canAttack(minion: MinionInstance): boolean {
 /** Stealth minions cannot be picked as a target — including as a Taunt. */
 export function isTargetable(minion: MinionInstance): boolean {
   return !minion.keywords.includes('Stealth');
+}
+
+/**
+ * Whether the hero may swing this turn.
+ *
+ * Deliberately separate from `canAttack`, which is minion-shaped: a hero has no
+ * summoning sickness, no Windfury and no board slot, and folding it in would
+ * mean four `if (isHero)` branches inside a function about minions.
+ */
+export function canHeroAttack(player: PlayerState): boolean {
+  if (!player.weapon || player.weapon.attack <= 0) return false;
+  return player.heroAttacksThisTurn < 1;
+}
+
+/**
+ * What a spell may be aimed at.
+ *
+ * **Taunt does not restrict spells** — that is the standard rule and the
+ * interesting one, since it means a Taunt wall stops attacks but not a fireball.
+ * Stealth still hides a minion from being picked.
+ */
+export function spellTargets(
+  state: MatchState,
+  caster: PlayerId,
+  side: 'any' | 'enemy' | 'friendly' = 'any'
+): Character[] {
+  const foe = opponentOf(caster);
+  const out: Character[] = [];
+
+  const add = (owner: PlayerId) => {
+    for (const minion of state.players[owner].board) {
+      if (isTargetable(minion)) out.push({ kind: 'minion', owner, minion });
+    }
+    out.push({ kind: 'hero', owner });
+  };
+
+  if (side !== 'friendly') add(foe);
+  if (side !== 'enemy') add(caster);
+  return out;
 }
 
 /** Taunt forces attackers to go through it first. */

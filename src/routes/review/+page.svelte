@@ -70,6 +70,9 @@
   }
 
   $: pool = ALL_CARDS.filter((card) => {
+    // Review studies syllabus terms. Hand-authored spells and weapons are game
+    // pieces with no definition to reveal, so they are not part of it.
+    if (!card.definition) return false;
     if (scope === 'owned' && ownedCount(owned, card.id) === 0) return false;
     if (sectionFilter !== 'all' && !(card.sections ?? []).includes(sectionFilter)) return false;
     return true;

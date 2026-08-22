@@ -15,10 +15,12 @@
   import {
     canAttackFromView,
     canPlayFromView,
+    chosenTargetsFromView,
     isMyTurn,
     legalTargetsFromView,
     turnIsSpent
   } from '../net/view';
+  import type { ChosenRef } from '../net/protocol';
   import type { Card } from '../../types/cards';
 
   /**
@@ -46,8 +48,9 @@
   export let overAction: string | null = null;
 
   const dispatch = createEventDispatcher<{
-    playCard: { handIndex: number; slot?: number };
+    playCard: { handIndex: number; slot?: number; target?: ChosenRef };
     attack: { instanceId: string; target: TargetRef };
+    heroAttack: { target: TargetRef };
     endTurn: void;
     drained: void;
     overAction: void;
@@ -90,7 +93,7 @@
 
   $: myTurn = interactive && isMyTurn(view) && !draining;
   $: activeAttacker = drag?.kind === 'attack' ? drag.instanceId : selectedId;
-  $: targets = myTurn && activeAttacker ? legalTargetsFromView(view) : [];
+  $: targets = myTurn && (activeAttacker || heroSelected) ? legalTargetsFromView(view) : [];
   $: heroTargetable = targets.some((t) => t.kind === 'hero');
   // Must be a reactive value, not a function call in a prop: Svelte 4 only
   // re-evaluates a prop when an identifier it references is dirty.
@@ -273,6 +276,43 @@
   let selectedId: string | null = null;
   let swallowClick = false;
 
+  /**
+   * A card waiting to be aimed.
+   *
+   * Dropping a targeted card on the board does not play it — it arms this, and
+   * the next click on a legal character casts it. Anything else cancels. The
+   * card is not spent until the target lands, so backing out costs nothing.
+   */
+  let aiming: { handIndex: number; card: Card } | null = null;
+
+  $: chosenTargets = aiming ? chosenTargetsFromView(view, aiming.card) : [];
+  $: chosenMinionIds = new Set(
+    chosenTargets.flatMap((t) => (t.kind === 'minion' ? [t.instanceId] : []))
+  );
+  $: canAimFoeHero = chosenTargets.some((t) => t.kind === 'hero' && t.side === 'foe');
+  $: canAimMyHero = chosenTargets.some((t) => t.kind === 'hero' && t.side === 'me');
+
+  function cancelAim() {
+    aiming = null;
+  }
+
+  /** Escape backs out of aiming or an armed hero without spending anything. */
+  function onWindowKey(event: KeyboardEvent) {
+    if (event.key !== 'Escape') return;
+    cancelAim();
+    heroSelected = false;
+  }
+
+  function castAt(target: ChosenRef) {
+    if (!aiming) return;
+    dispatch('playCard', { handIndex: aiming.handIndex, target });
+    aiming = null;
+  }
+
+  function needsAiming(card: Card): boolean {
+    return card.effects.some((e) => e.trigger === 'Battlecry' && e.target === 'Chosen');
+  }
+
   function openInspector(card: Card | undefined) {
     if (drag || !card) return;
     inspected = card;
@@ -400,6 +440,11 @@
     if (finished.kind === 'card') {
       if (!overMyBoard(event.clientY)) return;
       if (!canPlayFromView(view, finished.handIndex)) return;
+      // A card that must be aimed enters targeting mode rather than resolving.
+      if (needsAiming(finished.card)) {
+        aiming = { handIndex: finished.handIndex, card: finished.card };
+        return;
+      }
       dispatch('playCard', { handIndex: finished.handIndex, slot: finished.slot });
     } else {
       if (!finished.target) return;
@@ -421,6 +466,11 @@
 
   function onMyMinion(minion: SerialisedMinion) {
     if (swallowClick) return;
+    if (aiming) {
+      if (chosenMinionIds.has(minion.instanceId)) castAt({ kind: 'minion', instanceId: minion.instanceId });
+      else cancelAim();
+      return;
+    }
     if (myTurn && canAttackFromView(minion)) {
       selectedId = selectedId === minion.instanceId ? null : minion.instanceId;
       return;
@@ -430,9 +480,13 @@
 
   function onEnemyMinion(minion: SerialisedMinion) {
     if (swallowClick) return;
+    if (aiming) {
+      if (chosenMinionIds.has(minion.instanceId)) castAt({ kind: 'minion', instanceId: minion.instanceId });
+      else cancelAim();
+      return;
+    }
     if (myTurn && activeAttacker) {
-      const legal = targetableIds.has(minion.instanceId);
-      if (legal) {
+      if (targetableIds.has(minion.instanceId)) {
         dispatch('attack', {
           instanceId: activeAttacker,
           target: { kind: 'minion', instanceId: minion.instanceId }
@@ -441,13 +495,48 @@
       }
       return;
     }
+    if (myTurn && heroSelected && view.me.canHeroAttack) {
+      if (targetableIds.has(minion.instanceId)) {
+        dispatch('heroAttack', { target: { kind: 'minion', instanceId: minion.instanceId } });
+        heroSelected = false;
+      }
+      return;
+    }
     openInspector(inspectCard(minion));
   }
 
   function onEnemyHero() {
-    if (swallowClick || !myTurn || !activeAttacker || !heroTargetable) return;
-    dispatch('attack', { instanceId: activeAttacker, target: { kind: 'hero' } });
-    selectedId = null;
+    if (swallowClick) return;
+    if (aiming) {
+      if (canAimFoeHero) castAt({ kind: 'hero', side: 'foe' });
+      else cancelAim();
+      return;
+    }
+    if (!myTurn) return;
+    // An armed hero swinging takes precedence over a selected minion: it is the
+    // only thing the hero portrait can do on the attacking side.
+    if (activeAttacker && heroTargetable) {
+      dispatch('attack', { instanceId: activeAttacker, target: { kind: 'hero' } });
+      selectedId = null;
+      return;
+    }
+    if (view.me.canHeroAttack && heroSelected) {
+      dispatch('heroAttack', { target: { kind: 'hero' } });
+      heroSelected = false;
+    }
+  }
+
+  /** Tapping your own hero arms it; the next click on a legal target swings. */
+  let heroSelected = false;
+
+  function onMyHero() {
+    if (swallowClick) return;
+    if (aiming) {
+      if (canAimMyHero) castAt({ kind: 'hero', side: 'me' });
+      else cancelAim();
+      return;
+    }
+    if (myTurn && view.me.canHeroAttack) heroSelected = !heroSelected;
   }
 
   function onEndTurn() {
@@ -483,6 +572,7 @@
   on:pointermove={onPointerMove}
   on:pointerup={onPointerUp}
   on:pointercancel={onPointerCancel}
+  on:keydown={onWindowKey}
 />
 
 <main class="table" class:quaking style:--fit={fit.toFixed(3)}>
@@ -509,7 +599,8 @@
         side="foe"
         health={view.foe.health}
         armor={view.foe.armor}
-        targetable={heroTargetable}
+        weapon={view.foe.weapon}
+        targetable={heroTargetable || (aiming !== null && canAimFoeHero)}
         hit={hitHero === 'foe'}
         on:click={onEnemyHero}
       />
@@ -529,7 +620,8 @@
     {#each view.foe.board as minion (minion.instanceId)}
       <MinionView
         minion={minion}
-        targetable={targetableIds.has(minion.instanceId)}
+        targetable={targetableIds.has(minion.instanceId) ||
+          (aiming !== null && chosenMinionIds.has(minion.instanceId))}
         summoning={summoningId === minion.instanceId}
         struck={struckIds.has(minion.instanceId)}
         dying={dyingIds.has(minion.instanceId)}
@@ -544,6 +636,14 @@
     <span class="rule"></span>
   </div>
 
+  {#if aiming}
+    <!-- The card is not spent until a target lands, so cancelling costs nothing. -->
+    <div class="aiming">
+      <span>Choose a target for {aiming.card.name}</span>
+      <button on:click={cancelAim}>Cancel</button>
+    </div>
+  {/if}
+
   <section class="board mine" class:drop-open={drag?.kind === 'card'} bind:this={myBoardEl}>
     {#each view.me.board as minion, i (minion.instanceId)}
       {#if drag?.kind === 'card' && drag.slot === i}
@@ -552,6 +652,7 @@
       <MinionView
         minion={minion}
         ready={myTurn && canAttackFromView(minion)}
+        targetable={aiming !== null && chosenMinionIds.has(minion.instanceId)}
         selected={selectedId === minion.instanceId ||
           (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
         summoning={summoningId === minion.instanceId}
@@ -579,7 +680,11 @@
         side="you"
         health={view.me.health}
         armor={view.me.armor}
+        weapon={view.me.weapon}
+        armed={myTurn && view.me.canHeroAttack}
+        targetable={aiming !== null && canAimMyHero}
         hit={hitHero === 'me'}
+        on:click={onMyHero}
       />
     </div>
 
@@ -811,6 +916,42 @@
   }
 
   /* The space the dragged card would take, so the row opens where you aim. */
+  /* Sits on the centre line, where the eye already is while choosing. */
+  .aiming {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--frame-lit);
+    background: rgba(19, 13, 8, .95);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, .6);
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+  }
+
+  .aiming button {
+    padding: 5px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--ink-2);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 9.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+  .aiming button:hover { border-color: var(--frame-lit); color: var(--gold-bright); }
+
   .drop-gap {
     width: 96px;
     height: 116px;

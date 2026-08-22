@@ -24,7 +24,8 @@ are. Read it first, then this. Keep both current.
 npm install && npx svelte-kit sync && npm test && npm run check
 ```
 
-   Baseline after Phase 5 (2026-08-22): **278 tests pass, `svelte-check` reports 0 errors.**
+   Baseline after Phase 1B (2026-08-22): **313 tests pass, `svelte-check` reports 0 errors.**
+   **Every phase is complete.** Hero powers are the one deliberate omission.
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -45,7 +46,7 @@ ticked, and continue.
 | Phase | Title | Covers list items | Depends on | Status |
 |---|---|---|---|---|
 | [1](PHASE-1-CARD-SET.md) | The SL card set | 5, 9, 10, 11 + follow-ups 1, 2, 4, 5 | — | **Done** 2026-08-21 |
-| [1B](PHASE-1B-SPELLS-WEAPONS.md) | Spells, weapons, targeting | follow-up 3 | 1 | Not started |
+| [1B](PHASE-1B-SPELLS-WEAPONS.md) | Spells, weapons, targeting | follow-up 3 | 1 | **Done** 2026-08-22 (hero powers deferred) |
 | [2](PHASE-2-TABLE-UX.md) | Table & card UX | 2, 7, 8, 13 | — (light overlap w/ 1) | **Done** 2026-08-21 |
 | [3](PHASE-3-ACCOUNTS.md) | Accounts & server state | (enables 3, 4, 6) | 1 | **Done** 2026-08-22 |
 | [4](PHASE-4-ECONOMY.md) | Gold, packs, quests, card backs | 3, 4, 6, 12, 14 + follow-up 5 | 1, 1B, 2, 3 | **Done** 2026-08-22 |

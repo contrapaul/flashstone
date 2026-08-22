@@ -24,7 +24,11 @@ export type GameEvent =
   | { type: 'freeze'; instanceId: string }
   | { type: 'silence'; instanceId: string }
   | { type: 'buff'; instanceId: string }
-  | { type: 'turn'; owner: PlayerId };
+  | { type: 'turn'; owner: PlayerId }
+  /** A weapon was equipped, swung, or destroyed. */
+  | { type: 'equip'; owner: PlayerId }
+  | { type: 'heroAttack'; owner: PlayerId }
+  | { type: 'weaponBreak'; owner: PlayerId };
 
 /** Milliseconds the UI should hold on each cue before applying the next. */
 export const EVENT_BEAT: Record<GameEvent['type'], number> = {
@@ -37,5 +41,8 @@ export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   freeze: 300,
   silence: 300,
   buff: 260,
-  turn: 1300
+  turn: 1300,
+  equip: 320,
+  heroAttack: 260,
+  weaponBreak: 320
 };

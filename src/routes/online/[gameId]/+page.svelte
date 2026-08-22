@@ -6,7 +6,7 @@
   import { RemoteSource } from '$lib/net/source';
   import { emptyView } from '$lib/net/view';
   import type { GameEvent } from '$lib/engine/events';
-  import type { PlayerView, TargetRef } from '$lib/net/protocol';
+  import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
   import type { MatchStatus } from '$lib/net/source';
   import { lobbyCall } from '$lib/net/client';
 
@@ -70,8 +70,12 @@
 
   onDestroy(() => source?.destroy());
 
-  function onPlayCard(event: CustomEvent<{ handIndex: number; slot?: number }>) {
-    source?.playCard(event.detail.handIndex, event.detail.slot);
+  function onPlayCard(event: CustomEvent<{ handIndex: number; slot?: number; target?: ChosenRef }>) {
+    source?.playCard(event.detail.handIndex, event.detail.slot, event.detail.target);
+  }
+
+  function onHeroAttack(event: CustomEvent<{ target: TargetRef }>) {
+    source?.heroAttack(event.detail.target);
   }
 
   function onAttack(event: CustomEvent<{ instanceId: string; target: TargetRef }>) {
@@ -130,6 +134,7 @@
     overAction="Back to lobby"
     on:playCard={onPlayCard}
     on:attack={onAttack}
+    on:heroAttack={onHeroAttack}
     on:endTurn={() => source?.endTurn()}
     on:overAction={() => (location.href = '/online')}
   />
