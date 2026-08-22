@@ -35,7 +35,11 @@ async function mintTicket(gameId: string): Promise<{ ticket: string; realtimeUrl
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message ?? 'Could not get a connection ticket.');
   }
-  return res.json();
+  const data = await res.json();
+  // A trailing slash on REALTIME_URL would build `//lobby/create`, which the
+  // Worker's `startsWith('/lobby/')` route check does not match — a 404 with no
+  // obvious cause. Normalising here means the secret can be pasted either way.
+  return { ...data, realtimeUrl: String(data.realtimeUrl ?? '').replace(/\/+$/, '') };
 }
 
 /** Lobby calls go straight to the realtime Worker, authenticated by ticket. */
