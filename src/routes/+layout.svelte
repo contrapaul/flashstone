@@ -21,6 +21,16 @@
     { href: '/learn', label: 'Learn' }
   ];
 
+  /**
+   * A match is played with no chrome around it: no nav, no deck label, nothing
+   * but the table. Keyed on the route rather than on a store, because these two
+   * routes **are** the game — there is no state in which `/play` is open and a
+   * match is not being played.
+   *
+   * `/online` itself is the lobby, not a match; only a room under it counts.
+   */
+  $: inMatch = $page.url.pathname === '/play' || /^\/online\/.+/.test($page.url.pathname);
+
   let deckLabel = '';
   /** Set when today's login bonus was just paid, so the nav can say so once. */
   let dailyBonus = 0;
@@ -52,38 +62,50 @@
   });
 </script>
 
-<nav>
-  <a class="brand" href="/">Flashstone</a>
-  <div class="links">
-    {#each links as link}
-      <a href={link.href} class:active={$page.url.pathname === link.href}>{link.label}</a>
-    {/each}
-  </div>
-  <span class="deck">{deckLabel}</span>
+{#if !inMatch}
+  <nav>
+    <a class="brand" href="/">Flashstone</a>
+    <div class="links">
+      {#each links as link}
+        <a href={link.href} class:active={$page.url.pathname === link.href}>{link.label}</a>
+      {/each}
+    </div>
+    <span class="deck">{deckLabel}</span>
 
-  {#if dailyBonus > 0}
-    <button class="bonus" on:click={() => (dailyBonus = 0)} title="Dismiss">
-      +{dailyBonus}g daily bonus
-    </button>
-  {/if}
+    {#if dailyBonus > 0}
+      <button class="bonus" on:click={() => (dailyBonus = 0)} title="Dismiss">
+        +{dailyBonus}g daily bonus
+      </button>
+    {/if}
 
-  {#if !$account.loading}
-    <a class="account" class:signed-in={$account.user} href="/account">
-      {#if $account.user}
-        <span class="gold">{$account.gold}g</span>
-        <span class="who">{$account.user.username}</span>
-      {:else}
-        <span class="who">Sign in</span>
-      {/if}
-    </a>
-  {/if}
+    {#if !$account.loading}
+      <a class="account" class:signed-in={$account.user} href="/account">
+        {#if $account.user}
+          <span class="gold">{$account.gold}g</span>
+          <span class="who">{$account.user.username}</span>
+        {:else}
+          <span class="who">Sign in</span>
+        {/if}
+      </a>
+    {/if}
 
-  <SettingsMenu />
-</nav>
+    <SettingsMenu />
+  </nav>
+{/if}
 
-<slot />
+<!--
+  The wrapper exists to publish `--chrome`: the height the nav takes off the
+  viewport, which the match table subtracts to size itself. Hiding the nav
+  without this would leave a 55px strip of nothing under the table.
+-->
+<div class="shell" class:in-match={inMatch}>
+  <slot />
+</div>
 
 <style>
+  .shell { --chrome: 55px; }
+  .shell.in-match { --chrome: 0px; }
+
   nav {
     position: relative;
     z-index: 40;

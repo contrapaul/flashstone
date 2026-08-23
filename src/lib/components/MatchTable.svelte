@@ -25,6 +25,8 @@
   import type { ChosenRef } from '../net/protocol';
   import type { Card } from '../../types/cards';
   import { sceneUrl } from '../../utils/art';
+  import GameMenu from './GameMenu.svelte';
+  import { goto } from '$app/navigation';
 
   /**
    * The painted backdrop, when one has been dropped into `static/art/scene/`.
@@ -33,6 +35,9 @@
    */
   const tableArt = sceneUrl('table');
   const portraitArt = sceneUrl('table-portrait');
+
+  /** The in-game menu. A match hides the nav, so this is the only way out. */
+  let menuOpen = false;
 
   /**
    * The table. **One board for both modes.**
@@ -98,8 +103,14 @@
     handHeight = window.innerHeight;
   }
 
+  /*
+   * The table is the whole viewport during a match — the nav is hidden — so the
+   * scale is measured against the full height. It used to subtract 55px for a
+   * nav that is no longer there, which left the board scaled for a window
+   * smaller than the one it has.
+   */
   const DESIGN_HEIGHT = 824;
-  $: fit = Math.max(0.7, Math.min(1, (handHeight - 55) / DESIGN_HEIGHT));
+  $: fit = Math.max(0.7, Math.min(1, handHeight / DESIGN_HEIGHT));
   const RAIL_MIN_WIDTH = 1500;
   $: railed = handWidth >= RAIL_MIN_WIDTH;
 
@@ -316,10 +327,38 @@
   }
 
   /** Escape backs out of aiming or an armed hero without spending anything. */
+  /**
+   * Escape, in the order a player expects it to work: back out of the innermost
+   * thing first, and only open the menu when there is nothing left to back out
+   * of. The inspector closes itself, so this stands aside for it rather than
+   * closing the card and opening the menu in the same keystroke.
+   *
+   * Bound with `|capture` for exactly that reason. Both this and the inspector
+   * listen on `window`, and in the bubble phase the inspector's listener ran
+   * first — it had already set `inspected` to null by the time this checked it,
+   * so one keypress closed the card *and* opened the menu. Capture runs this
+   * before any of them, while the state it is reading is still true.
+   */
   function onWindowKey(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;
-    cancelAim();
-    heroSelected = false;
+    if (inspected) return;
+
+    if (menuOpen) {
+      menuOpen = false;
+      return;
+    }
+    if (aiming || aimingPower || heroSelected || drag) {
+      cancelAim();
+      heroSelected = false;
+      return;
+    }
+    menuOpen = true;
+  }
+
+  /** Leaves the match. Both routes destroy their source on unmount. */
+  function quitToMenu() {
+    menuOpen = false;
+    void goto('/');
   }
 
   function castAt(target: ChosenRef) {
@@ -636,7 +675,7 @@
   on:pointermove={onPointerMove}
   on:pointerup={onPointerUp}
   on:pointercancel={onPointerCancel}
-  on:keydown={onWindowKey}
+  on:keydown|capture={onWindowKey}
 />
 
 <main
@@ -647,6 +686,13 @@
   style:--scene-portrait={portraitArt ? `url("${portraitArt}")` : 'none'}
 >
   <div class="vignette" aria-hidden="true"></div>
+
+  <!--
+    What is left of the header. The nav is hidden for the length of a match, so
+    the wordmark stays behind as the way back to it — pressing it does what
+    pressing the header always did.
+  -->
+  <button class="brand" on:click={() => (menuOpen = true)} title="Menu (Esc)">Flashstone</button>
 
   <section class="hero-row foe">
     <div class="foe-hand" aria-hidden="true">
@@ -716,12 +762,11 @@
     board it acts on. The phase label keeps its place at the end of the line.
   -->
   <div class="centre">
+    <span class="phase">{phase}</span>
     <span class="rule"></span>
     <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
       {myTurn ? 'End Turn' : 'Waiting'}
     </button>
-    <span class="rule"></span>
-    <span class="phase">{phase}</span>
   </div>
 
   {#if aiming || aimingPower}
@@ -833,6 +878,12 @@
   <TurnBanner text={banner} />
   <Chronicle lines={view.log} rail={railed} />
 
+  <GameMenu
+    open={menuOpen}
+    on:close={() => (menuOpen = false)}
+    on:quit={quitToMenu}
+  />
+
   {#if overTitle}
     <div class="overlay">
       <div class="result">
@@ -865,10 +916,11 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    /* border-box so the padding sits inside the height, and 55px because
-       the nav is 54px tall plus a 1px bottom border. */
+    /* border-box so the padding sits inside the height. `--chrome` is published
+       by the layout shell: 55px (a 54px nav plus its border) off a match, 0
+       during one, when the nav is hidden and the table has the viewport. */
     box-sizing: border-box;
-    height: calc(100vh - 55px);
+    height: calc(100vh - var(--chrome, 55px));
     /* 12px, not 10: the hand cards' stat gems overhang the card frame. */
     padding-bottom: 12px;
     overflow: hidden;
@@ -921,6 +973,33 @@
       background: var(--scene-portrait, var(--scene, none)) center / cover no-repeat,
         var(--field-base);
     }
+  }
+
+  /*
+   * Sits where the nav's wordmark did, so the eye finds it in the place it
+   * already knows. Quiet until hovered: it is a way out, not a call to action.
+   */
+  .brand {
+    position: absolute;
+    top: 10px;
+    left: 18px;
+    z-index: 60;
+    padding: 4px 6px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--field-ink) 80%, transparent);
+    transition: color .16s ease, border-color .16s ease;
+  }
+  .brand:hover {
+    border-color: color-mix(in srgb, var(--field-ink) 30%, transparent);
+    color: var(--field-ink);
   }
 
   .vignette {
@@ -1165,14 +1244,13 @@
   .table.quaking { animation: fs-quake .5s ease-out; }
 
   /*
-   * Three tracks, so the button is centred on the table's own midline rather
-   * than on whatever space the phase label leaves over. The label is taken out
-   * of flow for the same reason.
+   * Phase label, rule, then the button hard right — the button belongs on the
+   * centre line, which is where the turn changes hands, but not in the middle
+   * of it, where it sat on the axis every attack is dragged along.
    */
   .centre {
     position: relative;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
     align-items: center;
     gap: 16px;
     /* Just tall enough for the button. The row is inside a height-locked
@@ -1189,8 +1267,6 @@
   }
 
   .phase {
-    position: absolute;
-    right: 28px;
     font-family: var(--display);
     font-size: 10px;
     letter-spacing: .3em;

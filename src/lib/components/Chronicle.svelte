@@ -52,7 +52,8 @@
   .chronicle {
     position: absolute;
     left: 18px;
-    top: 12px;
+    /* Below the Flashstone mark, which stands in for the hidden nav. */
+    top: 40px;
     z-index: 35;
     width: 230px;
     padding: 11px 13px;

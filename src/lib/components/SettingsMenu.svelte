@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { settings } from '../settings';
+  import SettingsControls from './SettingsControls.svelte';
 
-  /** The nav's settings popover. Small on purpose — one setting today. */
+  /**
+   * The nav's settings popover. The settings themselves live in
+   * `SettingsControls`, because the in-game menu shows the same ones.
+   */
   let open = false;
   let root: HTMLElement | undefined;
-
-  // SSR renders the defaults; storage is only readable once mounted.
-  onMount(() => settings.hydrate());
 
   function onWindowPointerDown(event: PointerEvent) {
     if (!open || !root) return;
@@ -28,20 +27,7 @@
 
   {#if open}
     <div class="panel">
-      <label class="row">
-        <input
-          type="checkbox"
-          checked={$settings.definitionsInGame}
-          on:change={() => settings.toggle('definitionsInGame')}
-        />
-        <span>
-          <span class="label">Show definitions in game</span>
-          <span class="note">
-            Shows a term's meaning beside a card when you click it during a match. The
-            collection and review always show definitions.
-          </span>
-        </span>
-      </label>
+      <SettingsControls />
     </div>
   {/if}
 </div>
@@ -81,34 +67,4 @@
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
   }
 
-  .row {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    cursor: pointer;
-  }
-
-  .row input {
-    flex: 0 0 auto;
-    width: 15px;
-    height: 15px;
-    margin-top: 2px;
-  }
-
-  .label {
-    display: block;
-    font-family: var(--body);
-    font-size: 14px;
-    color: var(--text);
-  }
-
-  .note {
-    display: block;
-    margin-top: 4px;
-    font-family: var(--body);
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: var(--text-faint);
-    text-wrap: pretty;
-  }
 </style>
