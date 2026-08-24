@@ -43,6 +43,10 @@ ids also live in `src/lib/data/slTerms.ts`; to see them with their stats, run
 > A card with no file keeps its generated gradient and its letter sigil. Once a
 > file exists the sigil is hidden automatically.
 
+Summoned **tokens** live here too, under their `token-` prefixed ids — they are
+not in `slTerms.ts` or the collection, so their ids come from
+`src/lib/data/tokens.ts`. `FILENAMES.md` lists all five.
+
 ## 2. Card backs — `art/backs/<back-id>.webp`
 
 | | |

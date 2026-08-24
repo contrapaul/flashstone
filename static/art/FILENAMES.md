@@ -1,6 +1,6 @@
 # Art filenames to draw
 
-Generated from the shipped card set on 2026-08-22. **210 cards, 5 card backs,
+Generated from the shipped card set on 2026-08-22. **210 cards, 5 tokens, 5 card backs,
 2 backdrops, 13 UI marks.** Every one is optional — a missing file keeps the
 generated gradient, so this list can be worked through in any order and the
 game never breaks partway.
@@ -81,6 +81,32 @@ fifteen cards anyone sees and the deck they play their first match with.
 - [ ] `research-question.webp` — Research Question · Common · Minion · A2.1
 - [ ] `task-analysis.webp` — Task Analysis · Uncommon · Minion · A2.1
 - [ ] `research-stage.webp` — Research Stage · Common · Minion · A2.1
+
+---
+
+## Tokens — 5 files, `art/cards/` · 640 × 480
+
+Tokens are summoned onto the board, never drawn and never collected, so they are
+**not** in the 210 above and never appear in a pack or on the collection screen.
+They still render through `art/cards/<id>.webp` like any other card, and the
+Designer sees one every turn they use their hero power — so these earn their art
+faster than most of Tier 4.
+
+The `token-` prefix is part of the id, and therefore part of the filename.
+
+- [x] `token-rechargeable-battery.webp` — Rechargeable Battery · 0/2 · Designer
+      Design Idea · heals all friendly minions 1 at end of turn
+- [ ] `token-oled-screen.webp` — OLED Screen · 1/1 · Designer Design Idea · no text
+- [ ] `token-reinforced-frame.webp` — Reinforced Frame · 0/2 · Designer Design
+      Idea · Taunt
+- [ ] `token-overclocked-cpu.webp` — Overclocked CPU · 0/2 · Designer Design
+      Idea · Spell Damage +1
+- [ ] `token-study-note.webp` — Study Note · 1/1 · the generic token any
+      `SummonToken` effect produces when it names none, so it can appear in any deck
+
+The four Design Ideas are one set: the hero power summons whichever the player
+does not already have out, so all four are seen side by side and should read as
+a family. Study Note belongs to no class and should read as neutral.
 
 ---
 
@@ -365,8 +391,9 @@ file of anything in the set.
 | 2 — class cards | 40 |
 | 3 — Neutral Legendaries | 5 |
 | 4 — remaining Neutral cards | 150 |
-| **Card illustrations total** | **210** |
-| **Everything** | **220** |
+| **Collectible card illustrations** | **210** |
+| Tokens — summoned, not collected | 5 |
+| **Everything** | **225** |
 
 Plus ten further `art/ui/` marks that are specified and indexed but not yet
 read by any component — `mana-crystal`, `mana-crystal-spent`, `taunt`,
