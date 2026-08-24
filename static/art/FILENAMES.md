@@ -256,7 +256,7 @@ file of anything in the set.
 - [ ] `composite-material.webp` — Composite Material · Common · Spell · A3.1
 - [ ] `density.webp` — Density · Uncommon · Minion · A3.1
 - [ ] `flammability.webp` — Flammability · Common · Minion · A3.1
-- [ ] `glass.webp` — Glass · Common · Spell · A3.1
+- [x] `glass.webp` — Glass · Common · Spell · A3.1
 - [ ] `natural-materials.webp` — Natural Materials · Rare · Minion · A3.1
 - [ ] `plasticity.webp` — Plasticity · Common · Minion · A3.1
 - [ ] `polymer.webp` — Polymer · Uncommon · Minion · A3.1
@@ -279,7 +279,7 @@ file of anything in the set.
 - [ ] `memorability-usability.webp` — Memorability (Usability) · Uncommon · Minion · B1.1
 - [ ] `user.webp` — User · Uncommon · Minion · B1.1
 - [ ] `efficiency-usability.webp` — Efficiency (Usability) · Common · Minion · B1.1
-- [ ] `environment.webp` — Environment · Common · Spell · B1.1
+- [x] `environment.webp` — Environment · Common · Spell · B1.1
 - [ ] `usability-objectives.webp` — Usability Objectives · Rare · Spell · B1.1
 - [ ] `usability.webp` — Usability · Rare · Minion · B1.1
 
@@ -345,7 +345,7 @@ file of anything in the set.
 ### C3.1 — 3 cards
 
 - [ ] `reverse-engineering.webp` — Reverse Engineering · Common · Minion · C3.1
-- [ ] `swot-analysis.webp` — SWOT Analysis · Common · Minion · C3.1
+- [x] `swot-analysis.webp` — SWOT Analysis · Common · Minion · C3.1
 - [ ] `constructive-discontent.webp` — Constructive Discontent · Common · Minion · C3.1
 
 ### C4.1 — 4 cards
