@@ -12,24 +12,32 @@
 
   // /import is deliberately absent: the import mechanic is shelved in favour of
   // the built-in SL card set. The route and its parsers remain on disk.
+  //
+  // Online and Learn are absent for a different reason: they are tabs of the
+  // New Game screen now, not destinations of their own.
   const links = [
     { href: '/play', label: 'Play' },
-    { href: '/online', label: 'Online' },
     { href: '/decks', label: 'Collection' },
     { href: '/review', label: 'Review' },
-    { href: '/shop', label: 'Shop' },
-    { href: '/learn', label: 'Learn' }
+    { href: '/shop', label: 'Shop' }
   ];
 
   /**
    * A match is played with no chrome around it: no nav, no deck label, nothing
    * but the table. Keyed on the route rather than on a store, because these two
-   * routes **are** the game — there is no state in which `/play` is open and a
-   * match is not being played.
+   * routes **are** the game — there is no state in which `/play/ai` is open and
+   * a match is not being played.
    *
-   * `/online` itself is the lobby, not a match; only a room under it counts.
+   * `/play` itself is the New Game screen, not a match; only `/play/ai` and a
+   * room under `/online/` count.
    */
-  $: inMatch = $page.url.pathname === '/play' || /^\/online\/.+/.test($page.url.pathname);
+  $: inMatch = $page.url.pathname === '/play/ai' || /^\/online\/.+/.test($page.url.pathname);
+
+  /** `/play` stays lit for its tabs and for the match under it. */
+  const isActive = (href: string) =>
+    href === '/play'
+      ? $page.url.pathname === '/play' || $page.url.pathname.startsWith('/play/')
+      : $page.url.pathname === href;
 
   let deckLabel = '';
   /** Set when today's login bonus was just paid, so the nav can say so once. */
@@ -67,7 +75,7 @@
     <a class="brand" href="/">Flashstone</a>
     <div class="links">
       {#each links as link}
-        <a href={link.href} class:active={$page.url.pathname === link.href}>{link.label}</a>
+        <a href={link.href} class:active={isActive(link.href)}>{link.label}</a>
       {/each}
     </div>
     <span class="deck">{deckLabel}</span>

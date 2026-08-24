@@ -132,7 +132,7 @@
   <div class="notice panel">
     <h1>Could not join</h1>
     <p>{error}</p>
-    <a class="cta" href="/online">Back to the lobby</a>
+    <a class="cta" href="/play?mode=online">Back to the lobby</a>
   </div>
 {:else}
   {#if status.kind === 'waiting'}
@@ -157,7 +157,7 @@
     on:heroAttack={onHeroAttack}
     on:heroPower={onHeroPower}
     on:endTurn={() => source?.endTurn()}
-    on:overAction={() => (location.href = '/online')}
+    on:overAction={() => (location.href = '/play?mode=online')}
   />
 {/if}
 
