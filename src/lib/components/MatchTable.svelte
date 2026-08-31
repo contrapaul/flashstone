@@ -143,6 +143,27 @@
         ? 'your move'
         : 'opponent';
 
+  /**
+   * The turn clock.
+   *
+   * The room already sends `turnEndsIn` with every state push, but state only
+   * arrives when something happens — so the number has to be ticked here or it
+   * would sit unchanged for a whole turn. A local match sends 0 and shows no
+   * clock at all: there is nothing to run out.
+   */
+  let secondsLeft = 0;
+  $: secondsLeft = view.turnEndsIn;
+  $: showClock = view.turnEndsIn > 0 && !view.winner;
+
+  // Guarded like the resize listener below: this component is server-rendered,
+  // and a timer started there would tick with nothing to tick for.
+  const clockTimer =
+    typeof window === 'undefined'
+      ? undefined
+      : setInterval(() => {
+          if (secondsLeft > 0) secondsLeft -= 1;
+        }, 1000);
+
   // ── Event playback ────────────────────────────────────────
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -666,6 +687,7 @@
   }
 
   onDestroy(() => {
+    if (clockTimer) clearInterval(clockTimer);
     if (typeof window !== 'undefined') window.removeEventListener('resize', onResize);
   });
   if (typeof window !== 'undefined') window.addEventListener('resize', onResize);
@@ -764,6 +786,11 @@
   <div class="centre">
     <span class="phase">{phase}</span>
     <span class="rule"></span>
+    {#if showClock}
+      <span class="clock" class:urgent={secondsLeft <= 10} aria-live="off">
+        {secondsLeft}s
+      </span>
+    {/if}
     <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
       {myTurn ? 'End Turn' : 'Waiting'}
     </button>
@@ -1274,6 +1301,16 @@
     white-space: nowrap;
     color: var(--field-ink);
   }
+
+  .clock {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .clock.urgent { color: var(--blood); }
 
   .end-turn {
     padding: 10px 24px;

@@ -14,6 +14,8 @@ export default defineConfig({
     }
   },
   test: {
-    include: ['src/**/*.test.ts']
+    // The realtime Worker is covered too: its Durable Objects hold the match
+    // sequencing, which is not reachable from anything under src/.
+    include: ['src/**/*.test.ts', 'workers/**/*.test.ts']
   }
 });

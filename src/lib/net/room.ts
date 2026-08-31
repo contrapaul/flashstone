@@ -44,7 +44,7 @@ import type {
  * `playCard` / `attack` / `endTurn` return their own verdict.
  */
 
-export const TURN_SECONDS = 75;
+export const TURN_SECONDS = 60;
 /** Missing this many turns in a row concedes. */
 export const MAX_MISSED_TURNS = 2;
 

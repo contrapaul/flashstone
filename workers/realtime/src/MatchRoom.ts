@@ -85,9 +85,8 @@ export class MatchRoom {
     server.addEventListener('close', drop);
     server.addEventListener('error', drop);
 
-    this.send(seat, { type: 'joined', you: side, opponent: this.opponentInfo(side) });
-
     if (this.sides.size < 2) {
+      this.send(seat, { type: 'joined', you: side, opponent: null });
       this.send(seat, { type: 'waiting' });
     } else {
       // A failure here — a database blip, a missing deck — must not take the
@@ -95,6 +94,12 @@ export class MatchRoom {
       // of a connection that refuses to open for no stated reason.
       try {
         if (!this.match) await this.start();
+        // **Both** seats are told the match is on, not just the one that just
+        // arrived. The player who got here first was last told `waiting`, and
+        // nothing else ever revises that: their board stays uninteractive for
+        // the whole match, so they cannot move, time out turn after turn, and
+        // lose on the missed-turn rule without ever having been able to play.
+        this.announceStart();
         this.pushState([]);
       } catch (e) {
         console.error('Failed to start match:', e);
@@ -106,6 +111,22 @@ export class MatchRoom {
     }
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /**
+   * Tells every seated player the match is underway, and who they are facing.
+   *
+   * Sent per seat rather than broadcast: `you` and the opponent's details
+   * differ by side, so there is no one message that is correct for both.
+   */
+  private announceStart(): void {
+    for (const seat of this.seats.values()) {
+      this.send(seat, {
+        type: 'joined',
+        you: seat.side,
+        opponent: this.opponentInfo(seat.side)
+      });
+    }
   }
 
   private opponentInfo(side: PlayerId) {
