@@ -37,7 +37,10 @@ export const POST: RequestHandler = async (event) => {
   // Checking the most recent one here would let an illegal active deck through
   // the gate and fall over inside the match instead.
   const deck = decks.find((d) => d.id === activeId) ?? decks[0];
-  if (!deck || !isLegal({ name: deck.name, cardIds: deck.cardIds }, owned)) {
+  // Pass the deck whole. Rebuilding it as `{ name, cardIds }` drops `class`,
+  // and `deckProblems` requires a playable class — so every deck, however
+  // legal, failed this gate.
+  if (!deck || !isLegal(deck, owned)) {
     error(400, 'You need a legal 30-card deck before playing online. Build one in Collection.');
   }
 
