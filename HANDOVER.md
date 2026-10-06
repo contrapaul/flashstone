@@ -210,12 +210,17 @@ resolve automatically — there is no manual targeting in v0.1.
 
 **The event queue — why the engine looks like this.** `engine.ts` appends
 presentation cues to `state.events` at every mutation site (13 of them: draw,
-summon, attack, shield, damage, death, turn, freeze, silence, buff). The engine
-finishes mutating first; `drain()` in `play/+page.svelte` then replays the queue
-on a timeline, so an attack lunges before its target shatters. Two consequences
-to respect: the visuals lag the truth by up to a second, and `myTurn` is gated on
-`!draining` so the player cannot act mid-playback. An empty queue is valid — the
-board simply snaps. Anything that mutates state must emit, or it will not animate.
+summon, attack, shield, damage, death, turn, freeze, silence, buff, and since
+2026-10-07 `play`). The engine finishes mutating first; `drain()` in
+`MatchTable.svelte` then replays the queue on a timeline. **The table draws
+`shown`, not `view`**: each cue moves `shown` one step towards `view` through
+`applyCue` (`src/lib/presentation/apply.ts`) at the moment its animation lands,
+and the two are made equal when the drain ends. Before that, the board drew the
+final state immediately, so deaths never visibly shattered. Two consequences to
+respect: the visuals lag the truth by up to a few seconds, and `myTurn` is gated
+on `!draining` so the player cannot act mid-playback. An empty queue is valid —
+the board simply snaps. Anything that mutates state must emit, or it will not
+animate (`docs/plan/REVISIONS.md` R1 has cues carry their results).
 This replaced a synchronous-engine-that-yields design, which was judged
 considerably more work. (Recorded here 2026-08-21 when `docs/OVERHAUL.md`, whose
 work was fully applied in `8d8841b` and `b22d22a`, was retired.)

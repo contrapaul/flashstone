@@ -23,64 +23,135 @@
   $: enraged = minion.health < minion.maxHealth;
   $: taunt = minion.keywords.includes('Taunt');
   $: stealth = minion.keywords.includes('Stealth');
+
+  /**
+   * Summoning sickness, shown rather than implied. Hearthstone's "z z z": a
+   * minion that cannot swing yet looks asleep, on either side of the board.
+   */
+  $: asleep =
+    minion.summonedThisTurn && !minion.keywords.includes('Charge') && !minion.frozen && minion.attack > 0;
+
+  /** Taunt and Divine Shield are drawn as shapes, so they no longer need a label. */
+  const SHOWN_AS_SHAPE = new Set(['Taunt', 'DivineShield']);
+  $: chips = minion.keywords.filter((k) => !SHOWN_AS_SHAPE.has(k));
+
+  // The bubble bursts when the shield goes, rather than simply vanishing.
+  let hadShield = minion.divineShield;
+  let popping = false;
+  $: {
+    if (hadShield && !minion.divineShield) {
+      popping = true;
+      setTimeout(() => (popping = false), 460);
+    }
+    hadShield = minion.divineShield;
+  }
 </script>
 
-<button
-  class="minion"
-  class:ready
+<!--
+  The unit, not the button, carries the animations, so the Taunt frame behind
+  the minion shakes, lifts and shatters with it.
+-->
+<div
+  class="unit"
   class:selected
-  class:targetable
   class:summoning
   class:dying
-  class:enraged
-  class:taunt
-  class:stealth
-  class:frozen={minion.frozen}
-  class:silenced={minion.silenced}
   class:struck
-  style:--art={drawnArt
-    ? `url("${drawnArt}") center / cover no-repeat`
-    : artFor(minion.card.name)}
-  on:click
-  on:pointerdown
-  on:pointerenter
-  on:pointerleave
 >
-  {#if minion.divineShield}
-    <span class="halo" aria-hidden="true"></span>
-  {/if}
   {#if taunt}
-    <span class="crest" aria-hidden="true"></span>
+    <span class="taunt-frame" aria-hidden="true"><span></span></span>
   {/if}
 
-  <span class="ring">
-    <span class="art">
-      {#if !drawnArt}<span class="sigil">{sigil(minion.card.name)}</span>{/if}
+  <button
+    class="minion"
+    class:ready
+    class:selected
+    class:targetable
+    class:enraged
+    class:taunt
+    class:stealth
+    class:frozen={minion.frozen}
+    class:silenced={minion.silenced}
+    style:--art={drawnArt
+      ? `url("${drawnArt}") center / cover no-repeat`
+      : artFor(minion.card.name)}
+    on:click
+    on:pointerdown
+    on:pointerenter
+    on:pointerleave
+  >
+    <span class="ring">
+      <span class="art">
+        {#if !drawnArt}<span class="sigil">{sigil(minion.card.name)}</span>{/if}
+      </span>
     </span>
-  </span>
 
-  <span class="name">{minion.card.name}</span>
+    <span class="name">{minion.card.name}</span>
 
-  <span class="chips">
-    {#each minion.keywords as keyword}
-      <span class="chip {keyword.toLowerCase()}">{keyword}</span>
-    {/each}
-    {#if minion.frozen}<span class="chip frozen">Frozen</span>{/if}
-    {#if minion.silenced}<span class="chip silenced">Silenced</span>{/if}
-    {#if enraged}<span class="chip enraged">Enraged</span>{/if}
-  </span>
+    <span class="chips">
+      {#each chips as keyword}
+        <span class="chip {keyword.toLowerCase()}">{keyword}</span>
+      {/each}
+      {#if minion.frozen}<span class="chip frozen">Frozen</span>{/if}
+      {#if minion.silenced}<span class="chip silenced">Silenced</span>{/if}
+    </span>
 
-  {#if minion.frozen}<span class="ice" aria-hidden="true"></span>{/if}
-  {#if minion.silenced}<span class="wash" aria-hidden="true"></span>{/if}
+    {#if minion.frozen}<span class="ice" aria-hidden="true"></span>{/if}
+    {#if minion.silenced}<span class="wash" aria-hidden="true"></span>{/if}
 
-  <span class="attack" class:buffed={minion.buffed}><span>{minion.attack}</span></span>
-  <span class="health" class:buffed={minion.buffed}>{minion.health}</span>
-</button>
+    {#if minion.divineShield || popping}
+      <span class="bubble" class:pop={popping && !minion.divineShield} aria-hidden="true"></span>
+    {/if}
+
+    {#if asleep}
+      <span class="zzz" aria-label="Asleep — can attack next turn"><i>z</i><i>z</i><i>z</i></span>
+    {/if}
+
+    <span class="attack" class:buffed={minion.buffed}><span>{minion.attack}</span></span>
+    <span class="health" class:buffed={minion.buffed}>{minion.health}</span>
+  </button>
+</div>
 
 <style>
-  .minion {
+  .unit {
     position: relative;
     flex: 0 0 116px;
+    width: 116px;
+    transition: transform .12s ease;
+  }
+
+  .unit.selected { transform: translateY(-8px); }
+  .unit.summoning { animation: fs-summon .62s cubic-bezier(.2, 1.3, .4, 1); }
+  .unit.struck { animation: fs-shake .5s ease-out; }
+  .unit.dying { animation: fs-shatter .6s ease-in forwards; }
+
+  /*
+   * Taunt: the Hearthstone silhouette — a heavy shield standing behind the
+   * minion, wider than it and pointed below, so a Taunt wall reads from across
+   * the room without a word on it. Two clipped layers make the rim and the face.
+   */
+  .taunt-frame {
+    position: absolute;
+    left: -12px;
+    right: -12px;
+    top: -11px;
+    bottom: -17px;
+    clip-path: polygon(10% 0, 90% 0, 100% 9%, 100% 60%, 50% 100%, 0 60%, 0 9%);
+    background: linear-gradient(180deg, #f1dca6, #9c7f4c 45%, #5b4527);
+    pointer-events: none;
+  }
+
+  .taunt-frame span {
+    position: absolute;
+    inset: 4px;
+    clip-path: inherit;
+    background:
+      linear-gradient(160deg, rgba(255, 255, 255, .22), transparent 40%),
+      linear-gradient(180deg, #7d7a74, #4f4c47 50%, #2f2c28);
+  }
+
+  .minion {
+    position: relative;
     width: 116px;
     height: 134px;
     padding: 8px 0 0;
@@ -117,7 +188,6 @@
   .minion.ready { cursor: pointer; animation: fs-ready 1.9s ease-in-out infinite; }
 
   .minion.selected {
-    transform: translateY(-8px);
     border: 2px solid var(--gold-bright);
     box-shadow: 0 16px 30px rgba(0, 0, 0, .6), 0 0 26px rgba(240, 214, 138, .65);
   }
@@ -128,30 +198,76 @@
     box-shadow: 0 10px 22px rgba(0, 0, 0, .6), 0 0 22px rgba(226, 96, 74, .6);
   }
 
-  .minion.summoning { animation: fs-summon .62s cubic-bezier(.2, 1.3, .4, 1); }
-  .minion.struck { animation: fs-shake .5s ease-out; }
-  .minion.dying { animation: fs-shatter .6s ease-in forwards; }
-
-  .halo {
+  /*
+   * Divine Shield: a golden bubble around the whole minion, with light sliding
+   * across it. Drawn over the portrait at low alpha; the stat gems sit above it
+   * so the numbers never fog.
+   */
+  .bubble {
     position: absolute;
-    inset: -4px;
-    border-radius: 14px;
-    border: 2px solid #f6dd93;
-    box-shadow: 0 0 14px rgba(246, 221, 147, .75), inset 0 0 12px rgba(246, 221, 147, .4);
+    z-index: 2;
+    inset: -9px -8px -7px;
+    border-radius: 30px;
+    border: 2px solid rgba(255, 228, 140, .95);
+    background: radial-gradient(70% 60% at 50% 40%, transparent 55%, rgba(255, 214, 110, .28) 82%, rgba(255, 236, 170, .55) 100%);
+    box-shadow: 0 0 18px rgba(255, 208, 90, .85), 0 0 34px rgba(255, 190, 60, .4),
+      inset 0 0 20px rgba(255, 222, 130, .55);
+    overflow: hidden;
     pointer-events: none;
   }
 
-  .crest {
+  .bubble::after {
+    content: '';
     position: absolute;
-    left: 50%;
-    top: -11px;
-    width: 34px;
-    height: 20px;
-    transform: translateX(-50%);
-    background: linear-gradient(#6d5738, #3b2c1a);
-    border-top: 1px solid #a98a4e;
-    clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%);
+    inset: 0;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 240, .55) 48%, transparent 60%);
+    background-size: 260% 100%;
+    animation: fs-sheen 2.8s ease-in-out infinite;
+  }
+
+  /* The burst when it breaks. */
+  .bubble.pop { animation: fs-bubble-pop .46s ease-out forwards; }
+
+  @keyframes fs-sheen {
+    0%, 100% { background-position: 130% 0; }
+    50% { background-position: -30% 0; }
+  }
+
+  @keyframes fs-bubble-pop {
+    0% { transform: scale(1); opacity: 1; filter: brightness(1.6); }
+    35% { transform: scale(1.14); opacity: .9; filter: brightness(2.4); }
+    100% { transform: scale(1.32); opacity: 0; filter: brightness(1); }
+  }
+
+  /* Asleep: three letters drifting up and off the portrait's shoulder. */
+  .zzz {
+    position: absolute;
+    z-index: 3;
+    top: 4px;
+    right: 6px;
+    width: 30px;
+    height: 34px;
     pointer-events: none;
+  }
+
+  .zzz i {
+    position: absolute;
+    font-family: var(--display);
+    font-style: normal;
+    font-weight: 700;
+    color: #f4ecd8;
+    text-shadow: 0 0 6px rgba(140, 190, 255, .9), 0 2px 3px rgba(0, 0, 0, .7);
+    opacity: 0;
+    animation: fs-zzz 2.4s ease-in-out infinite;
+  }
+  .zzz i:nth-child(1) { left: 0; bottom: 0; font-size: 11px; }
+  .zzz i:nth-child(2) { left: 8px; bottom: 9px; font-size: 14px; animation-delay: .8s; }
+  .zzz i:nth-child(3) { left: 17px; bottom: 19px; font-size: 17px; animation-delay: 1.6s; }
+
+  @keyframes fs-zzz {
+    0% { opacity: 0; transform: translate(0, 4px) scale(.7); }
+    25% { opacity: 1; }
+    100% { opacity: 0; transform: translate(6px, -10px) scale(1.1); }
   }
 
   .ring {
@@ -226,7 +342,6 @@
   .chip.divineshield { background: rgba(246, 221, 147, .9); color: #1a1207; }
   .chip.frozen { background: rgba(150, 220, 255, .85); color: #062032; }
   .chip.silenced { background: rgba(120, 110, 98, .9); color: #15110b; }
-  .chip.enraged { background: rgba(214, 84, 60, .85); color: #220905; }
 
   .ice {
     position: absolute;
@@ -250,6 +365,7 @@
   .attack,
   .health {
     position: absolute;
+    z-index: 3;
     bottom: -8px;
     width: 28px;
     height: 28px;

@@ -171,6 +171,7 @@
   bind:events
   interactive={!aiThinking}
   {deckName}
+  opponentName={aiClass}
   {overTitle}
   {overNote}
   overAction="Play again"

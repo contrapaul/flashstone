@@ -628,6 +628,17 @@ describe('armor', () => {
   });
 });
 
+describe('deck copies', () => {
+  it('gives each copy of a two-of its own object', () => {
+    const card = minionCard();
+    const state = createMatch([card, card], [card, card], 3);
+    const all = [...state.players.player.hand, ...state.players.player.deck];
+    expect(all).toHaveLength(2);
+    expect(all[0]).not.toBe(all[1]);
+    expect(all[0]).toEqual(all[1]);
+  });
+});
+
 describe('event queue', () => {
   it('starts every match with an events array', () => {
     const state = createMatch(buildDemoDeck(), buildDemoDeck(), 5);
@@ -646,6 +657,18 @@ describe('event queue', () => {
       owner: 'player',
       instanceId: state.players.player.board[0].instanceId
     });
+  });
+
+  it('emits a play cue before anything the card does', () => {
+    const state = bareMatch();
+    state.events = [];
+    const card = minionCard({ cost: 0 });
+    playCard(state, 'player', give(state, 'player', card));
+
+    const types = state.events.map((e) => e.type);
+    expect(types[0]).toBe('play');
+    expect(types.indexOf('play')).toBeLessThan(types.indexOf('summon'));
+    expect(state.events[0]).toMatchObject({ type: 'play', owner: 'player', card });
   });
 
   it('emits attack, damage and death cues for a lethal trade', () => {

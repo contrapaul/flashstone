@@ -34,6 +34,7 @@ npm install && npx svelte-kit sync && npm test && npm run check
    its own class, and an explicit choice of which one is played — also untested
    in a signed-in browser. **Migrations `0004` and `0005` are applied locally and
    not remotely.**
+   After the revisions demo cut (2026-10-07): **401 tests pass, 0 check errors.**
    If that is not what you see, fix that before starting work.
 
 6. Work one numbered step at a time. Each step names its own check. Do not proceed
@@ -62,6 +63,7 @@ ticked, and continue.
 | [6](PHASE-6-CLASSES.md) | Classes & hero powers | new 2026-08-22 | 1, 1B, 3, 4 | **Done** 2026-08-22 |
 | [7](PHASE-7-ECONOMY-TUNING.md) | Economy & shop review | — (decisions) | 4, 6 | **Decided** — one number changed, new-player package built; playing it is all that is left |
 | [8](PHASE-8-DECK-SLOTS.md) | Deck slots (10 per player) | — | 6 | **Complete** — untested in a signed-in browser |
+| [R](REVISIONS.md) | Revisions — polish, presentation and play | playtest 2026-10-07 | 1–8 | **Active** — start with its §4 demo cut |
 
 "Follow-ups" are the five clarifications Paul added on 2026-08-21, recorded in
 `DECISIONS.md` §8–§10 and in the Phase 1 and 1B steps: table text is game-text only,

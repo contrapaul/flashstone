@@ -148,7 +148,7 @@
     bind:events
     interactive={playing}
     {opponentBack}
-    deckName={opponentName}
+    {opponentName}
     {overTitle}
     {overNote}
     overAction="Back to lobby"

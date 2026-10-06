@@ -64,10 +64,14 @@ export function createMatch(
   classes: { player?: CardClass; ai?: CardClass } = {}
 ): MatchState {
   const rng = createRng(seed);
+  // Each copy becomes its own object. A deck resolved from the registry holds
+  // the *same* object twice for a two-of, and anything that tells cards in hand
+  // apart by identity — the table's keyed hand — then sees one card twice.
+  const own = (deck: Card[]) => deck.map((card) => ({ ...card }));
   const state: MatchState = {
     players: {
-      player: createPlayer('player', shuffle(rng, playerDeck), classes.player ?? 'Neutral'),
-      ai: createPlayer('ai', shuffle(rng, aiDeck), classes.ai ?? 'Neutral')
+      player: createPlayer('player', shuffle(rng, own(playerDeck)), classes.player ?? 'Neutral'),
+      ai: createPlayer('ai', shuffle(rng, own(aiDeck)), classes.ai ?? 'Neutral')
     },
     current: 'player',
     turnNumber: 0,
@@ -192,6 +196,17 @@ export function playCard(
   p.hand.splice(handIndex, 1);
   p.mana -= card.cost;
   state.log.push(`${id} plays ${card.name}.`);
+  emit(state, {
+    type: 'play',
+    owner: id,
+    card,
+    handIndex,
+    target: chosen
+      ? chosen.kind === 'hero'
+        ? { kind: 'hero', owner: chosen.owner }
+        : { kind: 'minion', instanceId: chosen.minion.instanceId }
+      : undefined
+  });
 
   let summoned: MinionInstance | undefined;
   if (card.type === 'Minion') summoned = summon(state, id, card, slot);

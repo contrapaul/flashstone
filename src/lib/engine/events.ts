@@ -1,3 +1,4 @@
+import type { Card } from '../../types/cards';
 import type { PlayerId } from './state';
 
 /**
@@ -10,6 +11,18 @@ import type { PlayerId } from './state';
  */
 export type GameEvent =
   | { type: 'draw'; owner: PlayerId }
+  /**
+   * A card left a hand. Emitted before anything it does, so the table can show
+   * it being played — the only way an opponent's spell is seen as a spell
+   * rather than as its side-effects. The card is public from this moment.
+   */
+  | {
+      type: 'play';
+      owner: PlayerId;
+      card: Card;
+      handIndex: number;
+      target?: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: PlayerId };
+    }
   | { type: 'summon'; owner: PlayerId; instanceId: string }
   /** `target` is where the attacker lunges to; the UI measures the arc from it. */
   | {
@@ -45,14 +58,17 @@ export type GameEvent =
  * permanently — a death, a summon, a hero power — gets a longer beat than
  * something that only flashes a number.
  *
- * There is no separate cue for casting a spell, a battlecry or a deathrattle:
- * each is seen through the events it emits, which is exactly why those events
- * have to breathe. A battlecry that deals 3 and kills a minion is a `damage`
+ * A card being played has its own cue (`play`), but there is no separate cue
+ * for what a spell, a battlecry or a deathrattle then *does*: each is seen
+ * through the events it emits, which is exactly why those events have to
+ * breathe. A battlecry that deals 3 and kills a minion is a `damage`
  * beat then a `death` beat, and both have to land before the next thing starts.
  */
 export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   // Frequent and low-stakes: several land in a row at the start of a turn.
   draw: 420,
+  // The table holds the reveal itself; this is only the breath after it.
+  play: 120,
   // A minion arriving is a board change worth watching land.
   summon: 620,
   // The lunge itself. Was 138ms after the multiplier — barely a twitch.

@@ -8,6 +8,11 @@ plainer but nothing breaks.
 
 ## Files to place here
 
+**Installed 2026-10-07** — the Latin subsets from Fontsource (`@fontsource/cinzel`,
+`@fontsource/eb-garamond`), with their licences as `OFL-cinzel.txt` and
+`OFL-eb-garamond.txt`. Glyphs outside Latin (the Ψ and Ω hero glyphs) fall back
+to Georgia, which is how they always rendered.
+
 Exact filenames — `flashstone.css` references these paths verbatim.
 
 | Filename | Family | Weight | Style |

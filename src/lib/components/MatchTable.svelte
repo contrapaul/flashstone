@@ -1,5 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from 'svelte';
+  import { flip } from 'svelte/animate';
+  import { gsap } from 'gsap';
   import CardPreview from './CardPreview.svelte';
   import MinionView from './MinionView.svelte';
   import HeroPortrait from './HeroPortrait.svelte';
@@ -27,6 +29,7 @@
   import { sceneUrl } from '../../utils/art';
   import GameMenu from './GameMenu.svelte';
   import { goto } from '$app/navigation';
+  import { applyCue } from '../presentation/apply';
 
   /**
    * The painted backdrop, when one has been dropped into `static/art/scene/`.
@@ -58,6 +61,8 @@
   export let interactive = true;
   export let opponentBack = 'default';
   export let deckName = '';
+  /** The opponent's username online, or the AI's class in practice. Never a seat id. */
+  export let opponentName = 'Opponent';
   /** Game-over overlay. Owned by the table so its styles are not orphaned. */
   export let overTitle: string | null = null;
   export let overNote: string | null = null;
@@ -84,6 +89,31 @@
   let floats: { id: number; text: string; color: string; x: number; y: number }[] = [];
   let floatSeq = 0;
   let draining = false;
+
+  /**
+   * The board **on screen**, which is not always the board in `view`.
+   *
+   * `view` is where the match is; `shown` is where playback has got to. The
+   * table used to draw `view` the moment it arrived and replay cues over it, so
+   * a minion that died was gone before its death cue played and a health gem
+   * dropped before the hit landed. Now each cue moves `shown` one step towards
+   * `view` as it plays (`applyCue`), and the two are made equal when playback
+   * ends — so any cue that does not yet say everything it changed is corrected
+   * there, never left wrong.
+   *
+   * The **hand** is still read from `view`: it changes only through your own
+   * plays and draws, and `pendingDraws` already holds new cards back.
+   * Legality and input read `view` too — they are only live when nothing is
+   * playing, which is exactly when the two agree.
+   */
+  let shown: PlayerView = view;
+
+  /** A card the opponent just played, held up large so it can be read. */
+  let showcase: { card: Card; key: number; from: { x: number; y: number } } | null = null;
+  let showcaseKey = 0;
+
+  const reduceMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let handWidth = 1440;
   let handHeight = 900;
   let inspected: Card | null = null;
@@ -92,6 +122,7 @@
   let foeBoardEl: HTMLElement | undefined;
   let foeHeroEl: HTMLElement | undefined;
   let myHeroEl: HTMLElement | undefined;
+  let foeHandEl: HTMLElement | undefined;
 
   if (typeof window !== 'undefined') {
     handWidth = window.innerWidth;
@@ -110,7 +141,18 @@
    * smaller than the one it has.
    */
   const DESIGN_HEIGHT = 824;
-  $: fit = Math.max(0.7, Math.min(1, handHeight / DESIGN_HEIGHT));
+  /*
+   * Big screens scale **up** as well as small ones down. Clamped at 1 the board
+   * was a small island on anything past 1440x900. Growing needs room on both
+   * axes, so width only ever limits the growth — below 1 the height alone
+   * decides, exactly as before, and iPad sizes are untouched.
+   */
+  const DESIGN_WIDTH = 1300;
+  $: growth = Math.min(handHeight / DESIGN_HEIGHT, handWidth / DESIGN_WIDTH);
+  $: fit =
+    growth > 1
+      ? Math.min(1.35, growth)
+      : Math.max(0.7, Math.min(1, handHeight / DESIGN_HEIGHT));
   const RAIL_MIN_WIDTH = 1500;
   $: railed = handWidth >= RAIL_MIN_WIDTH;
 
@@ -130,18 +172,13 @@
   $: pendingDraws = events.filter((e) => e.type === 'draw' && e.owner === view.you).length;
   $: visibleHand = view.me.hand.slice(0, view.me.hand.length - pendingDraws);
 
+  // With the rail out, the hand keeps clear of it on both sides — scaled up on
+  // a wide screen, ten cards would otherwise run under the log.
   $: handScale = Math.min(
     1,
-    Math.min(handWidth / fit - 90, 1260) / (Math.max(1, visibleHand.length) * 146)
+    Math.min((handWidth - (railed ? 580 : 0)) / fit - 90, 1260) /
+      (Math.max(1, visibleHand.length) * 146)
   );
-
-  $: phase = view.winner
-    ? 'match over'
-    : draining
-      ? '…'
-      : myTurn
-        ? 'your move'
-        : 'opponent';
 
   /**
    * The turn clock.
@@ -167,21 +204,87 @@
   // ── Event playback ────────────────────────────────────────
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  // Drains whenever new cues arrive.
+  // Drains whenever new cues arrive. Must stay above the line below: draining
+  // is set synchronously inside drain(), which is what keeps that line from
+  // snapping the board to the end state before playback has begun.
   $: if (events.length > 0 && !draining) void drain();
+  // With nothing to play, the board on screen is simply the view.
+  $: if (events.length === 0 && !draining) {
+    shown = view;
+    logShown = view.log.length;
+  }
+
+  /**
+   * How much of the log the Chronicle shows. It follows playback rather than
+   * the view, or it reads out the opponent's whole turn before any of it has
+   * happened on the board — locally the view even shares the engine's own
+   * log array, so it is never behind.
+   */
+  let logShown = 0;
+  $: chronicleLines = view.log.slice(0, logShown);
+
+  /** The line each cue writes, so the cue can uncover it as it plays. */
+  const LOG_LINE: Partial<Record<GameEvent['type'], RegExp>> = {
+    turn: /^— /,
+    play: / plays /,
+    heroPower: / uses /,
+    attack: / (attacks|hits) /,
+    shield: /Divine Shield/,
+    death: / dies\.$/,
+    weaponBreak: / breaks\.$/
+  };
+
+  function uncoverLog(event: GameEvent) {
+    const pattern = LOG_LINE[event.type];
+    if (!pattern) return;
+    for (let i = logShown; i < view.log.length; i++) {
+      if (pattern.test(view.log[i])) {
+        logShown = i + 1;
+        return;
+      }
+    }
+  }
+
+  /** Hits that land together: the two sides of a trade, every target of a sweep. */
+  const IMPACT = new Set<GameEvent['type']>(['damage', 'shield']);
 
   async function drain() {
     if (draining) return;
     draining = true;
+    shown = startingPoint(shown, view, events);
     while (events.length > 0) {
       rememberPositions();
       const event = events.shift() as GameEvent;
       events = events;
+      uncoverLog(event);
       await play(event);
-      await sleep(EVENT_BEAT[event.type]);
+      const together = IMPACT.has(event.type) && events[0] !== undefined && IMPACT.has(events[0].type);
+      await sleep(together ? 60 : EVENT_BEAT[event.type]);
     }
+    shown = view;
+    logShown = view.log.length;
     draining = false;
     dispatch('drained');
+  }
+
+  /**
+   * Where playback starts from. Usually the board as last shown — but a new
+   * match (the first view, or "Play again") starts from its own opening, with
+   * the cards the opening draws are about to deal still in the decks.
+   */
+  function startingPoint(from: PlayerView, to: PlayerView, queue: GameEvent[]): PlayerView {
+    const freshMatch = from.turnNumber === 0 || to.turnNumber < from.turnNumber;
+    if (!freshMatch) return { ...from, you: to.you, turnEndsIn: to.turnEndsIn };
+    logShown = 0;
+    const draws = (owner: string) => queue.filter((e) => e.type === 'draw' && e.owner === owner).length;
+    const foeId = to.you === 'player' ? 'ai' : 'player';
+    return {
+      ...to,
+      turnNumber: 0,
+      winner: null,
+      me: { ...to.me, mana: 0, maxMana: 0, deckCount: to.me.deckCount + draws(to.you) },
+      foe: { ...to.foe, mana: 0, maxMana: 0, handCount: 0, deckCount: to.foe.deckCount + draws(foeId) }
+    };
   }
 
   /** Which side of the table an event's owner is on, from this seat. */
@@ -189,14 +292,77 @@
     return owner === view.you ? 'me' : 'foe';
   }
 
+  /**
+   * Plays one cue, and moves the board on screen past it.
+   *
+   * The board steps forward at the moment the thing *lands* — after a lunge
+   * reaches its target, after a shatter finishes — which is why each case
+   * decides where in its own animation `advance` happens.
+   */
   async function play(event: GameEvent) {
+    const advance = () => (shown = applyCue(shown, event, view));
+
     switch (event.type) {
-      case 'summon':
+      case 'play': {
+        // Your own card is already where you dropped it; only the opponent's
+        // needs to be shown being played.
+        if (sideOf(event.owner) === 'me') return advance();
+        const backs = foeHandEl?.querySelectorAll<HTMLElement>('.foe-card');
+        const back = backs?.[Math.min(event.handIndex, backs.length - 1)];
+        const from = back ? centreOf(back) : { x: window.innerWidth / 2, y: 0 };
+        advance();
+        showcase = { card: event.card, key: ++showcaseKey, from };
+        await sleep(reduceMotion ? 1000 : 1350);
+        showcase = null;
+        return;
+      }
+      case 'summon': {
+        advance();
         summoningId = event.instanceId;
         // Matches the .62s summon animation. It used to clear at 260ms, which
         // cut the arrival off less than half way through it.
         setTimeout(() => (summoningId = null), 620);
-        break;
+        // A big minion lands with weight: the table jolts as it touches down.
+        const landed = [...shown.me.board, ...shown.foe.board].find((m) => m.instanceId === event.instanceId);
+        if (landed && landed.card.cost >= 6 && !reduceMotion) {
+          setTimeout(() => {
+            quaking = true;
+            setTimeout(() => (quaking = false), 500);
+          }, 300);
+        }
+        return;
+      }
+      case 'attack':
+        await lunge(unitOf(event.instanceId), targetElement(event.target));
+        return;
+      case 'heroAttack': {
+        // The cue carries no target; the hit that follows does.
+        const next = events.find(
+          (e): e is Extract<GameEvent, { type: 'damage' | 'shield' }> => e.type === 'damage' || e.type === 'shield'
+        );
+        const at = next?.type === 'damage' ? targetElement(next.target) : next ? unitOf(next.instanceId) : undefined;
+        const hero = (sideOf(event.owner) === 'me' ? myHeroEl : foeHeroEl)?.querySelector<HTMLElement>('.hero');
+        await lunge(hero ?? undefined, at);
+        return;
+      }
+      case 'death': {
+        dyingIds = new Set(dyingIds).add(event.instanceId);
+        // The shatter plays on the minion still on screen; only then is it
+        // removed. Deaths in a row shatter together rather than one by one.
+        const gone = sleep(600).then(() => {
+          shown = applyCue(shown, event, view);
+          const next = new Set(dyingIds);
+          next.delete(event.instanceId);
+          dyingIds = next;
+        });
+        if (events[0]?.type !== 'death') await gone;
+        return;
+      }
+    }
+
+    advance();
+
+    switch (event.type) {
       case 'draw': {
         if (sideOf(event.owner) !== 'me') break;
         const card = view.me.hand[view.me.hand.length - pendingDraws];
@@ -210,14 +376,6 @@
         }
         break;
       }
-      case 'attack':
-        struckIds = new Set(struckIds).add(event.instanceId);
-        setTimeout(() => {
-          const next = new Set(struckIds);
-          next.delete(event.instanceId);
-          struckIds = next;
-        }, 500);
-        break;
       case 'damage': {
         if (event.target.kind === 'hero') {
           hitHero = sideOf(event.target.owner);
@@ -239,14 +397,6 @@
         }
         break;
       }
-      case 'death':
-        dyingIds = new Set(dyingIds).add(event.instanceId);
-        setTimeout(() => {
-          const next = new Set(dyingIds);
-          next.delete(event.instanceId);
-          dyingIds = next;
-        }, 700);
-        break;
       case 'turn':
         banner = sideOf(event.owner) === 'me' ? 'Your turn' : "Opponent's turn";
         setTimeout(() => (banner = null), 900);
@@ -274,6 +424,7 @@
     positions = next;
   }
 
+  /** The DOM draws `shown`, so elements pair with its boards, not the view's. */
   function minionElements(): [HTMLElement, string][] {
     const pairs: [HTMLElement, string][] = [];
     const record = (root: HTMLElement | undefined, board: SerialisedMinion[]) => {
@@ -283,9 +434,82 @@
         if (els[i]) pairs.push([els[i], m.instanceId]);
       });
     };
-    record(myBoardEl, view.me.board);
-    record(foeBoardEl, view.foe.board);
+    record(myBoardEl, shown.me.board);
+    record(foeBoardEl, shown.foe.board);
     return pairs;
+  }
+
+  /** A minion's whole slot — the part that moves, Taunt frame and all. */
+  function unitOf(instanceId: string): HTMLElement | undefined {
+    const el = minionElements().find(([, id]) => id === instanceId)?.[0];
+    return el?.closest<HTMLElement>('.slot') ?? el;
+  }
+
+  function targetElement(
+    target: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: string }
+  ): HTMLElement | undefined {
+    if (target.kind === 'minion') return unitOf(target.instanceId);
+    const block = sideOf(target.owner) === 'me' ? myHeroEl : foeHeroEl;
+    return block?.querySelector<HTMLElement>('.hero') ?? block;
+  }
+
+  /**
+   * An attack you can see: the attacker rises, dashes most of the way to its
+   * target, holds for a beat at contact, and springs home.
+   *
+   * Resolves **at contact**, so the hit that follows lands as it arrives while
+   * the recoil plays on. Measured in the zoomed table's own pixels — a
+   * transform inside a `zoom`ed row is scaled by it, and the rects are not.
+   */
+  async function lunge(mover: HTMLElement | undefined, at: HTMLElement | undefined) {
+    if (!mover || !at || reduceMotion) return;
+    const from = centreOf(mover);
+    const to = centreOf(at);
+    const reach = 0.78;
+    gsap
+      .timeline()
+      .set(mover, { zIndex: 60 })
+      .to(mover, { scale: 1.12, y: -8, duration: 0.13, ease: 'power2.out' })
+      .to(mover, {
+        x: ((to.x - from.x) * reach) / fit,
+        y: ((to.y - from.y) * reach) / fit,
+        duration: 0.17,
+        ease: 'power3.in'
+      })
+      .to(mover, { x: 0, y: 0, scale: 1, duration: 0.32, ease: 'back.out(1.8)' }, '+=0.07')
+      .set(mover, { clearProps: 'transform,zIndex' });
+    await sleep(300);
+  }
+
+  /** The opponent's card flies up out of their hand and turns face up. */
+  function reveal(node: HTMLElement, from: { x: number; y: number }) {
+    if (reduceMotion) {
+      gsap.from(node, { opacity: 0, duration: 0.2 });
+      return;
+    }
+    const spot = centreOf(node);
+    gsap.from(node, {
+      x: from.x - spot.x,
+      y: from.y - spot.y,
+      scale: 0.3,
+      rotation: 9,
+      rotationY: -110,
+      transformPerspective: 900,
+      opacity: 0.4,
+      duration: 0.5,
+      ease: 'power3.out'
+    });
+  }
+
+  /** And leaves: a minion shrinks towards the board, a spell flares out. */
+  function vanish(_node: Element, { spell }: { spell: boolean }) {
+    return {
+      duration: reduceMotion ? 120 : 280,
+      css: (t: number) =>
+        spell
+          ? `opacity: ${t}; transform: scale(${1 + (1 - t) * 0.3}); filter: brightness(${1 + (1 - t) * 1.6})`
+          : `opacity: ${t}; transform: scale(${0.55 + 0.45 * t}) translateY(${(1 - t) * 60}px)`
+    };
   }
 
   function centreOf(el: HTMLElement) {
@@ -427,7 +651,7 @@
   }
 
   function slotAt(x: number): number {
-    if (!myBoardEl) return view.me.board.length;
+    if (!myBoardEl) return shown.me.board.length;
     const els = [...myBoardEl.querySelectorAll<HTMLElement>('.minion')];
     let slot = els.length;
     els.forEach((el, i) => {
@@ -450,7 +674,7 @@
       for (let i = 0; i < els.length; i++) {
         const rect = els[i].getBoundingClientRect();
         if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-          const id = view.foe.board[i]?.instanceId;
+          const id = shown.foe.board[i]?.instanceId;
           const match = legal.find((t) => t.kind === 'minion' && t.instanceId === id);
           return match ?? null;
         }
@@ -479,7 +703,7 @@
         drag = { kind: 'card', handIndex: press.handIndex, card, slot: view.me.board.length };
       } else {
         const attacking = press.instanceId;
-        const index = view.me.board.findIndex((m) => m.instanceId === attacking);
+        const index = shown.me.board.findIndex((m) => m.instanceId === attacking);
         const el = myBoardEl?.querySelectorAll<HTMLElement>('.minion')[index];
         drag = {
           kind: 'attack',
@@ -681,7 +905,7 @@
 
   function targetCentre(target: TargetRef) {
     if (target.kind === 'hero') return foeHeroEl ? centreOf(foeHeroEl) : pointer;
-    const index = view.foe.board.findIndex((m) => m.instanceId === target.instanceId);
+    const index = shown.foe.board.findIndex((m) => m.instanceId === target.instanceId);
     const el = foeBoardEl?.querySelectorAll<HTMLElement>('.minion')[index];
     return el ? centreOf(el) : pointer;
   }
@@ -708,6 +932,14 @@
   style:--scene-portrait={portraitArt ? `url("${portraitArt}")` : 'none'}
 >
   <div class="vignette" aria-hidden="true"></div>
+  <!--
+    Dark ground for the light to sit on. The warm field stays in the middle,
+    where the boards are; the edges and both hand areas darken, so the playable
+    glow, the mana and the card backs have something to burn against.
+  -->
+  <div class="rim" aria-hidden="true"></div>
+  <div class="tray-band foe" aria-hidden="true"></div>
+  <div class="tray-band you" aria-hidden="true"></div>
 
   <!--
     What is left of the header. The nav is hidden for the length of a match, so
@@ -717,11 +949,11 @@
   <button class="brand" on:click={() => (menuOpen = true)} title="Menu (Esc)">Flashstone</button>
 
   <section class="hero-row foe">
-    <div class="foe-hand" aria-hidden="true">
-      {#each Array(view.foe.handCount) as _, i}
+    <div class="foe-hand" aria-hidden="true" bind:this={foeHandEl}>
+      {#each Array(shown.foe.handCount) as _, i}
         <span
           class="foe-card"
-          style:transform={`rotate(${(i - (view.foe.handCount - 1) / 2) * 3.2}deg)`}
+          style:transform={`rotate(${(i - (shown.foe.handCount - 1) / 2) * 3.2}deg)`}
           style:margin-left={i ? '-58px' : '0'}
         >
           <CardBack backId={opponentBack} />
@@ -733,11 +965,11 @@
 
     <div class="hero-block" bind:this={foeHeroEl}>
       <HeroPortrait
-        label="Opponent"
+        label={opponentName}
         side="foe"
-        health={view.foe.health}
-        armor={view.foe.armor}
-        weapon={view.foe.weapon}
+        health={shown.foe.health}
+        armor={shown.foe.armor}
+        weapon={shown.foe.weapon}
         targetable={heroTargetable || ((aiming !== null || aimingPower) && canAimFoeHero)}
         hit={hitHero === 'foe'}
         on:click={onEnemyHero}
@@ -745,35 +977,39 @@
 
       <div class="hero-side">
         <div class="hero-meta">
-          <span>Opponent</span>
-          <span>Mana {view.foe.mana}/{view.foe.maxMana}</span>
+          <span class="name">{opponentName}</span>
         </div>
 
         <HeroPowerButton
-          heroClass={view.foe.heroClass}
-          used={view.foe.heroPowerUsed}
+          heroClass={shown.foe.heroClass}
+          used={shown.foe.heroPowerUsed}
           mine={false}
         />
       </div>
     </div>
 
-    <div class="deck-pile">
-      <CardBack backId={opponentBack} scale={0.34} />
-      <span class="deck-count">{view.foe.deckCount}</span>
+    <div class="foe-corner">
+      <ManaTray side="foe" mana={shown.foe.mana} maxMana={shown.foe.maxMana} />
+      <div class="deck-pile">
+        <CardBack backId={opponentBack} scale={0.34} />
+        <span class="deck-count">{shown.foe.deckCount}</span>
+      </div>
     </div>
   </section>
 
   <section class="board" bind:this={foeBoardEl}>
-    {#each view.foe.board as minion (minion.instanceId)}
-      <MinionView
-        minion={minion}
-        targetable={targetableIds.has(minion.instanceId) ||
-          ((aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId))}
-        summoning={summoningId === minion.instanceId}
-        struck={struckIds.has(minion.instanceId)}
-        dying={dyingIds.has(minion.instanceId)}
-        on:click={() => onEnemyMinion(minion)}
-      />
+    {#each shown.foe.board as minion (minion.instanceId)}
+      <div class="slot" animate:flip={{ duration: reduceMotion ? 0 : 280 }}>
+        <MinionView
+          minion={minion}
+          targetable={targetableIds.has(minion.instanceId) ||
+            ((aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId))}
+          summoning={summoningId === minion.instanceId}
+          struck={struckIds.has(minion.instanceId)}
+          dying={dyingIds.has(minion.instanceId)}
+          on:click={() => onEnemyMinion(minion)}
+        />
+      </div>
     {/each}
   </section>
 
@@ -781,18 +1017,21 @@
     The centre line is where the turn is handed over, so it is where the button
     that hands it over lives. It used to sit under your own hero row, which put
     the single most-pressed control in the match a full board away from the
-    board it acts on. The phase label keeps its place at the end of the line.
+    board it acts on. There is no phase label: the button, the glows and the
+    banner already say whose turn it is.
   -->
   <div class="centre">
-    <span class="phase">{phase}</span>
     <span class="rule"></span>
     {#if showClock}
       <span class="clock" class:urgent={secondsLeft <= 10} aria-live="off">
         {secondsLeft}s
       </span>
     {/if}
+    <!-- Labelled by whose turn it is on screen, not by whether input is open —
+         so your own plays animating do not flash it to "Enemy Turn", and the
+         opponent's do not flip it back before their turn has finished playing. -->
     <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
-      {myTurn ? 'End Turn' : 'Waiting'}
+      {isMyTurn(shown) ? 'End Turn' : 'Enemy Turn'}
     </button>
   </div>
 
@@ -805,41 +1044,43 @@
   {/if}
 
   <section class="board mine" class:drop-open={drag?.kind === 'card'} bind:this={myBoardEl}>
-    {#each view.me.board as minion, i (minion.instanceId)}
-      {#if drag?.kind === 'card' && drag.slot === i}
-        <span class="drop-gap" aria-hidden="true"></span>
-      {/if}
-      <MinionView
-        minion={minion}
-        ready={myTurn && canAttackFromView(minion)}
-        targetable={(aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId)}
-        selected={selectedId === minion.instanceId ||
-          (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
-        summoning={summoningId === minion.instanceId}
-        struck={struckIds.has(minion.instanceId)}
-        dying={dyingIds.has(minion.instanceId)}
-        on:click={() => onMyMinion(minion)}
-        on:pointerdown={(e) => onMinionPointerDown(e, minion)}
-      />
+    {#each shown.me.board as minion, i (minion.instanceId)}
+      <div class="slot" animate:flip={{ duration: reduceMotion ? 0 : 280 }}>
+        {#if drag?.kind === 'card' && drag.slot === i}
+          <span class="drop-gap" aria-hidden="true"></span>
+        {/if}
+        <MinionView
+          minion={minion}
+          ready={myTurn && canAttackFromView(minion)}
+          targetable={(aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId)}
+          selected={selectedId === minion.instanceId ||
+            (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
+          summoning={summoningId === minion.instanceId}
+          struck={struckIds.has(minion.instanceId)}
+          dying={dyingIds.has(minion.instanceId)}
+          on:click={() => onMyMinion(minion)}
+          on:pointerdown={(e) => onMinionPointerDown(e, minion)}
+        />
+      </div>
     {/each}
-    {#if drag?.kind === 'card' && drag.slot >= view.me.board.length}
+    {#if drag?.kind === 'card' && drag.slot >= shown.me.board.length}
       <span class="drop-gap" aria-hidden="true"></span>
     {/if}
   </section>
 
   <section class="hero-row you">
-    <ManaTray mana={view.me.mana} maxMana={view.me.maxMana} />
+    <div></div>
 
     <div class="hero-block reverse" bind:this={myHeroEl}>
       <div class="hero-side">
         <div class="hero-meta right">
-          <span>{deckName || 'You'}</span>
-          <span>Deck {view.me.deckCount}</span>
+          <span class="name">{deckName || 'You'}</span>
+          <span>Deck {shown.me.deckCount}</span>
         </div>
         <HeroPowerButton
-          heroClass={view.me.heroClass}
+          heroClass={shown.me.heroClass}
           usable={myTurn && view.me.canUseHeroPower}
-          used={view.me.heroPowerUsed}
+          used={shown.me.heroPowerUsed}
           on:click={onHeroPower}
         />
       </div>
@@ -847,9 +1088,9 @@
       <HeroPortrait
         label="You"
         side="you"
-        health={view.me.health}
-        armor={view.me.armor}
-        weapon={view.me.weapon}
+        health={shown.me.health}
+        armor={shown.me.armor}
+        weapon={shown.me.weapon}
         armed={myTurn && view.me.canHeroAttack}
         targetable={(aiming !== null || aimingPower) && canAimMyHero}
         hit={hitHero === 'me'}
@@ -857,9 +1098,14 @@
       />
     </div>
 
+    <!-- Bottom right, just above the hand and beside End Turn: where your eyes
+         are at the moment you decide whether a turn is over. -->
+    <div class="mana-dock">
+      <ManaTray mana={shown.me.mana} maxMana={shown.me.maxMana} />
+    </div>
   </section>
 
-  <section class="hand" style:transform={`scale(${handScale.toFixed(3)})`}>
+  <section class="hand" class:active={isMyTurn(shown)} style:transform={`scale(${handScale.toFixed(3)})`}>
     {#each visibleHand as card, i (card)}
       <div class="hand-slot" class:lifted={drag?.kind === 'card' && drag.handIndex === i}>
         <CardPreview
@@ -877,6 +1123,17 @@
     <div class="ghost" style:left={`${pointer.x}px`} style:top={`${pointer.y}px`} aria-hidden="true">
       <CardPreview card={drag.card} playable />
     </div>
+  {/if}
+
+  {#if showcase}
+    {#key showcase.key}
+      <!-- The opponent's card, held up where it can be read before it acts. -->
+      <div class="showcase" aria-live="polite" aria-label={`${opponentName} plays ${showcase.card.name}`}>
+        <div class="lift" use:reveal={showcase.from} out:vanish={{ spell: showcase.card.type === 'Spell' }}>
+          <div class="enlarge"><CardPreview card={showcase.card} playable={false} /></div>
+        </div>
+      </div>
+    {/key}
   {/if}
 
   {#if aim}
@@ -903,7 +1160,7 @@
   />
 
   <TurnBanner text={banner} />
-  <Chronicle lines={view.log} rail={railed} />
+  <Chronicle lines={chronicleLines} you={view.you} {opponentName} rail={railed} />
 
   <GameMenu
     open={menuOpen}
@@ -911,7 +1168,8 @@
     on:quit={quitToMenu}
   />
 
-  {#if overTitle}
+  <!-- Held until playback ends, so the killing blow is seen before the result. -->
+  {#if overTitle && !draining}
     <div class="overlay">
       <div class="result">
         <h2>{overTitle}</h2>
@@ -1021,12 +1279,13 @@
     font-weight: 700;
     letter-spacing: .22em;
     text-transform: uppercase;
-    color: color-mix(in srgb, var(--field-ink) 80%, transparent);
+    /* Sits on the dark top tray now, so it takes the tray's light ink. */
+    color: rgba(236, 210, 160, .5);
     transition: color .16s ease, border-color .16s ease;
   }
   .brand:hover {
-    border-color: color-mix(in srgb, var(--field-ink) 30%, transparent);
-    color: var(--field-ink);
+    border-color: rgba(236, 210, 160, .3);
+    color: var(--gold-bright);
   }
 
   .vignette {
@@ -1034,6 +1293,43 @@
     inset: 0;
     background: radial-gradient(60% 45% at 50% 50%, rgba(255, 196, 110, .09), transparent 70%);
     pointer-events: none;
+  }
+
+  /* The carved edge of the table: the warm centre stays, the margins darken. */
+  .rim {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(78% 72% at 50% 48%, transparent 58%, rgba(38, 22, 9, .5) 100%);
+    pointer-events: none;
+  }
+
+  /*
+   * The two hand areas. Until the drawn trays exist (`ui/tray-you`,
+   * `ui/tray-foe`), each is a dark ledge with a lit lip, so the playable glow
+   * and the card backs sit on dark ground rather than mid-tone wood. Heights
+   * follow the zoomed rows they sit under.
+   */
+  .tray-band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+  }
+
+  .tray-band.you {
+    bottom: 0;
+    height: calc(150px * var(--fit, 1));
+    border-top: 1px solid rgba(255, 214, 150, .16);
+    background: linear-gradient(180deg, rgba(26, 15, 6, .62), rgba(12, 7, 3, .9));
+    box-shadow: 0 -14px 28px rgba(30, 16, 4, .28);
+  }
+
+  .tray-band.foe {
+    top: 0;
+    height: calc(54px * var(--fit, 1));
+    border-bottom: 1px solid rgba(255, 214, 150, .12);
+    background: linear-gradient(0deg, rgba(26, 15, 6, .5), rgba(12, 7, 3, .85));
+    box-shadow: 0 14px 28px rgba(30, 16, 4, .22);
   }
 
   .hero-row {
@@ -1053,7 +1349,13 @@
   .hero-row.you { padding: 3px 28px 0; }
 
   .hero-row.foe > .hero-block { grid-column: 2; }
-  .hero-row.foe > .deck-pile { grid-column: 3; justify-self: end; }
+  .hero-row.foe > .foe-corner {
+    grid-column: 3;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
   .hero-row.you > .hero-block { grid-column: 2; }
 
   /*
@@ -1127,6 +1429,13 @@
     color: var(--field-ink);
   }
   .hero-meta.right { text-align: right; }
+  .hero-meta .name { font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+
+  .mana-dock {
+    position: absolute;
+    right: 28px;
+    bottom: 0;
+  }
 
   .deck-pile {
     position: relative;
@@ -1147,6 +1456,13 @@
     font-family: var(--display);
     font-size: 13px;
     color: #f0dcae;
+  }
+
+  /* One per minion: what `animate:flip` slides and what an attack lunges. */
+  .slot {
+    position: relative;
+    display: flex;
+    gap: 10px;
   }
 
   .board {
@@ -1293,15 +1609,6 @@
     background: linear-gradient(90deg, transparent, var(--field-rule), transparent);
   }
 
-  .phase {
-    font-family: var(--display);
-    font-size: 10px;
-    letter-spacing: .3em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--field-ink);
-  }
-
   .clock {
     font-family: var(--display);
     font-size: 13px;
@@ -1340,6 +1647,39 @@
     border-color: #8fc8ff;
     animation: fs-end-turn 1.6s ease-in-out infinite;
   }
+
+  /*
+   * The hand. Every card is fully opaque — a dimmed card read as broken, not as
+   * unaffordable — and the ones you can play wear a crisp, saturated edge with
+   * a tight bloom, on the dark tray, instead of the soft green haze that
+   * vanished against the field. On your turn, a card you cannot afford says so
+   * through its cost gem alone.
+   */
+  .hand :global(.card) { opacity: 1; }
+  .hand.active :global(.card:not(.playable) .cost) { filter: saturate(.15) brightness(.7); }
+
+  .hand :global(.card.playable:not(.drawn)),
+  .ghost :global(.card.playable) {
+    animation: fs-playable 1.7s ease-in-out infinite;
+  }
+
+  /*
+   * The opponent's played card, held left of centre — clear of the compact
+   * Chronicle, over the boards' left flank, where Hearthstone shows it.
+   */
+  .showcase {
+    position: fixed;
+    z-index: 250;
+    left: max(30vw, 400px);
+    top: 47%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .showcase .lift { filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .75)); }
+  .showcase .enlarge { transform: scale(1.6); }
+  .showcase :global(.card) { opacity: 1; }
+  .showcase :global(.card:hover) { transform: none; }
 
   /* Cards keep an 8px gap and never overlap; the row scales instead. */
   .hand {
