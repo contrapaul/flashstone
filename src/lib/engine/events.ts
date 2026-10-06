@@ -54,9 +54,21 @@ export type GameEvent =
   /**
    * An effect is about to resolve against these targets. Emitted before it
    * lands, so a projectile or a target line can travel first. `source` is null
-   * for a spell, whose card the preceding `play` cue already showed.
+   * for a spell or a hero power — it flies from the caster's hero.
+   *
+   * `aim` says how the target was found: picked by a player (`chosen`), drawn
+   * by chance (`random`, with the `candidates` it was drawn from, when there
+   * was more than one), or fixed by the card's text (`auto` — "all enemies").
    */
-  | { type: 'effect'; owner: PlayerId; source: CueRef | null; action: Action; targets: CueRef[] }
+  | {
+      type: 'effect';
+      owner: PlayerId;
+      source: CueRef | null;
+      action: Action;
+      targets: CueRef[];
+      aim: 'chosen' | 'random' | 'auto';
+      candidates?: CueRef[];
+    }
   /** Drawn into a full hand and destroyed. Public, as in Hearthstone. */
   | { type: 'burn'; owner: PlayerId; card: Card; deckCount: number }
   /** An empty deck deals damage; the `damage` cue that follows carries it. */
@@ -116,7 +128,7 @@ export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   mana: 300,
   // A flare on the minion before its effect; the effect carries the weight.
   trigger: 260,
-  // Instant for now — R2 gives it a projectile or a target line to hold for.
+  // The director holds the target line and the projectile itself.
   effect: 0,
   burn: 900,
   fatigue: 700

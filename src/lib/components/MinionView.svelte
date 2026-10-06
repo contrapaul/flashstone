@@ -17,6 +17,8 @@
   export let dying = false;
   /** Its text is firing — a Battlecry, a Deathrattle, a turn trigger. */
   export let triggered = false;
+  /** A 7-cost or bigger arrival: it drops from above and slams down. */
+  export let heavy = false;
 
   // Drawn art when the card has a file, the generated gradient when not — the
   // same two layers as CardPreview, so a card looks like itself on the board.
@@ -57,6 +59,7 @@
   class="unit"
   class:selected
   class:summoning
+  class:heavy
   class:dying
   class:struck
 >
@@ -127,7 +130,17 @@
   .unit.selected { transform: translateY(-8px); }
   /* `--pace` is the table's playback speed, so these keep time with it. */
   .unit.summoning { animation: fs-summon calc(.62s * var(--pace, 1)) cubic-bezier(.2, 1.3, .4, 1); }
+  .unit.summoning.heavy { animation: fs-slam calc(.76s * var(--pace, 1)) cubic-bezier(.5, 0, .2, 1); }
   .unit.struck { animation: fs-shake calc(.5s * var(--pace, 1)) ease-out; }
+
+  /* Dropped from height: it hangs, falls, squashes on impact, and settles. */
+  @keyframes fs-slam {
+    0% { transform: translateY(-90px) scale(1.35); opacity: 0; filter: brightness(2); }
+    35% { transform: translateY(-80px) scale(1.3); opacity: 1; }
+    55% { transform: translateY(0) scale(1.08, .88); filter: brightness(1.4); }
+    72% { transform: translateY(-6px) scale(.97, 1.04); }
+    100% { transform: none; filter: none; }
+  }
   .unit.dying { animation: fs-shatter calc(.6s * var(--pace, 1)) ease-in forwards; }
 
   /*

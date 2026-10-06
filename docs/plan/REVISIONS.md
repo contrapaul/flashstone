@@ -404,7 +404,38 @@ visual; `HANDOVER.md` §5 (the event queue and the lunge) is rewritten to match.
 and why their minion died, without reading anything.
 **Depends on:** R1.
 
-- [ ] **R2.1 — The AI acts one intent at a time.** Split `playAiTurn` into
+> ## Built 2026-10-07 — 403 tests, 0 check errors, both projects build. Not deployed.
+>
+> **The AI is a generator now** (`aiTurn` in `engine/ai.ts`): every place that
+> called the engine yields an intent instead, and `playAiTurn` runs it straight
+> through. Checked against the previous AI over 300 random-deck matches (1,956
+> AI turns): the final state, logs included, is identical. Practice steps it one
+> move at a time from `LocalSource.stepOpponent`, thinking 480–1000ms (scaled by
+> the opponent's pace) depending on the move.
+>
+> **Effect cues say how a target was found** — `aim: 'chosen' | 'random' |
+> 'auto'`, with the `candidates` of a random draw. The random pools moved into
+> `randomPool`; the draw is the same single `pick`, so every match replays as
+> before. The Director then draws a red target line for the opponent's aimed
+> effects, runs the roulette for random ones (measured: 7 hops across 4
+> candidates, slowing from 60 to 200ms, landing on the chosen one, about 1.2s),
+> and flies a coloured bolt per target on the particle canvas.
+>
+> **Found and fixed:** `drain()` was started from a reactive statement, so a
+> batch's first cue ran in the middle of Svelte's update. The markup saw its
+> changes, but derived values did not — the End Turn label stayed "Enemy Turn"
+> through the handover. Playback now waits for the update to finish before it
+> starts. Measured after: "Enemy Turn" the instant their turn begins, "Your Turn"
+> with the gold flare as it comes back, then "End Turn".
+>
+> **Seen in a practice match:** the back rising from the fan before the reveal;
+> the red line and the bolt for an aimed Frostbolt; a weapon equipped and swung;
+> the heal's motes; the opponent's draws arriving from their deck.
+> **Not seen in play:** a 7+ cost slam (none was played) and the roulette on the
+> real board — the roulette was run through the real Director against stand-in
+> elements instead.
+
+- [x] **R2.1 — The AI acts one intent at a time.** Split `playAiTurn` into
       `nextAiAction(state): Intent | null`, with `playAiTurn` becoming a loop over it
       so the tests keep their shape. `LocalSource.runOpponent` steps through it:
       think → apply → publish → await `drained` → next. This is the shape online
@@ -412,19 +443,19 @@ and why their minion died, without reading anything.
       → **verify:** `ai.test.ts` is unchanged: the same seed gives the same final
       state as before.
 
-- [ ] **R2.2 — Thinking.** A pause before each AI action, d(0.5–1.0s), longer before
+- [x] **R2.2 — Thinking.** A pause before each AI action, d(0.5–1.0s), longer before
       big plays. Online, if the opponent has been idle for more than 2 seconds, a
       random card back in their fan lifts and settles now and then, the way a
       Hearthstone opponent hovers cards. Before a `play` cue, the back at its
       `handIndex` lifts first.
       → **verify:** the opponent's hand feels inhabited.
 
-- [ ] **R2.3 — The reveal (D8), finished.** Minion landings scale with cost:
+- [x] **R2.3 — The reveal (D8), finished.** Minion landings scale with cost:
       1–3 is a tap, 4–6 a thud with a dust ring, 7+ a slam with a screen shake.
       Legendaries get a unique entrance (R8.6).
       → **verify:** a 7-drop feels heavy, a 1-drop doesn't.
 
-- [ ] **R2.4 — Target lines and projectiles.** For aimed effects (`effect` cues with
+- [x] **R2.4 — Target lines and projectiles.** For aimed effects (`effect` cues with
       a chosen target), a red arrow draws from the source to the target and holds
       briefly before the projectile flies. For random targets (`RandomEnemy`,
       `EnemyMinion`), a **roulette**: a highlight flickers across the candidates and
@@ -433,11 +464,11 @@ and why their minion died, without reading anything.
       → **verify:** Frostbolt shows what it was aimed at; a random 2-damage effect
       visibly chooses.
 
-- [ ] **R2.5 — The opponent draws.** A back slides from their deck into their fan,
+- [x] **R2.5 — The opponent draws.** A back slides from their deck into their fan,
       and the fan re-spaces with Flip.
       → **verify:** their hand count never changes without a visible card.
 
-- [ ] **R2.6 — Handover.** When the opponent ends their turn, their side of the End
+- [x] **R2.6 — Handover.** When the opponent ends their turn, their side of the End
       Turn button flips to **Your Turn** with a flash, and the banner plays. Your
       crystals refill one at a time (R4.5).
       → **verify:** the start of your turn is unmistakable without the banner.

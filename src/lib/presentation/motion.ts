@@ -40,6 +40,11 @@ export function d(ms: number): number {
   return ms * MOTION_SCALE[motion] * (opponentsTurn ? pace : 1);
 }
 
+/** A pause that belongs to the opponent — their thinking — at their pace. */
+export function dOpponent(ms: number): number {
+  return ms * MOTION_SCALE[motion] * pace;
+}
+
 /** False under Reduced: no lunges, flights or shakes — fades only. */
 export function spatial(): boolean {
   return motion !== 'reduced';

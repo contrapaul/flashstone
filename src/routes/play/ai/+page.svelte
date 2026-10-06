@@ -6,7 +6,8 @@
   import { PLAYABLE_CLASSES, type CardClass } from '../../../types/cards';
   import { isLegal, resolveDeck } from '$lib/decks/deck';
   import { loadPlayer } from '$lib/collection/sync';
-  import { playAiTurn } from '$lib/engine/ai';
+  import { aiTurn, type AiIntent } from '$lib/engine/ai';
+  import { dOpponent } from '$lib/presentation/motion';
   import type { GameEvent } from '$lib/engine/events';
   import { LocalSource } from '$lib/net/source';
   import { emptyView } from '$lib/net/view';
@@ -62,7 +63,7 @@
     aiThinking = false;
     source?.destroy();
     aiClass = PLAYABLE_CLASSES[Math.floor(Math.random() * PLAYABLE_CLASSES.length)];
-    source = new LocalSource(deckCards, aiCards, handlers, playAiTurn, {
+    source = new LocalSource(deckCards, aiCards, handlers, aiTurn, {
       player: heroClass,
       ai: aiClass
     });
@@ -102,23 +103,44 @@
   }
 
   /**
-   * The AI moves once playback has caught up.
+   * The AI moves once playback has caught up — **one move at a time**.
    *
-   * `drained` fires when the table has finished animating, so the opponent's
-   * turn never lands on top of the player's own cues.
+   * `drained` fires when the table has finished animating, so each decision
+   * lands, plays out, and only then is the next one made: the opponent's turn
+   * reads as a sequence of moves, not one burst. Between moves it thinks, for
+   * longer before a big play than before ending its turn.
    */
   function onDrained() {
     if (!source) return;
     if (view.winner) return void onMatchOver();
-    if (view.turn !== 'ai') {
+    const next = source.nextOpponentIntent();
+    if (!next) {
       aiThinking = false;
       return;
     }
-    // A beat, so the AI does not answer instantly.
+    aiThinking = true;
+    const stepping = source;
     setTimeout(() => {
-      source?.runOpponent();
-      aiThinking = false;
-    }, 450);
+      // A restart in the meantime replaces the source; this move is void.
+      if (source === stepping) source.stepOpponent();
+    }, dOpponent(thinkFor(next)));
+  }
+
+  /** How long a move is worth considering, in ms before pacing. */
+  function thinkFor(intent: AiIntent): number {
+    switch (intent.kind) {
+      case 'play': {
+        const card = source?.raw.players.ai.hand[intent.handIndex];
+        return card && card.cost >= 5 ? 1000 : 650;
+      }
+      case 'power':
+        return 600;
+      case 'attack':
+      case 'heroAttack':
+        return 480;
+      case 'end':
+        return 700;
+    }
   }
 
   // ── Quest counters and rewards ───────────────────────────

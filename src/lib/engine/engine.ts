@@ -554,29 +554,9 @@ function resolveTargets(
         ? [{ kind: 'minion', owner, minion: source }]
         : [{ kind: 'hero', owner }];
 
-    case 'EnemyMinion': {
-      const m = pick(rng, enemyBoard);
-      return m ? [{ kind: 'minion', owner: foe, minion: m }] : [];
-    }
-
-    case 'FriendlyMinion': {
-      const others = friendlyBoard.filter((m) => m !== source);
-      const m = pick(rng, others.length > 0 ? others : friendlyBoard);
-      return m ? [{ kind: 'minion', owner, minion: m }] : [];
-    }
-
     // Helpful effects aimed at "Hero" mean your own; harmful ones mean theirs.
     case 'Hero':
       return [{ kind: 'hero', owner: HELPFUL.has(effect.action) ? owner : foe }];
-
-    case 'RandomEnemy': {
-      const candidates: Character[] = [
-        ...enemyBoard.map((minion) => ({ kind: 'minion' as const, owner: foe, minion })),
-        { kind: 'hero' as const, owner: foe }
-      ];
-      const c = pick(rng, candidates);
-      return c ? [c] : [];
-    }
 
     case 'AllFriendly':
       return friendlyBoard.map((minion) => ({ kind: 'minion' as const, owner, minion }));
@@ -590,8 +570,43 @@ function resolveTargets(
         { kind: 'hero' as const, owner: foe }
       ];
 
+    default: {
+      const pool = randomPool(state, owner, source, effect);
+      const c = pool ? pick(rng, pool) : undefined;
+      return c ? [c] : [];
+    }
+  }
+}
+
+/**
+ * What a random target is drawn from, or null when the target is not random.
+ *
+ * Separate so the `effect` cue can name the candidates — the table flickers
+ * across them before landing on the one chosen, which is the whole drama of a
+ * random effect. The draw itself is one `pick` from this list, as it always was.
+ */
+function randomPool(
+  state: MatchState,
+  owner: PlayerId,
+  source: MinionInstance | undefined,
+  effect: Effect
+): Character[] | null {
+  const foe = opponentOf(owner);
+  const enemyBoard = state.players[foe].board;
+  const friendlyBoard = state.players[owner].board;
+  const enemies = enemyBoard.map((minion) => ({ kind: 'minion' as const, owner: foe, minion }));
+
+  switch (effect.target) {
+    case 'EnemyMinion':
+      return enemies;
+    case 'FriendlyMinion': {
+      const others = friendlyBoard.filter((m) => m !== source);
+      return (others.length > 0 ? others : friendlyBoard).map((minion) => ({ kind: 'minion' as const, owner, minion }));
+    }
+    case 'RandomEnemy':
+      return [...enemies, { kind: 'hero' as const, owner: foe }];
     default:
-      return [];
+      return null;
   }
 }
 
@@ -652,12 +667,15 @@ function resolveEffect(
       : resolveTargets(state, owner, source, effect, rng);
 
   if (targets.length > 0) {
+    const pool = effect.target === 'Chosen' ? null : randomPool(state, owner, source, effect);
     emit(state, {
       type: 'effect',
       owner,
       source: source ? { kind: 'minion', instanceId: source.instanceId } : null,
       action: effect.action,
-      targets: targets.map(refOf)
+      targets: targets.map(refOf),
+      aim: effect.target === 'Chosen' ? 'chosen' : pool ? 'random' : 'auto',
+      candidates: pool && pool.length > 1 ? pool.map(refOf) : undefined
     });
   }
 

@@ -44,9 +44,22 @@ export interface BurstOptions {
 
 const TAU = Math.PI * 2;
 
+/** Something travelling from one point to another, trailing light. */
+interface Bolt {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  /** Seconds in flight, and seconds to arrive. */
+  age: number;
+  duration: number;
+  color: string;
+  size: number;
+  arrive: () => void;
+}
+
 export class Fx {
   private ctx: CanvasRenderingContext2D | null;
   private parts: Particle[] = [];
+  private bolts: Bolt[] = [];
   private frame = 0;
   private last = 0;
   private dpr = 1;
@@ -63,7 +76,24 @@ export class Fx {
   }
 
   get alive(): number {
-    return this.parts.length;
+    return this.parts.length + this.bolts.length;
+  }
+
+  /**
+   * A projectile: a glowing head on a shallow arc from `from` to `to`, shedding
+   * sparks as it goes and bursting where it lands. Resolves on arrival, so the
+   * effect it carries can land then and not before.
+   */
+  bolt(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    o: { color?: string; duration?: number; size?: number } = {}
+  ): Promise<void> {
+    return new Promise((arrive) => {
+      if (!this.ctx) return arrive();
+      this.bolts.push({ from, to, age: 0, duration: o.duration ?? 0.32, color: o.color ?? '#ffb24a', size: o.size ?? 9, arrive });
+      this.start();
+    });
   }
 
   /** Bright streaks thrown out from a point: an impact. */
@@ -92,6 +122,8 @@ export class Fx {
 
   clear(): void {
     this.parts = [];
+    for (const bolt of this.bolts) bolt.arrive();
+    this.bolts = [];
   }
 
   private emit(shape: Shape, x: number, y: number, o: BurstOptions): void {
@@ -134,6 +166,8 @@ export class Fx {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
+    this.flyBolts(ctx, dt);
+
     this.parts = this.parts.filter((p) => (p.age += dt) < p.life);
     for (const p of this.parts) {
       const damp = Math.exp(-p.drag * dt);
@@ -146,8 +180,38 @@ export class Fx {
     }
 
     // Nothing alive: stop. The next burst starts the loop again.
-    this.frame = this.parts.length > 0 ? requestAnimationFrame(this.tick) : 0;
+    this.frame = this.alive > 0 ? requestAnimationFrame(this.tick) : 0;
   };
+
+  private flyBolts(ctx: CanvasRenderingContext2D, dt: number): void {
+    const landed: Bolt[] = [];
+    for (const b of this.bolts) {
+      b.age += dt;
+      const t = Math.min(1, b.age / b.duration);
+      // Ease in: it gathers speed, so it hits rather than drifts.
+      const e = t * t * (1.6 - 0.6 * t);
+      const { x, y } = arc(b.from, b.to, e);
+      // Trail: a few slow sparks left behind each frame.
+      this.emit('spark', x, y, { count: 2, colors: [b.color, '#fff4dc'], speed: 70, gravity: 0, life: 0.28, size: b.size * 0.3 });
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, b.size * 2.4);
+      glow.addColorStop(0, '#ffffff');
+      glow.addColorStop(0.3, b.color);
+      glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y, b.size * 2.4, 0, TAU);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      if (t >= 1) landed.push(b);
+    }
+    if (landed.length === 0) return;
+    this.bolts = this.bolts.filter((b) => !landed.includes(b));
+    for (const b of landed) {
+      this.emit('spark', b.to.x, b.to.y, { count: 16, colors: [b.color, '#fff6d8'], speed: 360, gravity: 500, life: 0.4, size: 2.4 });
+      b.arrive();
+    }
+  }
 }
 
 function draw(ctx: CanvasRenderingContext2D, p: Particle): void {
@@ -206,4 +270,13 @@ function draw(ctx: CanvasRenderingContext2D, p: Particle): void {
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
+}
+
+/** A point on a shallow upward arc between two points, `t` from 0 to 1. */
+function arc(from: { x: number; y: number }, to: { x: number; y: number }, t: number) {
+  const lift = Math.min(120, Math.hypot(to.x - from.x, to.y - from.y) * 0.25);
+  const cx = (from.x + to.x) / 2;
+  const cy = Math.min(from.y, to.y) - lift;
+  const u = 1 - t;
+  return { x: u * u * from.x + 2 * u * t * cx + t * t * to.x, y: u * u * from.y + 2 * u * t * cy + t * t * to.y };
 }

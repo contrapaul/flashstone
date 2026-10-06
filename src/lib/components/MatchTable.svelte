@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from 'svelte';
+  import { createEventDispatcher, onDestroy, tick } from 'svelte';
   import { gsap } from 'gsap';
   import CardPreview from './CardPreview.svelte';
   import MinionView from './MinionView.svelte';
@@ -94,6 +94,7 @@
   /** Minions mid-animation, by kind. Each set is reassigned, never mutated. */
   let marks: Record<Mark, Set<string>> = {
     summoning: new Set(),
+    heavy: new Set(),
     struck: new Set(),
     dying: new Set(),
     triggered: new Set()
@@ -106,6 +107,12 @@
   let floatSeq = 0;
   let draining = false;
   let fx: Fx | null = null;
+  /** The line from an opponent's spell to what they aimed it at. */
+  let cueAim: { from: { x: number; y: number }; to: { x: number; y: number }; color: string } | null = null;
+  /** The highlight a random effect flickers across its candidates. */
+  let rouletteRect: DOMRect | null = null;
+  /** The End Turn button announcing that the turn is yours. */
+  let handover = false;
 
   /**
    * The board **on screen**, which is not always the board in `view`.
@@ -125,6 +132,9 @@
   let showcase: { card: Card; key: number; from: { x: number; y: number } } | null = null;
   let showcaseKey = 0;
 
+  /** "Your Turn" as it turns over to you, then what it does. */
+  $: endTurnLabel = handover ? 'Your Turn' : isMyTurn(shown) ? 'End Turn' : 'Enemy Turn';
+
   // The motion settings, applied before any cue is played.
   $: setMotion($settings.motion);
   $: setOpponentPace($settings.opponentPace);
@@ -142,6 +152,7 @@
   let foeHeroEl: HTMLElement | undefined;
   let myHeroEl: HTMLElement | undefined;
   let foeHandEl: HTMLElement | undefined;
+  let foeDeckEl: HTMLElement | undefined;
 
   if (typeof window !== 'undefined') {
     handWidth = window.innerWidth;
@@ -270,6 +281,11 @@
   async function drain() {
     if (draining) return;
     draining = true;
+    // Started from a reactive statement — the middle of Svelte's update. Any
+    // assignment made before this await reaches the markup but not the values
+    // derived from it (the End Turn label stayed "Enemy Turn" through the
+    // handover). So the update finishes first, and playback begins after it.
+    await tick();
     shown = startingPoint(shown, view, events);
     while (events.length > 0) {
       const event = events.shift() as GameEvent;
@@ -333,6 +349,8 @@
       const backs = foeHandEl?.querySelectorAll<HTMLElement>('.foe-card');
       return backs?.[Math.min(index, backs.length - 1)];
     },
+    foeBacks: () => [...(foeHandEl?.querySelectorAll<HTMLElement>('.foe-card') ?? [])],
+    foeDeck: () => foeDeckEl,
     nextDrawn: () => view.me.hand[view.me.hand.length - events.filter((e) => e.type === 'draw' && e.owner === view.you).length - 1],
     setDrawn: (card, on) => {
       const next = new Set(drawnCards);
@@ -353,8 +371,33 @@
     setShowcase: (card, from) => {
       showcase = card ? { card, key: ++showcaseKey, from: from ?? { x: window.innerWidth / 2, y: 0 } } : null;
     },
+    setAimLine: (line) => (cueAim = line),
+    setRoulette: (rect) => (rouletteRect = rect),
+    setHandover: (on) => (handover = on),
     fx: () => fx
   };
+
+  /*
+   * The opponent, thinking. While it is their turn and nothing is playing —
+   * a person deciding, online, or the AI between moves — now and then one of
+   * their cards rises a little out of the fan and settles back, the way a
+   * Hearthstone opponent hovers over their hand. Purely idle: it never runs
+   * while a cue is playing, and the next cue resets it.
+   */
+  const considering =
+    typeof window === 'undefined'
+      ? undefined
+      : setInterval(() => {
+          if (draining || !spatial() || view.winner || isMyTurn(shown) || showcase) return;
+          if (Math.random() < 0.45) return;
+          const backs = foeHandEl?.querySelectorAll<HTMLElement>('.foe-card .arrive');
+          const back = backs?.[Math.floor(Math.random() * backs.length)];
+          if (!back) return;
+          gsap
+            .timeline()
+            .to(back, { y: 20, scale: 1.05, duration: 0.35, ease: 'power2.out' })
+            .to(back, { y: 0, scale: 1, duration: 0.45, ease: 'power2.inOut', delay: 0.5, clearProps: 'transform' });
+        }, 1700);
 
   /** The DOM draws `shown`, so elements pair with its boards, not the view's. */
   function minionElements(): [HTMLElement, string][] {
@@ -798,6 +841,7 @@
 
   onDestroy(() => {
     if (clockTimer) clearInterval(clockTimer);
+    if (considering) clearInterval(considering);
     if (typeof window !== 'undefined') window.removeEventListener('resize', onResize);
   });
   if (typeof window !== 'undefined') window.addEventListener('resize', onResize);
@@ -844,7 +888,7 @@
           style:transform={`rotate(${(i - (shown.foe.handCount - 1) / 2) * 3.2}deg)`}
           style:margin-left={i ? '-58px' : '0'}
         >
-          <CardBack backId={opponentBack} />
+          <span class="arrive"><CardBack backId={opponentBack} /></span>
         </span>
       {/each}
     </div>
@@ -878,7 +922,7 @@
 
     <div class="foe-corner">
       <ManaTray side="foe" mana={shown.foe.mana} maxMana={shown.foe.maxMana} />
-      <div class="deck-pile">
+      <div class="deck-pile" bind:this={foeDeckEl}>
         <CardBack backId={opponentBack} scale={0.34} />
         <span class="deck-count">{shown.foe.deckCount}</span>
       </div>
@@ -896,6 +940,7 @@
           struck={marks.struck.has(minion.instanceId)}
           dying={marks.dying.has(minion.instanceId)}
           triggered={marks.triggered.has(minion.instanceId)}
+          heavy={marks.heavy.has(minion.instanceId)}
           on:click={() => onEnemyMinion(minion)}
         />
       </div>
@@ -919,8 +964,11 @@
     <!-- Labelled by whose turn it is on screen, not by whether input is open —
          so your own plays animating do not flash it to "Enemy Turn", and the
          opponent's do not flip it back before their turn has finished playing. -->
-    <button class="end-turn" class:spent on:click={onEndTurn} disabled={!myTurn}>
-      {isMyTurn(shown) ? 'End Turn' : 'Enemy Turn'}
+    <button class="end-turn" class:spent class:handover on:click={onEndTurn} disabled={!myTurn}>
+      <!-- Keyed on the words, so each change turns the button over. -->
+      {#key endTurnLabel}
+        <span class="turnover">{endTurnLabel}</span>
+      {/key}
     </button>
   </div>
 
@@ -948,6 +996,7 @@
           struck={marks.struck.has(minion.instanceId)}
           dying={marks.dying.has(minion.instanceId)}
           triggered={marks.triggered.has(minion.instanceId)}
+          heavy={marks.heavy.has(minion.instanceId)}
           on:click={() => onMyMinion(minion)}
           on:pointerdown={(e) => onMinionPointerDown(e, minion)}
         />
@@ -1041,6 +1090,30 @@
         r={drag?.kind === 'attack' && drag.target ? 15 : 11}
       />
     </svg>
+  {/if}
+
+  {#if cueAim}
+    <!-- Drawn out from the caster to the target, then held while it is read. -->
+    <svg class="cue-aim" aria-hidden="true">
+      <path
+        class="cue-aim-line"
+        pathLength="1"
+        style:stroke={cueAim.color}
+        d={`M ${cueAim.from.x} ${cueAim.from.y} Q ${(cueAim.from.x + cueAim.to.x) / 2} ${Math.min(cueAim.from.y, cueAim.to.y) - 70} ${cueAim.to.x} ${cueAim.to.y}`}
+      />
+      <circle class="cue-aim-head" style:stroke={cueAim.color} cx={cueAim.to.x} cy={cueAim.to.y} r="22" />
+    </svg>
+  {/if}
+
+  {#if rouletteRect}
+    <div
+      class="roulette"
+      aria-hidden="true"
+      style:left={`${rouletteRect.left - 8}px`}
+      style:top={`${rouletteRect.top - 8}px`}
+      style:width={`${rouletteRect.width + 16}px`}
+      style:height={`${rouletteRect.height + 16}px`}
+    ></div>
   {/if}
 
   <FxLayer bind:fx />
@@ -1287,6 +1360,12 @@
      backs are unscaled and each one is rotated by its wrapper instead. */
   .foe-card :global(.back) { transform-origin: bottom center; }
 
+  /* The fan re-spaces smoothly as cards come and go. */
+  .foe-card { transition: transform .3s ease; }
+
+  /* The part that rises when the opponent picks a card — the fan's own rotation stays on its parent. */
+  .arrive { display: block; transform-origin: top center; }
+
   /*
    * Three tracks with the portrait in the middle one, so the **portrait** is
    * what sits on the table's centre axis — not the block that contains it.
@@ -1470,6 +1549,49 @@
   /* Locked onto a legal target: fill in. */
   .aim-head.locked { fill: rgba(150, 255, 170, .75); }
 
+  .cue-aim {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 330;
+    pointer-events: none;
+  }
+
+  .cue-aim-line {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    filter: drop-shadow(0 0 8px rgba(255, 90, 70, .85));
+    animation: fs-draw-line .26s ease-out forwards;
+  }
+
+  .cue-aim-head {
+    fill: rgba(255, 90, 70, .22);
+    stroke-width: 3;
+    opacity: 0;
+    animation: fs-reticle .5s ease-out .2s forwards;
+  }
+
+  @keyframes fs-draw-line { to { stroke-dashoffset: 0; } }
+
+  @keyframes fs-reticle {
+    0% { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(1.8); }
+    100% { opacity: 1; transform-box: fill-box; transform-origin: center; transform: scale(1); }
+  }
+
+  /* The random pick's highlight: a ring that hops from candidate to candidate. */
+  .roulette {
+    position: fixed;
+    z-index: 330;
+    border-radius: 16px;
+    border: 3px solid #ffe08a;
+    box-shadow: 0 0 22px rgba(255, 210, 100, .9), inset 0 0 18px rgba(255, 210, 100, .5);
+    pointer-events: none;
+  }
+
   /* Draggable things must not also pan the page on touch. Scoped to the table
      so cards elsewhere (the import preview, the collection) still scroll. */
   .hand :global(.card),
@@ -1489,7 +1611,8 @@
   .table.still.quaking { animation: none; }
   .table.still :global(.unit.struck),
   .table.still :global(.hero.hit) { animation: none; }
-  .table.still :global(.unit.summoning) { animation: fs-fade-in .3s ease-out; }
+  .table.still :global(.unit.summoning),
+  .table.still :global(.unit.summoning.heavy) { animation: fs-fade-in .3s ease-out; }
   .table.still :global(.unit.dying) { animation: fs-fade-out .5s ease-in forwards; }
 
   /*
@@ -1547,6 +1670,28 @@
     cursor: pointer;
     box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5),
       0 0 18px rgba(224, 190, 118, .25);
+  }
+
+  /* Each change of words turns the button over, like a placard. */
+  .turnover {
+    display: inline-block;
+    animation: fs-turnover .42s cubic-bezier(.2, 1.3, .4, 1);
+  }
+
+  @keyframes fs-turnover {
+    from { transform: perspective(300px) rotateX(-90deg); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+
+  /* The turn arriving: a gold flare that settles into the ordinary button. */
+  .end-turn.handover {
+    animation: fs-handover 1.3s ease-out;
+  }
+
+  @keyframes fs-handover {
+    0% { box-shadow: 0 0 0 0 rgba(255, 226, 140, 0); filter: brightness(1); }
+    18% { box-shadow: 0 0 0 4px rgba(255, 226, 140, .9), 0 0 40px rgba(255, 206, 90, .9); filter: brightness(1.5); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 226, 140, 0); filter: brightness(1); }
   }
 
   .end-turn.spent:not(:disabled) {

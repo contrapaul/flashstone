@@ -22,11 +22,31 @@ import {
 import type { Card } from '../../types/cards';
 import { heroPowerFor } from '../data/classes';
 
+/** One thing the AI has decided to do. */
+export type AiIntent =
+  | { kind: 'power'; target?: Character }
+  | { kind: 'play'; handIndex: number; target?: Character }
+  | { kind: 'attack'; instanceId: string; target: { kind: 'minion'; instanceId: string } | { kind: 'hero' } }
+  | { kind: 'heroAttack'; target: Character }
+  | { kind: 'end' };
+
+/**
+ * The AI's turn, one decision at a time.
+ *
+ * A generator so the turn can be **watched**: it yields each intent, the
+ * caller applies it (`applyAiIntent`) and sends back whether it worked, and
+ * the next decision is made against the board that results. Practice steps it
+ * with a pause between moves, the way a person plays; tests and simulations
+ * run it straight through with `playAiTurn`. The decisions are identical
+ * either way — every place that used to call the engine now yields instead.
+ */
+export type AiTurn = Generator<AiIntent, void, boolean>;
+
 /**
  * Heuristic opponent: spend the curve, clear Taunts, take free trades,
  * otherwise hit face. Deliberately simple — it should be beatable.
  */
-export function playAiTurn(state: MatchState): void {
+export function* aiTurn(state: MatchState): AiTurn {
   if (state.winner || state.current !== 'ai') return;
   // Twice, guarded by the once-per-turn flag so the second is a no-op if the
   // first fired. A card is usually the better use of two mana, so the power only
@@ -34,14 +54,37 @@ export function playAiTurn(state: MatchState): void {
   // otherwise it mops up whatever the curve leaves behind. Calling it only at
   // the end meant a curving-out AI never used it at all, which makes for a
   // duller opponent and hides the mechanic from the player.
-  usePower(state, true);
-  spendMana(state);
-  swing(state);
-  usePower(state, false);
-  if (!state.winner) endTurn(state);
+  yield* usePower(state, true);
+  yield* spendMana(state);
+  yield* swing(state);
+  yield* usePower(state, false);
+  if (!state.winner) yield { kind: 'end' };
 }
 
-function spendMana(state: MatchState): void {
+/** Carries out one intent. Returns whether the engine accepted it. */
+export function applyAiIntent(state: MatchState, intent: AiIntent): boolean {
+  switch (intent.kind) {
+    case 'power':
+      return useHeroPower(state, 'ai', intent.target);
+    case 'play':
+      return playCard(state, 'ai', intent.handIndex, undefined, intent.target);
+    case 'attack':
+      return attack(state, 'ai', intent.instanceId, intent.target);
+    case 'heroAttack':
+      return heroAttack(state, 'ai', intent.target);
+    case 'end':
+      endTurn(state);
+      return true;
+  }
+}
+
+/** The whole turn at once — for tests, simulations and anything not watching. */
+export function playAiTurn(state: MatchState): void {
+  const turn = aiTurn(state);
+  for (let step = turn.next(); !step.done; step = turn.next(applyAiIntent(state, step.value)));
+}
+
+function* spendMana(state: MatchState): AiTurn {
   const hand = () => state.players.ai.hand;
 
   // The Coin is only worth it when it unlocks something right now.
@@ -49,7 +92,7 @@ function spendMana(state: MatchState): void {
   if (coinIndex >= 0) {
     const mana = state.players.ai.mana;
     const unlocks = hand().some((c) => c.name !== 'The Coin' && c.cost === mana + 1);
-    if (unlocks) playCard(state, 'ai', coinIndex);
+    if (unlocks) yield { kind: 'play', handIndex: coinIndex };
   }
 
   // Greedily play the most expensive affordable card until nothing fits.
@@ -71,7 +114,7 @@ function spendMana(state: MatchState): void {
       // A card that must be aimed needs a target chosen before it is played, or
       // the engine refuses it and the loop spins on the same card forever.
       const chosen = needsTarget(card) ? chooseSpellTarget(state, card) : undefined;
-      played = needsTarget(card) && !chosen ? false : playCard(state, 'ai', best, undefined, chosen);
+      played = needsTarget(card) && !chosen ? false : yield { kind: 'play', handIndex: best, target: chosen };
       // Nothing legal to aim at: drop the card from consideration this turn by
       // treating the pass as spent, rather than looping.
       if (!played) break;
@@ -136,7 +179,7 @@ function chooseSpellTarget(state: MatchState, card: Card): Character | undefined
  */
 const CONSUMER_HEALTH_FLOOR = 12;
 
-function usePower(state: MatchState, early: boolean): void {
+function* usePower(state: MatchState, early: boolean): AiTurn {
   const me = state.players.ai;
   if (!canUseHeroPower(state, 'ai')) return;
   if (me.mana < HERO_POWER_COST) return;
@@ -162,20 +205,20 @@ function usePower(state: MatchState, early: boolean): void {
     const target: Character = kill
       ? { kind: 'minion', owner: 'player', minion: kill }
       : { kind: 'hero', owner: 'player' };
-    useHeroPower(state, 'ai', target);
+    yield { kind: 'power', target };
     return;
   }
 
-  useHeroPower(state, 'ai');
+  yield { kind: 'power' };
 }
 
-function swing(state: MatchState): void {
+function* swing(state: MatchState): AiTurn {
   const foe = opponentOf('ai');
 
   // The hero swings first, while the board is still cluttered: the weapon is
   // the one attack that does not risk losing a minion, so spending it on a
   // Taunt before the minions trade is usually the better order.
-  swingWeapon(state, foe);
+  yield* swingWeapon(state, foe);
 
   // Keep going while any minion still has an attack left.
   let acted = true;
@@ -193,18 +236,18 @@ function swing(state: MatchState): void {
       const available = state.players.ai.board.filter(canAttack);
       const damage = available.reduce((sum, m) => sum + m.attack, 0);
       if (damage >= state.players[foe].health) {
-        acted = attack(state, 'ai', attacker.instanceId, { kind: 'hero' });
+        acted = yield { kind: 'attack', instanceId: attacker.instanceId, target: { kind: 'hero' } };
         continue;
       }
     }
 
     const target = chooseTarget(attacker, minionTargets, heroTarget !== undefined);
     if (!target) break;
-    acted = attack(state, 'ai', attacker.instanceId, target);
+    acted = yield { kind: 'attack', instanceId: attacker.instanceId, target };
   }
 }
 
-function swingWeapon(state: MatchState, foe: 'player' | 'ai'): void {
+function* swingWeapon(state: MatchState, foe: 'player' | 'ai'): AiTurn {
   if (!canHeroAttack(state.players.ai)) return;
   const weapon = state.players.ai.weapon;
   if (!weapon) return;
@@ -226,7 +269,7 @@ function swingWeapon(state: MatchState, foe: 'player' | 'ai'): void {
         ? { kind: 'minion', owner: foe, minion: minions[0] }
         : undefined;
 
-  if (target) heroAttack(state, 'ai', target);
+  if (target) yield { kind: 'heroAttack', target };
 }
 
 function chooseTarget(

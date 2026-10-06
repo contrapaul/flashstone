@@ -8,6 +8,7 @@ import {
   playCard,
   useHeroPower
 } from '../engine/engine';
+import { applyAiIntent, type AiIntent, type AiTurn } from '../engine/ai';
 import type { GameEvent } from '../engine/events';
 import { findMinion, opponentOf, type Character, type MatchState, type PlayerId } from '../engine/state';
 import { viewFor } from './room';
@@ -53,8 +54,8 @@ export interface MatchStatus {
 /**
  * The single-player match, wrapped to look exactly like a remote one.
  *
- * The AI still runs in the browser and still takes its turn through
- * `playAiTurn`; this only changes how the board is fed. Because the view is
+ * The AI still runs in the browser, one move at a time through `aiTurn`
+ * (`stepOpponent`); this only changes how the board is fed. Because the view is
  * produced by the same `viewFor` the room uses, a bug in what the opponent is
  * allowed to see would show up in single-player too — which is a good place for
  * it to show up.
@@ -64,20 +65,23 @@ export class LocalSource implements MatchSource {
   private handlers: SourceHandlers;
   private deck: Card[];
   private foeDeck: Card[];
-  private takeAiTurn: (state: MatchState) => void;
+  private aiTurn: (state: MatchState) => AiTurn;
   private classes: { player: CardClass; ai: CardClass };
+  /** The AI's turn in progress, and the decision it is about to carry out. */
+  private turn: AiTurn | null = null;
+  private pending: AiIntent | null = null;
 
   constructor(
     deck: Card[],
     foeDeck: Card[],
     handlers: SourceHandlers,
-    takeAiTurn: (state: MatchState) => void,
+    aiTurn: (state: MatchState) => AiTurn,
     classes: { player: CardClass; ai: CardClass } = { player: 'Designer', ai: 'Manufacturer' }
   ) {
     this.deck = deck;
     this.foeDeck = foeDeck;
     this.handlers = handlers;
-    this.takeAiTurn = takeAiTurn;
+    this.aiTurn = aiTurn;
     this.classes = classes;
     this.state = createMatch(deck, foeDeck, Date.now() % 100000, classes);
     this.publish();
@@ -143,11 +147,41 @@ export class LocalSource implements MatchSource {
     this.publish();
   }
 
-  /** Runs the AI's turn. Called by the route once playback has caught up. */
-  runOpponent() {
-    if (this.state.winner || this.state.current !== 'ai') return;
-    this.takeAiTurn(this.state);
+  /**
+   * What the AI will do next, or null when it is not its turn.
+   *
+   * Exposed so the route can think for as long as the move deserves — a big
+   * minion is worth a longer pause than ending the turn.
+   */
+  nextOpponentIntent(): AiIntent | null {
+    if (this.state.winner || this.state.current !== 'ai') {
+      this.turn = null;
+      this.pending = null;
+      return null;
+    }
+    if (!this.turn) {
+      this.turn = this.aiTurn(this.state);
+      const step = this.turn.next();
+      this.pending = step.done ? null : step.value;
+    }
+    return this.pending;
+  }
+
+  /**
+   * Carries out the AI's next decision, and publishes it.
+   *
+   * One move per call, so each lands on the table and plays out before the
+   * next is made — the opponent's turn as a sequence you can follow, rather
+   * than one batch of everything at once. Returns false once its turn is over.
+   */
+  stepOpponent(): boolean {
+    const intent = this.nextOpponentIntent();
+    if (!intent || !this.turn) return false;
+    const step = this.turn.next(applyAiIntent(this.state, intent));
+    this.pending = step.done ? null : step.value;
+    if (step.done) this.turn = null;
     this.publish();
+    return true;
   }
 
   concede() {
@@ -156,6 +190,8 @@ export class LocalSource implements MatchSource {
   }
 
   restart() {
+    this.turn = null;
+    this.pending = null;
     this.state = createMatch(this.deck, this.foeDeck, Date.now() % 100000, this.classes);
     this.handlers.onStatus({ kind: 'playing' });
     this.publish();

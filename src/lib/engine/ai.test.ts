@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../../types/cards';
 import { buildDemoDeck } from '../data/demoDeck';
-import { playAiTurn } from './ai';
+import { aiTurn, applyAiIntent, playAiTurn, type AiIntent } from './ai';
 import { COIN_CARD, createMatch, endTurn, playCard } from './engine';
 import { HERO_HEALTH, type MatchState } from './state';
 
@@ -130,5 +130,40 @@ describe('ai turn', () => {
     playAiTurn(state);
     expect(state.players.ai.board).toHaveLength(0);
     expect(state.current).toBe('player');
+  });
+
+  it('yields its turn one intent at a time, and ends the turn last', () => {
+    const state = aiTurnMatch();
+    state.players.ai.hand = [
+      minionCard({ cost: 2, name: 'First' }),
+      minionCard({ cost: 1, name: 'Second', attack: 2, keywords: ['Charge'] })
+    ];
+    const seen: AiIntent['kind'][] = [];
+    const turn = aiTurn(state);
+    for (let step = turn.next(); !step.done; step = turn.next(applyAiIntent(state, step.value))) {
+      seen.push(step.value.kind);
+      // Each decision sees the board the previous one left.
+      if (seen.length === 2) expect(state.players.ai.board).toHaveLength(1);
+    }
+    expect(seen).toEqual(['play', 'play', 'attack', 'end']);
+    expect(state.current).toBe('player');
+  });
+
+  it('plays the same match whether stepped or run whole', () => {
+    for (const seed of [3, 17, 41, 99]) {
+      const whole = createMatch(buildDemoDeck(), buildDemoDeck(), seed, { ai: 'Manufacturer' });
+      const stepped = createMatch(buildDemoDeck(), buildDemoDeck(), seed, { ai: 'Manufacturer' });
+      for (let t = 0; t < 40 && !whole.winner; t++) {
+        if (whole.current === 'player') {
+          endTurn(whole);
+          endTurn(stepped);
+          continue;
+        }
+        playAiTurn(whole);
+        const turn = aiTurn(stepped);
+        for (let step = turn.next(); !step.done; step = turn.next(applyAiIntent(stepped, step.value)));
+      }
+      expect({ ...stepped, events: [] }).toEqual({ ...whole, events: [] });
+    }
   });
 });
