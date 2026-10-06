@@ -1,5 +1,4 @@
-import type { GameEvent } from '../engine/events';
-import { HERO_POWER_COST, MAX_MANA } from '../engine/state';
+import type { CueRef, GameEvent } from '../engine/events';
 import type { PlayerView, SerialisedMinion } from '../net/protocol';
 
 /**
@@ -10,67 +9,65 @@ import type { PlayerView, SerialisedMinion } from '../net/protocol';
  * cue played, and a health gem dropped before the hit landed. Now the table
  * draws `shown`, and playback walks it towards the view one cue at a time.
  *
- * Cues today carry *what happened* but rarely *what it produced*, so anything
- * a cue does not say is read from `target`, the view being walked towards
- * (a summoned minion, a buff's new stats, an equipped weapon). That is an
- * approximation — a minion buffed and then damaged in the same batch shows its
- * final health a moment early — and the table snaps `shown` to the view when
- * playback ends, so no approximation outlives a drain. REVISIONS.md R1.1 has
- * cues carry their results, at which point `target` stops being needed.
+ * Every cue carries what it produced (health after a hit, the minion summoned,
+ * mana after a card), so this needs nothing but the cue. `apply.test.ts` folds
+ * whole matches through it and asserts it lands exactly where the engine did.
+ *
+ * Two things it deliberately does not track:
+ *  - **your hand's contents** — a `draw` never names its card, because both
+ *    players receive every cue. The table reads your hand from the view;
+ *  - **who won**, and the input flags (`canHeroAttack`, `canUseHeroPower`) —
+ *    nothing is clickable during playback, and the table syncs to the view
+ *    when it ends.
  *
  * Pure: no DOM, no timers. `death` removes the minion outright — the table
  * plays the shatter first and applies the cue after it.
  */
-export function applyCue(shown: PlayerView, cue: GameEvent, target: PlayerView): PlayerView {
+export function applyCue(shown: PlayerView, cue: GameEvent): PlayerView {
   const sideOf = (owner: string): Side => (owner === shown.you ? 'me' : 'foe');
 
   switch (cue.type) {
     case 'turn': {
       const s = sideOf(cue.owner);
-      const maxMana = Math.min(MAX_MANA, shown[s].maxMana + 1);
       const next = patchSide(shown, s, {
-        maxMana,
-        mana: maxMana,
+        mana: cue.mana,
+        maxMana: cue.maxMana,
         heroPowerUsed: false,
         board: shown[s].board.map((m) => ({ ...m, summonedThisTurn: false, attacksThisTurn: 0, frozen: false }))
       });
-      return { ...next, turn: cue.owner, turnNumber: shown.turnNumber + 1 };
+      return { ...next, turn: cue.owner, turnNumber: cue.turnNumber };
     }
 
     case 'draw': {
       const s = sideOf(cue.owner);
-      const deckCount = Math.max(0, shown[s].deckCount - 1);
-      if (s === 'me') return patchSide(shown, 'me', { deckCount });
-      return patchSide(shown, 'foe', { deckCount, handCount: shown.foe.handCount + 1 });
+      if (s === 'me') return patchSide(shown, 'me', { deckCount: cue.deckCount });
+      return patchSide(shown, 'foe', { deckCount: cue.deckCount, handCount: shown.foe.handCount + 1 });
     }
+
+    case 'burn':
+      return patchSide(shown, sideOf(cue.owner), { deckCount: cue.deckCount });
 
     case 'play': {
       const s = sideOf(cue.owner);
-      const mana = Math.max(0, shown[s].mana - cue.card.cost);
-      if (s === 'me') return patchSide(shown, 'me', { mana });
-      return patchSide(shown, 'foe', { mana, handCount: Math.max(0, shown.foe.handCount - 1) });
+      if (s === 'me') return patchSide(shown, 'me', { mana: cue.mana });
+      return patchSide(shown, 'foe', { mana: cue.mana, handCount: Math.max(0, shown.foe.handCount - 1) });
     }
+
+    case 'mana':
+      return patchSide(shown, sideOf(cue.owner), { mana: cue.mana });
 
     case 'summon': {
       const s = sideOf(cue.owner);
-      const minion = target[s].board.find((m) => m.instanceId === cue.instanceId);
-      // Summoned and gone again inside one batch: nothing left to show.
-      if (!minion || shown[s].board.some((m) => m.instanceId === cue.instanceId)) return shown;
-      return patchSide(shown, s, { board: insertInOrder(shown[s].board, minion, target[s].board) });
+      if (shown[s].board.some((m) => m.instanceId === cue.instanceId)) return shown;
+      return withSpellDamage(patchSide(shown, s, { board: insertAfter(shown[s].board, cue.minion, cue.after) }));
     }
 
-    case 'damage': {
-      if (cue.target.kind === 'hero') {
-        const s = sideOf(cue.target.owner);
-        const absorbed = Math.min(shown[s].armor, cue.amount);
-        return patchSide(shown, s, {
-          armor: shown[s].armor - absorbed,
-          health: shown[s].health - (cue.amount - absorbed)
-        });
-      }
-      const amount = cue.amount;
-      return mapMinion(shown, cue.target.instanceId, (m) => ({ ...m, health: m.health - amount }));
-    }
+    case 'attack':
+      return mapMinion(shown, cue.instanceId, (m) => ({ ...m, attacksThisTurn: m.attacksThisTurn + 1 }));
+
+    case 'damage':
+    case 'heal':
+      return setHealth(shown, cue.target, cue.health, cue.type === 'damage' ? cue.armor : undefined);
 
     case 'shield':
       return mapMinion(shown, cue.instanceId, (m) => ({
@@ -81,74 +78,118 @@ export function applyCue(shown: PlayerView, cue: GameEvent, target: PlayerView):
 
     case 'death': {
       const s = sideOf(cue.owner);
-      return patchSide(shown, s, { board: shown[s].board.filter((m) => m.instanceId !== cue.instanceId) });
+      return withSpellDamage(
+        patchSide(shown, s, { board: shown[s].board.filter((m) => m.instanceId !== cue.instanceId) })
+      );
     }
 
     case 'freeze':
       return mapMinion(shown, cue.instanceId, (m) => ({ ...m, frozen: true }));
 
     case 'silence':
+      return withSpellDamage(
+        mapMinion(shown, cue.instanceId, (m) => ({ ...m, silenced: true, keywords: [], divineShield: false }))
+      );
+
+    case 'buff':
       return mapMinion(shown, cue.instanceId, (m) => ({
         ...m,
-        silenced: true,
-        keywords: [],
-        divineShield: false
+        attack: cue.attack,
+        health: cue.health,
+        maxHealth: cue.maxHealth,
+        buffed: true
       }));
 
-    case 'buff': {
-      const after = findMinion(target, cue.instanceId);
-      return mapMinion(shown, cue.instanceId, (m) =>
-        after
-          ? {
-              ...m,
-              attack: after.attack,
-              health: after.health,
-              maxHealth: after.maxHealth,
-              keywords: after.keywords,
-              buffed: true
-            }
-          : { ...m, buffed: true }
-      );
-    }
+    case 'keyword':
+      return mapMinion(shown, cue.instanceId, (m) => ({
+        ...m,
+        keywords: [...cue.keywords],
+        divineShield: cue.divineShield
+      }));
 
-    case 'equip': {
+    case 'equip':
+      return patchSide(shown, sideOf(cue.owner), { weapon: { ...cue.weapon } });
+
+    case 'heroAttack': {
       const s = sideOf(cue.owner);
-      return patchSide(shown, s, { weapon: target[s].weapon });
+      const weapon = shown[s].weapon;
+      return weapon ? patchSide(shown, s, { weapon: { ...weapon, durability: cue.durability } }) : shown;
     }
 
     case 'weaponBreak':
       return patchSide(shown, sideOf(cue.owner), { weapon: null });
 
-    case 'armor': {
-      const s = sideOf(cue.owner);
-      return patchSide(shown, s, { armor: target[s].armor });
-    }
+    case 'armor':
+      return patchSide(shown, sideOf(cue.owner), { armor: cue.armor });
 
-    case 'heroPower': {
-      const s = sideOf(cue.owner);
-      return patchSide(shown, s, {
-        heroPowerUsed: true,
-        mana: Math.max(0, shown[s].mana - HERO_POWER_COST)
-      });
-    }
+    case 'heroPower':
+      return patchSide(shown, sideOf(cue.owner), { heroPowerUsed: true, mana: cue.mana });
 
-    case 'attack':
-    case 'heroAttack':
+    case 'trigger':
+    case 'effect':
+    case 'fatigue':
       return shown;
   }
+}
+
+/**
+ * The parts of a view that playback is responsible for, flattened for
+ * comparison. The table warns when `shown` and the view disagree on any of
+ * these after a drain; the replay test fails on it.
+ */
+export function presented(view: PlayerView) {
+  const minion = (m: SerialisedMinion) => ({
+    instanceId: m.instanceId,
+    cardId: m.card.id,
+    attack: m.attack,
+    health: m.health,
+    maxHealth: m.maxHealth,
+    keywords: [...m.keywords],
+    divineShield: m.divineShield,
+    summonedThisTurn: m.summonedThisTurn,
+    attacksThisTurn: m.attacksThisTurn,
+    frozen: m.frozen,
+    silenced: m.silenced,
+    buffed: m.buffed
+  });
+  const side = (s: PlayerView['me'] | PlayerView['foe']) => ({
+    health: s.health,
+    armor: s.armor,
+    mana: s.mana,
+    maxMana: s.maxMana,
+    deckCount: s.deckCount,
+    weapon: s.weapon ? { ...s.weapon } : null,
+    heroPowerUsed: s.heroPowerUsed,
+    spellDamage: s.spellDamage,
+    board: s.board.map(minion)
+  });
+  return {
+    turn: view.turn,
+    turnNumber: view.turnNumber,
+    me: side(view.me),
+    foe: { ...side(view.foe), handCount: view.foe.handCount }
+  };
+}
+
+/** Dotted paths where two views differ in what playback presents. Empty means agreed. */
+export function presentedDiff(a: PlayerView, b: PlayerView): string[] {
+  const out: string[] = [];
+  const walk = (x: unknown, y: unknown, path: string) => {
+    if (x !== null && y !== null && typeof x === 'object' && typeof y === 'object') {
+      const keys = new Set([...Object.keys(x), ...Object.keys(y)]);
+      for (const k of keys) walk((x as Record<string, unknown>)[k], (y as Record<string, unknown>)[k], `${path}.${k}`);
+    } else if (x !== y) {
+      out.push(`${path.slice(1)}: ${JSON.stringify(x)} → ${JSON.stringify(y)}`);
+    }
+  };
+  walk(presented(a), presented(b), '');
+  return out;
 }
 
 type Side = 'me' | 'foe';
 
 function patchSide<S extends Side>(view: PlayerView, side: S, patch: Partial<PlayerView[S]>): PlayerView {
   return { ...view, [side]: { ...view[side], ...patch } };
-}
-
-function findMinion(view: PlayerView, instanceId: string): SerialisedMinion | undefined {
-  return (
-    view.me.board.find((m) => m.instanceId === instanceId) ??
-    view.foe.board.find((m) => m.instanceId === instanceId)
-  );
 }
 
 function mapMinion(
@@ -166,22 +207,42 @@ function mapMinion(
   return view;
 }
 
+function setHealth(view: PlayerView, target: CueRef, health: number, armor?: number): PlayerView {
+  if (target.kind === 'minion') return mapMinion(view, target.instanceId, (m) => ({ ...m, health }));
+  const side: Side = target.owner === view.you ? 'me' : 'foe';
+  return patchSide(view, side, armor === undefined ? { health } : { health, armor });
+}
+
 /**
- * Inserts a summoned minion where it ends up relative to its neighbours.
- *
- * Its index in the final board is no use on its own: minions that die later in
- * the batch are still on screen, and minions summoned later are not yet. So it
- * goes in after the nearest minion to its left that is already shown.
+ * Spell Damage is derived from the board — the sum of its unsilenced minions'
+ * — exactly as `spellPowerOf` derives it in the engine, so it moves whenever
+ * the board does.
  */
-function insertInOrder(
+function withSpellDamage(view: PlayerView): PlayerView {
+  const sum = (board: SerialisedMinion[]) =>
+    board.reduce((total, m) => total + (m.silenced ? 0 : (m.card.spellDamage ?? 0)), 0);
+  return {
+    ...view,
+    me: { ...view.me, spellDamage: sum(view.me.board) },
+    foe: { ...view.foe, spellDamage: sum(view.foe.board) }
+  };
+}
+
+/**
+ * Inserts a summoned minion after the neighbour it landed beside.
+ *
+ * Not by index: a minion dying in the same batch is still on screen until its
+ * own death cue, so the engine's index would be off by however many are
+ * waiting to shatter. Its left neighbour, though, is alive and shown.
+ */
+function insertAfter(
   board: SerialisedMinion[],
   minion: SerialisedMinion,
-  finalBoard: SerialisedMinion[]
+  after: string | null
 ): SerialisedMinion[] {
-  const at = finalBoard.findIndex((m) => m.instanceId === minion.instanceId);
-  for (let i = at - 1; i >= 0; i--) {
-    const index = board.findIndex((m) => m.instanceId === finalBoard[i].instanceId);
-    if (index >= 0) return [...board.slice(0, index + 1), minion, ...board.slice(index + 1)];
-  }
-  return [minion, ...board];
+  const fresh = { ...minion, keywords: [...minion.keywords] };
+  if (after === null) return [fresh, ...board];
+  const index = board.findIndex((m) => m.instanceId === after);
+  if (index < 0) return [...board, fresh];
+  return [...board.slice(0, index + 1), fresh, ...board.slice(index + 1)];
 }

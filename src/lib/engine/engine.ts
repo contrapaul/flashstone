@@ -1,7 +1,7 @@
 import type { Card, CardClass, Effect, Trigger } from '../../types/cards';
 import { HERO_POWERS } from '../data/classes';
 import { STUDY_NOTE, tokenById } from '../data/tokens';
-import type { GameEvent } from './events';
+import type { CueRef, GameEvent } from './events';
 import { createRng, pick, shuffle, type Rng } from './rng';
 import {
   BOARD_LIMIT,
@@ -16,6 +16,8 @@ import {
   legalTargets,
   opponentOf,
   silence,
+  snapshotMinion,
+  snapshotWeapon,
   spellTargets,
   type Character,
   type MatchState,
@@ -86,6 +88,8 @@ export function createMatch(
   for (let i = 0; i < 3; i++) drawCard(state, 'player');
   for (let i = 0; i < 4; i++) drawCard(state, 'ai');
   state.players.ai.hand.push(COIN_CARD);
+  // Seen arriving like any card, so the hand on screen counts it.
+  emit(state, { type: 'draw', owner: 'ai', deckCount: state.players.ai.deck.length });
 
   startTurn(state, 'player');
   return state;
@@ -94,6 +98,19 @@ export function createMatch(
 /** Queues an animation cue. Cosmetic only — no rule depends on the queue. */
 function emit(state: MatchState, event: GameEvent): void {
   state.events.push(event);
+}
+
+function refOf(target: Character): CueRef {
+  return target.kind === 'hero'
+    ? { kind: 'hero', owner: target.owner }
+    : { kind: 'minion', instanceId: target.minion.instanceId };
+}
+
+/** Lights a minion's text before it fires, when it has any for this trigger. */
+function emitTrigger(state: MatchState, minion: MinionInstance, trigger: Trigger): void {
+  if (minion.card.effects.some((e) => e.trigger === trigger)) {
+    emit(state, { type: 'trigger', instanceId: minion.instanceId, trigger });
+  }
 }
 
 /** Each match re-derives its RNG from the seed plus turn count so replays match. */
@@ -117,7 +134,7 @@ function startTurn(state: MatchState, id: PlayerId): void {
     minion.frozen = false;
   }
   state.log.push(`— ${id} turn ${state.turnNumber} (${p.mana} mana) —`);
-  emit(state, { type: 'turn', owner: id });
+  emit(state, { type: 'turn', owner: id, turnNumber: state.turnNumber, mana: p.mana, maxMana: p.maxMana });
   drawCard(state, id);
   triggerBoard(state, id, 'StartOfTurn');
 }
@@ -134,6 +151,7 @@ function triggerBoard(state: MatchState, id: PlayerId, trigger: Trigger): void {
   // Snapshot: effects can kill minions mid-loop.
   for (const minion of [...state.players[id].board]) {
     if (!state.players[id].board.includes(minion)) continue;
+    emitTrigger(state, minion, trigger);
     for (const effect of minion.card.effects) {
       if (effect.trigger === trigger) resolveEffect(state, id, minion, effect);
     }
@@ -149,15 +167,17 @@ export function drawCard(state: MatchState, id: PlayerId): void {
   if (!card) {
     p.fatigue++;
     state.log.push(`${id} is out of cards — ${p.fatigue} fatigue damage.`);
+    emit(state, { type: 'fatigue', owner: id, amount: p.fatigue });
     damageHero(state, id, p.fatigue);
     return;
   }
   if (p.hand.length >= HAND_LIMIT) {
     state.log.push(`${id}'s hand is full — ${card.name} burned.`);
+    emit(state, { type: 'burn', owner: id, card, deckCount: p.deck.length });
     return;
   }
   p.hand.push(card);
-  emit(state, { type: 'draw', owner: id });
+  emit(state, { type: 'draw', owner: id, deckCount: p.deck.length });
 }
 
 export function canPlayCard(state: MatchState, id: PlayerId, handIndex: number): boolean {
@@ -201,16 +221,14 @@ export function playCard(
     owner: id,
     card,
     handIndex,
-    target: chosen
-      ? chosen.kind === 'hero'
-        ? { kind: 'hero', owner: chosen.owner }
-        : { kind: 'minion', instanceId: chosen.minion.instanceId }
-      : undefined
+    target: chosen ? refOf(chosen) : undefined,
+    mana: p.mana
   });
 
   let summoned: MinionInstance | undefined;
   if (card.type === 'Minion') summoned = summon(state, id, card, slot);
   else if (card.type === 'Weapon') equipWeapon(state, id, card);
+  if (summoned) emitTrigger(state, summoned, 'Battlecry');
 
   // Battlecry-triggered effects fire on play, for minions and spells alike.
   //
@@ -255,7 +273,7 @@ export function useHeroPower(
   p.mana -= HERO_POWER_COST;
   p.heroPowerUsedThisTurn = true;
   state.log.push(`${id} uses ${power.name}.`);
-  emit(state, { type: 'heroPower', owner: id });
+  emit(state, { type: 'heroPower', owner: id, mana: p.mana });
 
   for (const effect of power.effects(state, id)) {
     resolveEffect(state, id, undefined, effect, chosen, true);
@@ -302,7 +320,7 @@ function equipWeapon(state: MatchState, id: PlayerId, card: Card): void {
   const p = state.players[id];
   if (p.weapon) state.log.push(`${p.weapon.card.name} is discarded.`);
   p.weapon = { card, attack: card.attack ?? 0, durability: card.durability ?? 1 };
-  emit(state, { type: 'equip', owner: id });
+  emit(state, { type: 'equip', owner: id, weapon: snapshotWeapon(p.weapon)! });
 }
 
 /**
@@ -327,7 +345,12 @@ export function heroAttack(state: MatchState, id: PlayerId, target: Character): 
   if (!match) return false;
 
   p.heroAttacksThisTurn++;
-  emit(state, { type: 'heroAttack', owner: id });
+  emit(state, {
+    type: 'heroAttack',
+    owner: id,
+    target: match.kind === 'hero' ? { kind: 'hero', owner: foe } : refOf(match),
+    durability: p.weapon.durability - 1
+  });
 
   const damage = p.weapon.attack;
   if (match.kind === 'hero') {
@@ -375,7 +398,13 @@ function summon(
   const at =
     slot === undefined ? p.board.length : Math.min(Math.max(slot, 0), p.board.length);
   p.board.splice(at, 0, minion);
-  emit(state, { type: 'summon', owner: id, instanceId: minion.instanceId });
+  emit(state, {
+    type: 'summon',
+    owner: id,
+    instanceId: minion.instanceId,
+    minion: snapshotMinion(minion),
+    after: p.board[at - 1]?.instanceId ?? null
+  });
   return minion;
 }
 
@@ -411,6 +440,7 @@ export function attack(
         ? { kind: 'hero', owner: defenderId }
         : { kind: 'minion', instanceId: chosen.minion.instanceId }
   });
+  emitTrigger(state, attacker, 'OnAttack');
   for (const effect of attacker.card.effects) {
     if (effect.trigger === 'OnAttack') resolveEffect(state, id, attacker, effect);
   }
@@ -443,7 +473,8 @@ function damageMinion(state: MatchState, minion: MinionInstance, amount: number)
   emit(state, {
     type: 'damage',
     target: { kind: 'minion', instanceId: minion.instanceId },
-    amount
+    amount,
+    health: minion.health
   });
 }
 
@@ -454,7 +485,7 @@ function damageHero(state: MatchState, id: PlayerId, amount: number): void {
   const absorbed = Math.min(p.armor, amount);
   p.armor -= absorbed;
   p.health -= amount - absorbed;
-  emit(state, { type: 'damage', target: { kind: 'hero', owner: id }, amount });
+  emit(state, { type: 'damage', target: { kind: 'hero', owner: id }, amount, health: p.health, armor: p.armor });
   checkWinner(state);
 }
 
@@ -476,6 +507,8 @@ function checkDeaths(state: MatchState): void {
       state.players[owner].board = board.filter((m) => m.health > 0);
       for (const minion of dead) {
         state.log.push(`${minion.card.name} dies.`);
+        // The flare comes first, while the minion is still there to flare.
+        emitTrigger(state, minion, 'Deathrattle');
         emit(state, { type: 'death', owner, instanceId: minion.instanceId });
         for (const effect of minion.card.effects) {
           if (effect.trigger === 'Deathrattle') resolveEffect(state, owner, minion, effect);
@@ -598,12 +631,13 @@ function resolveEffect(
 
   if (effect.action === 'GainArmor') {
     state.players[owner].armor += value;
-    emit(state, { type: 'armor', owner });
+    emit(state, { type: 'armor', owner, armor: state.players[owner].armor });
     return;
   }
   if (effect.action === 'GainMana') {
     const p = state.players[owner];
     p.mana = Math.min(MAX_MANA, p.mana + value);
+    emit(state, { type: 'mana', owner, mana: p.mana });
     return;
   }
 
@@ -617,27 +651,38 @@ function resolveEffect(
         : []
       : resolveTargets(state, owner, source, effect, rng);
 
+  if (targets.length > 0) {
+    emit(state, {
+      type: 'effect',
+      owner,
+      source: source ? { kind: 'minion', instanceId: source.instanceId } : null,
+      action: effect.action,
+      targets: targets.map(refOf)
+    });
+  }
+
   for (const target of targets) {
     switch (effect.action) {
       case 'DealDamage':
         damageCharacter(state, target, value);
         break;
 
-      case 'Heal':
-        if (target.kind === 'hero') {
-          const p = state.players[target.owner];
-          p.health = Math.min(HERO_HEALTH, p.health + value);
-        } else {
-          const m = target.minion;
-          m.health = Math.min(m.maxHealth, m.health + value);
+      case 'Heal': {
+        const holder = target.kind === 'hero' ? state.players[target.owner] : target.minion;
+        const cap = target.kind === 'hero' ? HERO_HEALTH : target.minion.maxHealth;
+        const before = holder.health;
+        holder.health = Math.min(cap, holder.health + value);
+        if (holder.health > before) {
+          emit(state, { type: 'heal', target: refOf(target), amount: holder.health - before, health: holder.health });
         }
         break;
+      }
 
       case 'BuffAttack':
         if (target.kind === 'minion') {
           target.minion.attack += value;
           target.minion.buffed = true;
-          emit(state, { type: 'buff', instanceId: target.minion.instanceId });
+          emitBuff(state, target.minion);
         }
         break;
 
@@ -646,7 +691,7 @@ function resolveEffect(
           target.minion.maxHealth += value;
           target.minion.health += value;
           target.minion.buffed = true;
-          emit(state, { type: 'buff', instanceId: target.minion.instanceId });
+          emitBuff(state, target.minion);
         }
         break;
 
@@ -677,7 +722,7 @@ function resolveEffect(
           // maxHealth follows, or the minion reads as damaged the moment it swaps.
           m.maxHealth = Math.max(wasAttack, 1);
           m.buffed = true;
-          emit(state, { type: 'buff', instanceId: m.instanceId });
+          emitBuff(state, m);
         }
         break;
 
@@ -689,9 +734,25 @@ function resolveEffect(
         if (!target.minion.keywords.includes(keyword)) {
           target.minion.keywords.push(keyword);
           if (keyword === 'DivineShield') target.minion.divineShield = true;
+          emit(state, {
+            type: 'keyword',
+            instanceId: target.minion.instanceId,
+            keywords: [...target.minion.keywords],
+            divineShield: target.minion.divineShield
+          });
         }
         break;
       }
     }
   }
+}
+
+function emitBuff(state: MatchState, minion: MinionInstance): void {
+  emit(state, {
+    type: 'buff',
+    instanceId: minion.instanceId,
+    attack: minion.attack,
+    health: minion.health,
+    maxHealth: minion.maxHealth
+  });
 }

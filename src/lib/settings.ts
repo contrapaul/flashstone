@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
+import type { Motion, OpponentPace } from './presentation/motion';
 
 /**
  * Player settings, persisted to localStorage.
@@ -19,23 +20,37 @@ export interface Settings {
    * and it never puts the definition on the card face.
    */
   definitionsInGame: boolean;
+  /**
+   * How the table moves. Full, Fast (everything at a bit over half the time),
+   * or Reduced (nothing travels or shakes; it fades). Defaults to Reduced when
+   * the device asks for less motion.
+   */
+  motion: Motion;
+  /** How long the opponent's turn takes. Measured gives a new player time to see what hit them. */
+  opponentPace: OpponentPace;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  definitionsInGame: true
+  definitionsInGame: true,
+  motion: 'full',
+  opponentPace: 'measured'
 };
 
 const KEY = 'flashstone.settings';
 
 function load(): Settings {
   if (!browser) return DEFAULT_SETTINGS;
+  const defaults: Settings = {
+    ...DEFAULT_SETTINGS,
+    motion: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full'
+  };
   try {
     const raw = localStorage.getItem(KEY);
     // Merged over the defaults so a setting added later has a value on an old
     // stored object, rather than arriving as undefined.
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
   } catch {
-    return DEFAULT_SETTINGS;
+    return defaults;
   }
 }
 
@@ -55,8 +70,10 @@ function createSettings() {
 
   return {
     subscribe,
-    toggle: (key: keyof Settings) =>
+    toggle: (key: 'definitionsInGame') =>
       update((value) => persist({ ...value, [key]: !value[key] })),
+    choose: <K extends keyof Settings>(key: K, choice: Settings[K]) =>
+      update((value) => persist({ ...value, [key]: choice })),
     set: (value: Settings) => set(persist(value)),
     /** Re-reads storage. Needed once on mount, since SSR loads the defaults. */
     hydrate: () => set(load())

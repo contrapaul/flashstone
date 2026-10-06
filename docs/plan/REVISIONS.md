@@ -295,7 +295,44 @@ runs ahead of its cue and no cue goes unseen.
 **Depends on:** nothing. D6 is its first half.
 **Blocks:** R2, R3, R5, the engine work in R8, and mulligan in R9.
 
-- [ ] **R1.1 — Cues carry results.** Extend `GameEvent` (`events.ts`):
+> ## Built 2026-10-07 — 401 tests, 0 check errors, both projects build. Not deployed.
+>
+> **The replay invariant holds.** 200 seeded matches, decks drawn at random from
+> all 210 cards plus The Coin, both sides playing aimed spells, hero powers,
+> weapons and attacks: after every one of 5,000+ intents, folding its cues over
+> the view before it equals the engine's view in every presented field. The test
+> also requires all 23 cue types to occur. Four deliberate mutations (deleting
+> the heal, keyword, mana and turn emits) each fail it with the seed, the step
+> and the field.
+>
+> **Where things live now:** cue shapes and results in `engine/events.ts`; the
+> snapshot types in `engine/state.ts` (the protocol's `SerialisedMinion` is an
+> alias of them now, so a cue and a view cannot disagree); the reducer and
+> `presentedDiff` in `presentation/apply.ts`; one choreography per cue in
+> `presentation/director.ts`, which works through a `Stage` the table
+> implements; `d()`, `spatial()` and `flipZoomed` in `presentation/motion.ts`;
+> particles in `presentation/fx.ts` with `components/FxLayer.svelte`.
+>
+> **Measured in the browser:** the particle loop requests **zero** frames over
+> two idle seconds; 400 particles at once hold a median 8.3ms frame (p95 9.7ms)
+> on a desktop; an element's drawn scale is exactly the board's zoom (1.311 at
+> 1920×1080), which is what lunges and reflow divide by; several turns of a
+> practice match, including a weapon swing and a double death, with no drift
+> warning. Hits now throw sparks scaled by `hitIntensity` and deaths throw
+> shards — R1.8's first consumers, ahead of the rest of R3.
+>
+> **Two changes beyond the steps:** The Coin now arrives with a `draw` cue, so
+> the opponent's hand count is right from the opening; and a minion's health gem
+> shows 0, not −2, while an overkilled minion shatters.
+>
+> **Not verified:** frame rate on an iPad; Reduced motion through a whole
+> match (the setting applies and persists, and the guards are in place); the
+> reflow with three or more minions on a board.
+>
+> **Deploying:** the cue shapes changed, so the realtime Worker and the Pages
+> app must ship together, as with D8.
+
+- [x] **R1.1 — Cues carry results.** Extend `GameEvent` (`events.ts`):
 
       | Cue | New or changed | Carries |
       |---|---|---|
@@ -316,7 +353,7 @@ runs ahead of its cue and no cue goes unseen.
       → **verify:** an `events.test.ts` that drives every action in the `Action`
       union and asserts each emits. All 385 existing tests pass.
 
-- [ ] **R1.2 — The replay invariant.** This is the keystone test, and the
+- [x] **R1.2 — The replay invariant.** This is the keystone test, and the
       project's usual habit: *simulate, don't derive*. For 200 seeded AI-vs-AI
       matches, take the view before each intent, fold its cues through
       `applyCue`, and assert the result deep-equals `viewFor(state)` after the intent
@@ -326,32 +363,32 @@ runs ahead of its cue and no cue goes unseen.
       → **verify:** green over 200 matches. Then delete one `emit` on purpose,
       confirm the test fails and names the site, and put it back.
 
-- [ ] **R1.3 — `applyCue` reducer** in `src/lib/presentation/apply.ts`: pure, no DOM,
+- [x] **R1.3 — `applyCue` reducer** in `src/lib/presentation/apply.ts`: pure, no DOM,
       used by the table and by R1.2.
       → **verify:** unit tests per cue.
 
-- [ ] **R1.4 — The table renders `shown`.** D6 switches from guessing to
+- [x] **R1.4 — The table renders `shown`.** D6 switches from guessing to
       `applyCue`. At the end of the drain, if `shown` and `view` differ, log a dev
       warning naming the field: that is a missed cue in the wild.
       → **verify:** a full AI match with zero warnings.
 
-- [ ] **R1.5 — Director.** `play()` becomes `director[cue.type](cue, stage)`. `stage`
+- [x] **R1.5 — Director.** `play()` becomes `director[cue.type](cue, stage)`. `stage`
       exposes element lookup (minion by instanceId, hero, hand slot, deck pile, the
       showcase spot), the FX layer, shake, banner and sound. Each choreography awaits
       its own animation. `EVENT_BEAT` remains only as a minimum hold.
       → **verify:** no `setTimeout` left in `MatchTable.svelte`'s playback path.
 
-- [ ] **R1.6 — Motion settings.** Port `motion.ts`. Settings gain **Animation speed**
+- [x] **R1.6 — Motion settings.** Port `motion.ts`. Settings gain **Animation speed**
       (Full / Fast / Reduced) and **Opponent pace** (default 1.3× slower).
       `prefers-reduced-motion` selects Reduced on first run.
       → **verify:** Reduced has no lunges, shakes or flights; fades only; and a
       match is still fully readable.
 
-- [ ] **R1.7 — GSAP and `animate:flip`.** Add `gsap` (^3.13). Put `animate:flip` on
+- [x] **R1.7 — GSAP and `animate:flip`.** Add `gsap` (^3.13). Put `animate:flip` on
       both board `#each` blocks and on the hand.
       → **verify:** a death in the middle of a board slides the neighbours together.
 
-- [ ] **R1.8 — FX canvas.** `FxLayer.svelte` with `burst`, `shards`, `trail`, `ring`
+- [x] **R1.8 — FX canvas.** `FxLayer.svelte` with `burst`, `shards`, `trail`, `ring`
       and `motes`. DPR-aware. The rAF loop stops when no particles are alive.
       → **verify:** CPU is idle on an idle board (Performance panel); 300 sparks
       hold 60fps on the iPad.

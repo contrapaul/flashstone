@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Card, CardClass } from '../../types/cards';
 import type { GameEvent } from '../engine/events';
-import type { PlayerId } from '../engine/state';
+import type { MinionSnapshot, PlayerId, WeaponSnapshot } from '../engine/state';
 
 /**
  * The wire between the browser and the match Durable Object.
@@ -113,26 +113,9 @@ export interface PlayerView {
   turnEndsIn: number;
 }
 
-export interface SerialisedWeapon {
-  name: string;
-  attack: number;
-  durability: number;
-}
-
-export interface SerialisedMinion {
-  instanceId: string;
-  card: Card;
-  attack: number;
-  health: number;
-  maxHealth: number;
-  keywords: string[];
-  divineShield: boolean;
-  summonedThisTurn: boolean;
-  attacksThisTurn: number;
-  frozen: boolean;
-  silenced: boolean;
-  buffed: boolean;
-}
+/** The engine's snapshot shapes, so a cue and a view can never disagree on one. */
+export type SerialisedWeapon = WeaponSnapshot;
+export type SerialisedMinion = MinionSnapshot;
 
 export interface OpponentInfo {
   username: string;

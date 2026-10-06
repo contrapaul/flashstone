@@ -65,6 +65,53 @@ export interface MatchState {
   events: import('./events').GameEvent[];
 }
 
+/**
+ * A minion as it may be shown: what the view sends and what a `summon` cue
+ * carries. Defined here rather than in the protocol so the engine can emit it —
+ * the cue and the view are then the same shape by construction.
+ */
+export interface MinionSnapshot {
+  instanceId: string;
+  card: Card;
+  attack: number;
+  health: number;
+  maxHealth: number;
+  keywords: string[];
+  divineShield: boolean;
+  summonedThisTurn: boolean;
+  attacksThisTurn: number;
+  frozen: boolean;
+  silenced: boolean;
+  buffed: boolean;
+}
+
+export interface WeaponSnapshot {
+  name: string;
+  attack: number;
+  durability: number;
+}
+
+export function snapshotMinion(minion: MinionInstance): MinionSnapshot {
+  return {
+    instanceId: minion.instanceId,
+    card: minion.card,
+    attack: minion.attack,
+    health: minion.health,
+    maxHealth: minion.maxHealth,
+    keywords: [...minion.keywords],
+    divineShield: minion.divineShield,
+    summonedThisTurn: minion.summonedThisTurn,
+    attacksThisTurn: minion.attacksThisTurn,
+    frozen: minion.frozen,
+    silenced: minion.silenced,
+    buffed: minion.buffed
+  };
+}
+
+export function snapshotWeapon(weapon: WeaponInstance | null): WeaponSnapshot | null {
+  return weapon ? { name: weapon.card.name, attack: weapon.attack, durability: weapon.durability } : null;
+}
+
 /** A minion or a hero — anything that can be damaged or healed. */
 export type Character =
   | { kind: 'minion'; owner: PlayerId; minion: MinionInstance }

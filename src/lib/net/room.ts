@@ -18,19 +18,13 @@ import {
   spellPowerOf,
   findMinion,
   opponentOf,
+  snapshotMinion,
+  snapshotWeapon,
   type Character,
   type MatchState,
-  type MinionInstance,
   type PlayerId
 } from '../engine/state';
-import type {
-  ChosenRef,
-  ClientMessage,
-  PlayerView,
-  SerialisedMinion,
-  SerialisedWeapon,
-  TargetRef
-} from './protocol';
+import type { ChosenRef, ClientMessage, PlayerView, TargetRef } from './protocol';
 
 /**
  * The rules of an online match, with no sockets in sight.
@@ -213,28 +207,6 @@ export function forceEndTurn(state: MatchState): GameEvent[] {
   return events;
 }
 
-function serialiseWeapon(weapon: MatchState['players']['player']['weapon']): SerialisedWeapon | null {
-  return weapon
-    ? { name: weapon.card.name, attack: weapon.attack, durability: weapon.durability }
-    : null;
-}
-
-function serialiseMinion(minion: MinionInstance): SerialisedMinion {
-  return {
-    instanceId: minion.instanceId,
-    card: minion.card,
-    attack: minion.attack,
-    health: minion.health,
-    maxHealth: minion.maxHealth,
-    keywords: [...minion.keywords],
-    divineShield: minion.divineShield,
-    summonedThisTurn: minion.summonedThisTurn,
-    attacksThisTurn: minion.attacksThisTurn,
-    frozen: minion.frozen,
-    silenced: minion.silenced,
-    buffed: minion.buffed
-  };
-}
 
 /**
  * What one player may see.
@@ -259,8 +231,8 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       maxMana: me.maxMana,
       hand: me.hand,
       deckCount: me.deck.length,
-      board: me.board.map(serialiseMinion),
-      weapon: serialiseWeapon(me.weapon),
+      board: me.board.map(snapshotMinion),
+      weapon: snapshotWeapon(me.weapon),
       heroClass: me.heroClass,
       canUseHeroPower: canUseHeroPower(state, viewer),
       heroPowerUsed: me.heroPowerUsedThisTurn,
@@ -276,8 +248,8 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       maxMana: foe.maxMana,
       handCount: foe.hand.length,
       deckCount: foe.deck.length,
-      board: foe.board.map(serialiseMinion),
-      weapon: serialiseWeapon(foe.weapon),
+      board: foe.board.map(snapshotMinion),
+      weapon: snapshotWeapon(foe.weapon),
       heroClass: foe.heroClass,
       heroPowerUsed: foe.heroPowerUsedThisTurn,
       spellDamage: spellPowerOf(foe)

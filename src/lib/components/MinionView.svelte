@@ -15,6 +15,8 @@
   export let struck = false;
   /** Dying — plays the shatter, then the parent removes it. */
   export let dying = false;
+  /** Its text is firing — a Battlecry, a Deathrattle, a turn trigger. */
+  export let triggered = false;
 
   // Drawn art when the card has a file, the generated gradient when not — the
   // same two layers as CardPreview, so a card looks like itself on the board.
@@ -72,6 +74,7 @@
     class:stealth
     class:frozen={minion.frozen}
     class:silenced={minion.silenced}
+    class:triggered
     style:--art={drawnArt
       ? `url("${drawnArt}") center / cover no-repeat`
       : artFor(minion.card.name)}
@@ -108,7 +111,8 @@
     {/if}
 
     <span class="attack" class:buffed={minion.buffed}><span>{minion.attack}</span></span>
-    <span class="health" class:buffed={minion.buffed}>{minion.health}</span>
+    <!-- Overkill takes health below zero; the gem shows the 0 it shatters at. -->
+    <span class="health" class:buffed={minion.buffed}>{Math.max(0, minion.health)}</span>
   </button>
 </div>
 
@@ -121,9 +125,10 @@
   }
 
   .unit.selected { transform: translateY(-8px); }
-  .unit.summoning { animation: fs-summon .62s cubic-bezier(.2, 1.3, .4, 1); }
-  .unit.struck { animation: fs-shake .5s ease-out; }
-  .unit.dying { animation: fs-shatter .6s ease-in forwards; }
+  /* `--pace` is the table's playback speed, so these keep time with it. */
+  .unit.summoning { animation: fs-summon calc(.62s * var(--pace, 1)) cubic-bezier(.2, 1.3, .4, 1); }
+  .unit.struck { animation: fs-shake calc(.5s * var(--pace, 1)) ease-out; }
+  .unit.dying { animation: fs-shatter calc(.6s * var(--pace, 1)) ease-in forwards; }
 
   /*
    * Taunt: the Hearthstone silhouette — a heavy shield standing behind the
@@ -190,6 +195,25 @@
   .minion.selected {
     border: 2px solid var(--gold-bright);
     box-shadow: 0 16px 30px rgba(0, 0, 0, .6), 0 0 26px rgba(240, 214, 138, .65);
+  }
+
+  /* Its text firing: a gold flare from inside, over whatever else it wears. */
+  .minion.triggered::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    z-index: 4;
+    border-radius: 13px;
+    pointer-events: none;
+    box-shadow: 0 0 0 2px rgba(255, 226, 140, .95), 0 0 26px rgba(255, 206, 90, .9),
+      inset 0 0 24px rgba(255, 220, 130, .7);
+    animation: fs-flare calc(.52s * var(--pace, 1)) ease-out forwards;
+  }
+
+  @keyframes fs-flare {
+    0% { opacity: 0; transform: scale(.94); }
+    30% { opacity: 1; transform: scale(1.04); }
+    100% { opacity: 0; transform: scale(1.08); }
   }
 
   .minion.targetable {

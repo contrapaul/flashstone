@@ -1,6 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from 'svelte';
-  import { flip } from 'svelte/animate';
   import { gsap } from 'gsap';
   import CardPreview from './CardPreview.svelte';
   import MinionView from './MinionView.svelte';
@@ -14,7 +13,7 @@
   import HeroPowerButton from './HeroPowerButton.svelte';
   import { heroPowerFor } from '../data/classes';
   import { settings } from '../settings';
-  import { EVENT_BEAT, type GameEvent } from '../engine/events';
+  import type { GameEvent } from '../engine/events';
   import type { PlayerView, SerialisedMinion, TargetRef } from '../net/protocol';
   import {
     canAttackFromView,
@@ -29,7 +28,20 @@
   import { sceneUrl } from '../../utils/art';
   import GameMenu from './GameMenu.svelte';
   import { goto } from '$app/navigation';
-  import { applyCue } from '../presentation/apply';
+  import { applyCue, presentedDiff } from '../presentation/apply';
+  import { centreOf, direct, hold, type Mark, type Stage } from '../presentation/director';
+  import type { Fx } from '../presentation/fx';
+  import FxLayer from './FxLayer.svelte';
+  import {
+    MOTION_SCALE,
+    d,
+    flipZoomed,
+    opponentTurn,
+    setMotion,
+    setOpponentPace,
+    sleep,
+    spatial
+  } from '../presentation/motion';
 
   /**
    * The painted backdrop, when one has been dropped into `static/art/scene/`.
@@ -79,9 +91,13 @@
   }>();
 
   // ── Presentation state, driven by the event queue ──
-  let summoningId: string | null = null;
-  let dyingIds = new Set<string>();
-  let struckIds = new Set<string>();
+  /** Minions mid-animation, by kind. Each set is reassigned, never mutated. */
+  let marks: Record<Mark, Set<string>> = {
+    summoning: new Set(),
+    struck: new Set(),
+    dying: new Set(),
+    triggered: new Set()
+  };
   let quaking = false;
   let drawnCards = new Set<Card>();
   let hitHero: 'me' | 'foe' | null = null;
@@ -89,31 +105,34 @@
   let floats: { id: number; text: string; color: string; x: number; y: number }[] = [];
   let floatSeq = 0;
   let draining = false;
+  let fx: Fx | null = null;
 
   /**
    * The board **on screen**, which is not always the board in `view`.
    *
-   * `view` is where the match is; `shown` is where playback has got to. The
-   * table used to draw `view` the moment it arrived and replay cues over it, so
-   * a minion that died was gone before its death cue played and a health gem
-   * dropped before the hit landed. Now each cue moves `shown` one step towards
-   * `view` as it plays (`applyCue`), and the two are made equal when playback
-   * ends — so any cue that does not yet say everything it changed is corrected
-   * there, never left wrong.
+   * `view` is where the match is; `shown` is where playback has got to. Each
+   * cue moves `shown` one step towards `view` as it plays (`applyCue`), and the
+   * two are made equal when playback ends.
    *
-   * The **hand** is still read from `view`: it changes only through your own
-   * plays and draws, and `pendingDraws` already holds new cards back.
-   * Legality and input read `view` too — they are only live when nothing is
-   * playing, which is exactly when the two agree.
+   * The **hand** is still read from `view`: a draw never names its card, and
+   * `pendingDraws` holds new cards back until their cue. Legality and input
+   * read `view` too — they are only live when nothing is playing, which is
+   * exactly when the two agree.
    */
   let shown: PlayerView = view;
 
-  /** A card the opponent just played, held up large so it can be read. */
+  /** A card held up large so it can be read — the opponent's play, or a burn. */
   let showcase: { card: Card; key: number; from: { x: number; y: number } } | null = null;
   let showcaseKey = 0;
 
-  const reduceMotion =
-    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // The motion settings, applied before any cue is played.
+  $: setMotion($settings.motion);
+  $: setOpponentPace($settings.opponentPace);
+  $: still = $settings.motion === 'reduced';
+  $: flipMs = still ? 0 : Math.round(280 * MOTION_SCALE[$settings.motion]);
+  /** CSS animations run at the same pace as the playback around them. */
+  let pace = 1;
+
   let handWidth = 1440;
   let handHeight = 900;
   let inspected: Card | null = null;
@@ -202,7 +221,8 @@
         }, 1000);
 
   // ── Event playback ────────────────────────────────────────
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  // What each cue looks like lives in `presentation/director.ts`; this file
+  // runs the queue and gives the director a stage to work on.
 
   // Drains whenever new cues arrive. Must stay above the line below: draining
   // is set synchronously inside drain(), which is what keeps that line from
@@ -231,7 +251,9 @@
     attack: / (attacks|hits) /,
     shield: /Divine Shield/,
     death: / dies\.$/,
-    weaponBreak: / breaks\.$/
+    weaponBreak: / breaks\.$/,
+    burn: / burned\.$/,
+    fatigue: / fatigue damage\.$/
   };
 
   function uncoverLog(event: GameEvent) {
@@ -245,21 +267,28 @@
     }
   }
 
-  /** Hits that land together: the two sides of a trade, every target of a sweep. */
-  const IMPACT = new Set<GameEvent['type']>(['damage', 'shield']);
-
   async function drain() {
     if (draining) return;
     draining = true;
     shown = startingPoint(shown, view, events);
     while (events.length > 0) {
-      rememberPositions();
       const event = events.shift() as GameEvent;
       events = events;
+      // The opponent's turn plays at their pace, from whose turn is on screen —
+      // or, for the cue that hands the turn over, whose it is becoming.
+      opponentTurn((event.type === 'turn' ? event.owner : shown.turn) !== shown.you);
+      pace = d(1000) / 1000;
       uncoverLog(event);
-      await play(event);
-      const together = IMPACT.has(event.type) && events[0] !== undefined && IMPACT.has(events[0].type);
-      await sleep(together ? 60 : EVENT_BEAT[event.type]);
+      await direct(event, stage);
+      await sleep(hold(event, events[0]));
+    }
+    opponentTurn(false);
+    pace = d(1000) / 1000;
+    // Every cue carries its result, so this should change nothing. If it does,
+    // a mutation somewhere is not emitting what it did — say which.
+    if (import.meta.env.DEV) {
+      const drift = presentedDiff(shown, view);
+      if (drift.length > 0) console.warn('[playback] the board on screen drifted from the match:', drift);
     }
     shown = view;
     logShown = view.log.length;
@@ -292,137 +321,40 @@
     return owner === view.you ? 'me' : 'foe';
   }
 
-  /**
-   * Plays one cue, and moves the board on screen past it.
-   *
-   * The board steps forward at the moment the thing *lands* — after a lunge
-   * reaches its target, after a shatter finishes — which is why each case
-   * decides where in its own animation `advance` happens.
-   */
-  async function play(event: GameEvent) {
-    const advance = () => (shown = applyCue(shown, event, view));
-
-    switch (event.type) {
-      case 'play': {
-        // Your own card is already where you dropped it; only the opponent's
-        // needs to be shown being played.
-        if (sideOf(event.owner) === 'me') return advance();
-        const backs = foeHandEl?.querySelectorAll<HTMLElement>('.foe-card');
-        const back = backs?.[Math.min(event.handIndex, backs.length - 1)];
-        const from = back ? centreOf(back) : { x: window.innerWidth / 2, y: 0 };
-        advance();
-        showcase = { card: event.card, key: ++showcaseKey, from };
-        await sleep(reduceMotion ? 1000 : 1350);
-        showcase = null;
-        return;
-      }
-      case 'summon': {
-        advance();
-        summoningId = event.instanceId;
-        // Matches the .62s summon animation. It used to clear at 260ms, which
-        // cut the arrival off less than half way through it.
-        setTimeout(() => (summoningId = null), 620);
-        // A big minion lands with weight: the table jolts as it touches down.
-        const landed = [...shown.me.board, ...shown.foe.board].find((m) => m.instanceId === event.instanceId);
-        if (landed && landed.card.cost >= 6 && !reduceMotion) {
-          setTimeout(() => {
-            quaking = true;
-            setTimeout(() => (quaking = false), 500);
-          }, 300);
-        }
-        return;
-      }
-      case 'attack':
-        await lunge(unitOf(event.instanceId), targetElement(event.target));
-        return;
-      case 'heroAttack': {
-        // The cue carries no target; the hit that follows does.
-        const next = events.find(
-          (e): e is Extract<GameEvent, { type: 'damage' | 'shield' }> => e.type === 'damage' || e.type === 'shield'
-        );
-        const at = next?.type === 'damage' ? targetElement(next.target) : next ? unitOf(next.instanceId) : undefined;
-        const hero = (sideOf(event.owner) === 'me' ? myHeroEl : foeHeroEl)?.querySelector<HTMLElement>('.hero');
-        await lunge(hero ?? undefined, at);
-        return;
-      }
-      case 'death': {
-        dyingIds = new Set(dyingIds).add(event.instanceId);
-        // The shatter plays on the minion still on screen; only then is it
-        // removed. Deaths in a row shatter together rather than one by one.
-        const gone = sleep(600).then(() => {
-          shown = applyCue(shown, event, view);
-          const next = new Set(dyingIds);
-          next.delete(event.instanceId);
-          dyingIds = next;
-        });
-        if (events[0]?.type !== 'death') await gone;
-        return;
-      }
-    }
-
-    advance();
-
-    switch (event.type) {
-      case 'draw': {
-        if (sideOf(event.owner) !== 'me') break;
-        const card = view.me.hand[view.me.hand.length - pendingDraws];
-        if (card) {
-          drawnCards = new Set(drawnCards).add(card);
-          setTimeout(() => {
-            const next = new Set(drawnCards);
-            next.delete(card);
-            drawnCards = next;
-          }, 500);
-        }
-        break;
-      }
-      case 'damage': {
-        if (event.target.kind === 'hero') {
-          hitHero = sideOf(event.target.owner);
-          quaking = event.amount >= 4;
-          setTimeout(() => {
-            hitHero = null;
-            quaking = false;
-          }, 500);
-          floatAt(heroPos(sideOf(event.target.owner)), `-${event.amount}`, 'var(--blood)');
-        } else {
-          const id = event.target.instanceId;
-          struckIds = new Set(struckIds).add(id);
-          setTimeout(() => {
-            const next = new Set(struckIds);
-            next.delete(id);
-            struckIds = next;
-          }, 500);
-          floatAt(positions.get(id), `-${event.amount}`, 'var(--blood)');
-        }
-        break;
-      }
-      case 'turn':
-        banner = sideOf(event.owner) === 'me' ? 'Your turn' : "Opponent's turn";
-        setTimeout(() => (banner = null), 900);
-        break;
-      case 'shield':
-        floatAt(positions.get(event.instanceId), 'Shield', 'var(--gold-bright)');
-        break;
-      case 'buff':
-        floatAt(positions.get(event.instanceId), 'Buff', 'var(--good)');
-        break;
-      case 'freeze':
-        floatAt(positions.get(event.instanceId), 'Frozen', '#8fd0ff');
-        break;
-      case 'silence':
-        floatAt(positions.get(event.instanceId), 'Silenced', 'var(--text-dim)');
-        break;
-    }
-  }
-
-  let positions = new Map<string, { x: number; y: number }>();
-
-  function rememberPositions() {
-    const next = new Map<string, { x: number; y: number }>();
-    for (const [el, id] of minionElements()) next.set(id, centreOf(el));
-    positions = next;
-  }
+  /** What the director works through. Every state it sets is this table's. */
+  const stage: Stage = {
+    side: sideOf,
+    shown: () => shown,
+    advance: (cue) => (shown = applyCue(shown, cue)),
+    queued: () => events,
+    unit: unitOf,
+    hero: (side) => (side === 'me' ? myHeroEl : foeHeroEl),
+    foeBack: (index) => {
+      const backs = foeHandEl?.querySelectorAll<HTMLElement>('.foe-card');
+      return backs?.[Math.min(index, backs.length - 1)];
+    },
+    nextDrawn: () => view.me.hand[view.me.hand.length - events.filter((e) => e.type === 'draw' && e.owner === view.you).length - 1],
+    setDrawn: (card, on) => {
+      const next = new Set(drawnCards);
+      if (on) next.add(card);
+      else next.delete(card);
+      drawnCards = next;
+    },
+    mark: (kind, id, on) => {
+      const next = new Set(marks[kind]);
+      if (on) next.add(id);
+      else next.delete(id);
+      marks = { ...marks, [kind]: next };
+    },
+    setHeroHit: (side) => (hitHero = side),
+    setQuake: (on) => (quaking = on),
+    setBanner: (text) => (banner = text),
+    float: floatAt,
+    setShowcase: (card, from) => {
+      showcase = card ? { card, key: ++showcaseKey, from: from ?? { x: window.innerWidth / 2, y: 0 } } : null;
+    },
+    fx: () => fx
+  };
 
   /** The DOM draws `shown`, so elements pair with its boards, not the view's. */
   function minionElements(): [HTMLElement, string][] {
@@ -445,45 +377,9 @@
     return el?.closest<HTMLElement>('.slot') ?? el;
   }
 
-  function targetElement(
-    target: { kind: 'minion'; instanceId: string } | { kind: 'hero'; owner: string }
-  ): HTMLElement | undefined {
-    if (target.kind === 'minion') return unitOf(target.instanceId);
-    const block = sideOf(target.owner) === 'me' ? myHeroEl : foeHeroEl;
-    return block?.querySelector<HTMLElement>('.hero') ?? block;
-  }
-
-  /**
-   * An attack you can see: the attacker rises, dashes most of the way to its
-   * target, holds for a beat at contact, and springs home.
-   *
-   * Resolves **at contact**, so the hit that follows lands as it arrives while
-   * the recoil plays on. Measured in the zoomed table's own pixels — a
-   * transform inside a `zoom`ed row is scaled by it, and the rects are not.
-   */
-  async function lunge(mover: HTMLElement | undefined, at: HTMLElement | undefined) {
-    if (!mover || !at || reduceMotion) return;
-    const from = centreOf(mover);
-    const to = centreOf(at);
-    const reach = 0.78;
-    gsap
-      .timeline()
-      .set(mover, { zIndex: 60 })
-      .to(mover, { scale: 1.12, y: -8, duration: 0.13, ease: 'power2.out' })
-      .to(mover, {
-        x: ((to.x - from.x) * reach) / fit,
-        y: ((to.y - from.y) * reach) / fit,
-        duration: 0.17,
-        ease: 'power3.in'
-      })
-      .to(mover, { x: 0, y: 0, scale: 1, duration: 0.32, ease: 'back.out(1.8)' }, '+=0.07')
-      .set(mover, { clearProps: 'transform,zIndex' });
-    await sleep(300);
-  }
-
   /** The opponent's card flies up out of their hand and turns face up. */
   function reveal(node: HTMLElement, from: { x: number; y: number }) {
-    if (reduceMotion) {
+    if (!spatial()) {
       gsap.from(node, { opacity: 0, duration: 0.2 });
       return;
     }
@@ -496,7 +392,7 @@
       rotationY: -110,
       transformPerspective: 900,
       opacity: 0.4,
-      duration: 0.5,
+      duration: d(500) / 1000,
       ease: 'power3.out'
     });
   }
@@ -504,7 +400,7 @@
   /** And leaves: a minion shrinks towards the board, a spell flares out. */
   function vanish(_node: Element, { spell }: { spell: boolean }) {
     return {
-      duration: reduceMotion ? 120 : 280,
+      duration: spatial() ? d(280) : d(120),
       css: (t: number) =>
         spell
           ? `opacity: ${t}; transform: scale(${1 + (1 - t) * 0.3}); filter: brightness(${1 + (1 - t) * 1.6})`
@@ -512,21 +408,11 @@
     };
   }
 
-  function centreOf(el: HTMLElement) {
-    const rect = el.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  }
-
-  function heroPos(side: 'me' | 'foe') {
-    const el = side === 'me' ? myHeroEl : foeHeroEl;
-    return el ? centreOf(el) : undefined;
-  }
-
   function floatAt(at: { x: number; y: number } | undefined, text: string, color: string) {
     if (!at) return;
     const id = floatSeq++;
     floats = [...floats, { id, text, color, x: at.x, y: at.y }];
-    setTimeout(() => (floats = floats.filter((f) => f.id !== id)), 900);
+    void sleep(900).then(() => (floats = floats.filter((f) => f.id !== id)));
   }
 
   // ── Input ─────────────────────────────────────────────────
@@ -927,7 +813,9 @@
 <main
   class="table"
   class:quaking
+  class:still
   style:--fit={fit.toFixed(3)}
+  style:--pace={pace.toFixed(2)}
   style:--scene={tableArt ? `url("${tableArt}")` : 'none'}
   style:--scene-portrait={portraitArt ? `url("${portraitArt}")` : 'none'}
 >
@@ -999,14 +887,15 @@
 
   <section class="board" bind:this={foeBoardEl}>
     {#each shown.foe.board as minion (minion.instanceId)}
-      <div class="slot" animate:flip={{ duration: reduceMotion ? 0 : 280 }}>
+      <div class="slot" animate:flipZoomed={{ duration: flipMs }}>
         <MinionView
           minion={minion}
           targetable={targetableIds.has(minion.instanceId) ||
             ((aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId))}
-          summoning={summoningId === minion.instanceId}
-          struck={struckIds.has(minion.instanceId)}
-          dying={dyingIds.has(minion.instanceId)}
+          summoning={marks.summoning.has(minion.instanceId)}
+          struck={marks.struck.has(minion.instanceId)}
+          dying={marks.dying.has(minion.instanceId)}
+          triggered={marks.triggered.has(minion.instanceId)}
           on:click={() => onEnemyMinion(minion)}
         />
       </div>
@@ -1045,7 +934,7 @@
 
   <section class="board mine" class:drop-open={drag?.kind === 'card'} bind:this={myBoardEl}>
     {#each shown.me.board as minion, i (minion.instanceId)}
-      <div class="slot" animate:flip={{ duration: reduceMotion ? 0 : 280 }}>
+      <div class="slot" animate:flipZoomed={{ duration: flipMs }}>
         {#if drag?.kind === 'card' && drag.slot === i}
           <span class="drop-gap" aria-hidden="true"></span>
         {/if}
@@ -1055,9 +944,10 @@
           targetable={(aiming !== null || aimingPower) && chosenMinionIds.has(minion.instanceId)}
           selected={selectedId === minion.instanceId ||
             (drag?.kind === 'attack' && drag.instanceId === minion.instanceId)}
-          summoning={summoningId === minion.instanceId}
-          struck={struckIds.has(minion.instanceId)}
-          dying={dyingIds.has(minion.instanceId)}
+          summoning={marks.summoning.has(minion.instanceId)}
+          struck={marks.struck.has(minion.instanceId)}
+          dying={marks.dying.has(minion.instanceId)}
+          triggered={marks.triggered.has(minion.instanceId)}
           on:click={() => onMyMinion(minion)}
           on:pointerdown={(e) => onMinionPointerDown(e, minion)}
         />
@@ -1107,7 +997,11 @@
 
   <section class="hand" class:active={isMyTurn(shown)} style:transform={`scale(${handScale.toFixed(3)})`}>
     {#each visibleHand as card, i (card)}
-      <div class="hand-slot" class:lifted={drag?.kind === 'card' && drag.handIndex === i}>
+      <div
+        class="hand-slot"
+        class:lifted={drag?.kind === 'card' && drag.handIndex === i}
+        animate:flipZoomed={{ duration: flipMs }}
+      >
         <CardPreview
           {card}
           playable={myTurn && canPlayFromView(view, i)}
@@ -1148,6 +1042,8 @@
       />
     </svg>
   {/if}
+
+  <FxLayer bind:fx />
 
   {#each floats as float (float.id)}
     <FloatingNumber text={float.text} color={float.color} x={float.x} y={float.y} />
@@ -1583,8 +1479,18 @@
 
   .table { user-select: none; }
 
-  /* A hero taking 7+ shakes the table, not just the portrait. */
+  /* A heavy hit, or a heavy landing, shakes the table, not just the portrait. */
   .table.quaking { animation: fs-quake .5s ease-out; }
+
+  /*
+   * Reduced motion, chosen in settings: everything still changes and fades,
+   * nothing travels or shakes — what the OS preference does globally.
+   */
+  .table.still.quaking { animation: none; }
+  .table.still :global(.unit.struck),
+  .table.still :global(.hero.hit) { animation: none; }
+  .table.still :global(.unit.summoning) { animation: fs-fade-in .3s ease-out; }
+  .table.still :global(.unit.dying) { animation: fs-fade-out .5s ease-in forwards; }
 
   /*
    * Phase label, rule, then the button hard right — the button belongs on the

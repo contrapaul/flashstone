@@ -208,22 +208,24 @@ The engine is pure TypeScript and fully decoupled from Svelte and from cards' or
 legality; the UI reassigns (`state = state`) to trigger Svelte reactivity. Effect targets
 resolve automatically — there is no manual targeting in v0.1.
 
-**The event queue — why the engine looks like this.** `engine.ts` appends
-presentation cues to `state.events` at every mutation site (13 of them: draw,
-summon, attack, shield, damage, death, turn, freeze, silence, buff, and since
-2026-10-07 `play`). The engine finishes mutating first; `drain()` in
-`MatchTable.svelte` then replays the queue on a timeline. **The table draws
-`shown`, not `view`**: each cue moves `shown` one step towards `view` through
-`applyCue` (`src/lib/presentation/apply.ts`) at the moment its animation lands,
-and the two are made equal when the drain ends. Before that, the board drew the
-final state immediately, so deaths never visibly shattered. Two consequences to
-respect: the visuals lag the truth by up to a few seconds, and `myTurn` is gated
-on `!draining` so the player cannot act mid-playback. An empty queue is valid —
-the board simply snaps. Anything that mutates state must emit, or it will not
-animate (`docs/plan/REVISIONS.md` R1 has cues carry their results).
-This replaced a synchronous-engine-that-yields design, which was judged
-considerably more work. (Recorded here 2026-08-21 when `docs/OVERHAUL.md`, whose
-work was fully applied in `8d8841b` and `b22d22a`, was retired.)
+**The event queue — why the engine looks like this.** `engine.ts` appends a
+presentation cue to `state.events` at every mutation site, and **every cue
+carries what it produced** — health after a hit, the minion summoned, mana after
+a card (`engine/events.ts`). The engine finishes mutating first; `drain()` in
+`MatchTable.svelte` then plays the queue back through
+`presentation/director.ts`, one choreography per cue type. **The table draws
+`shown`, not `view`**: each cue moves `shown` forward through `applyCue`
+(`presentation/apply.ts`) at the moment its animation lands, and the two are
+made equal when the drain ends — in dev, with a console warning naming any field
+that drifted. Before this the board drew the final state immediately, so deaths
+never visibly shattered. Rules to respect: the visuals lag the truth by a few
+seconds; `myTurn` is gated on `!draining` so nothing can be clicked mid-playback;
+your **hand** is read from the view (a `draw` never names its card, because both
+players receive every cue); and **anything that mutates presented state must
+emit a cue with its result**, or `apply.test.ts` — which replays 200 matches and
+compares after every intent — fails and names the field. Durations go through
+`d()` in `presentation/motion.ts`, which applies the Animation setting and the
+slower opponent pace.
 
 **The clean seam:** `createMatch(playerDeck, aiDeck, seed)` takes a plain `Card[]`.
 Swapping demo cards for imported ones is a one-line change.
