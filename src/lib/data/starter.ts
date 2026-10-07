@@ -23,7 +23,8 @@ export const STARTER_CARD_IDS = [
   'psychology-factors',
   'population-stereotype',
   'rapid-prototyping',
-  'circular-economy',
+  // Circular Economy until R8.5 made it a Legendary, which a two-copy starter cannot hold.
+  'tensile-strength',
   // 3 mana
   'scenario',
   'user-population',

@@ -974,3 +974,25 @@ describe('return and transform', () => {
     expect(playCard(state, 'player', give(state, 'player', bolt), undefined, { kind: 'hero', owner: 'ai' })).toBe(true);
   });
 });
+
+describe('the graveyard', () => {
+  it('resummons the most recent friendly minions that died, fresh', () => {
+    const state = bareMatch();
+    const first = minionCard({ cost: 0, name: 'First', health: 1, keywords: ['Charge'] });
+    const second = minionCard({ cost: 0, name: 'Second', health: 1, keywords: ['Charge'] });
+    playCard(state, 'player', give(state, 'player', first));
+    playCard(state, 'player', give(state, 'player', second));
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 5, health: 30 })));
+    state.current = 'player';
+    const wall = state.players.ai.board[0].instanceId;
+    for (const m of [...state.players.player.board]) attack(state, 'player', m.instanceId, { kind: 'minion', instanceId: wall });
+    expect(state.players.player.board).toHaveLength(0);
+    expect(state.players.player.graveyard.map((c) => c.name)).toEqual(['First', 'Second']);
+
+    const circular: Card = { ...minionCard({ cost: 0 }), type: 'Spell', attack: undefined, health: undefined, effects: [{ trigger: 'Battlecry', action: 'Resummon', value: 3 }] };
+    playCard(state, 'player', give(state, 'player', circular));
+    expect(state.players.player.board.map((m) => [m.card.name, m.health])).toEqual([['Second', 1], ['First', 1]]);
+  });
+});

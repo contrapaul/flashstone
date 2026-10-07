@@ -14,7 +14,7 @@
 //   and `SelfHero` targets, and per-card `spellDamage`.
 // v0.6 (REVISIONS R8.4) adds reactions: triggers `OnDamaged`, `OnFriendlyDeath`,
 //   `OnFriendlySpell` and `OnFriendlyPlay`; actions `ReturnToHand` and
-//   `Transform`; target `AllMinions`.
+//   `Transform`; target `AllMinions`; action `Resummon`.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -77,7 +77,9 @@ export type Action =
   /** Sends a minion back to its owner's hand; with the hand full, it is lost. */
   | 'ReturnToHand'
   /** Turns a minion into a token in place — `condition` names it, the Study Note by default. */
-  | 'Transform';
+  | 'Transform'
+  /** Summons fresh copies of the `value` friendly minions that died most recently this game. */
+  | 'Resummon';
 export type Target =
   | 'Self'
   | 'EnemyMinion'

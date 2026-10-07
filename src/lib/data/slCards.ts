@@ -68,6 +68,11 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     cost: 4, attack: 2, health: 6, rarity: 'Rare',
     effects: [{ trigger: 'OnDamaged', action: 'BuffAttack', target: 'Self', value: 2 }]
   },
+  // Resources stay in use: what was lost comes back into play.
+  'circular-economy': {
+    type: 'Spell', cost: 6, rarity: 'Legendary',
+    effects: [{ trigger: 'Battlecry', action: 'Resummon', value: 3 }]
+  },
   // It remembers its shape: kill it and it comes back to your hand.
   'shape-memory-material': {
     cost: 5, attack: 4, health: 5, rarity: 'Legendary', keywords: [],

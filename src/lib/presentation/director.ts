@@ -115,6 +115,7 @@ const EFFECT_COLOR: Record<Action, string> = {
   GainMana: '#6cc4ff',
   GainArmor: '#cfd8e0',
   ReturnToHand: '#bfe3ff',
+  Resummon: '#ffe7b0',
   Transform: '#e6d4ff'
 };
 

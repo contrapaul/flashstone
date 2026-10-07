@@ -474,6 +474,10 @@ function phrase(effect: Effect): string {
       return `Swap ${target}'s Attack and Health`;
     case 'GainArmor':
       return `Gain ${value} Armor`;
+    case 'Resummon':
+      return value === 1
+        ? 'Resummon your most recent friendly minion that died this game'
+        : `Resummon your ${value} most recent friendly minions that died this game`;
     case 'ReturnToHand':
       if (effect.target === 'Self') return 'Return this to your hand';
       if (effect.target === 'AllMinions') return "Return all minions to their owners' hands";

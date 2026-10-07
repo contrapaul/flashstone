@@ -7,7 +7,7 @@
   import { heroPowerFor } from '$lib/data/classes';
   import { cardFitsClass } from '$lib/decks/deck';
   import { DEFAULT_CLASS } from '$lib/data/starter';
-  import { ALL_CARDS } from '$lib/data/cards';
+  import { ALL_CARDS, cardById } from '$lib/data/cards';
   import { ownedCount, isGold, type Owned } from '$lib/collection/owned';
   import {
     DECK_SIZE,
@@ -142,6 +142,8 @@
   let rarityFilter: Rarity | 'all' = 'all';
   let sectionFilter = 'all';
   let ownedOnly = false;
+  /** Cards a saved deck held two of before they became Legendary. */
+  let trimmedLegends: string[] = [];
 
   const RARITIES: Rarity[] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 
@@ -155,8 +157,16 @@
     decks = player.decks;
     activeId = player.activeId;
     signedIn = player.signedIn;
-    // A saved deck can outlive a card leaving the set, or copies being spent.
-    if (player.deck) deck = pruneDeck(player.deck, owned);
+    // A saved deck can outlive a card leaving the set, or copies being spent —
+    // or a card becoming Legendary, which allows one copy. Those are named, once:
+    // the notice lasts until the trimmed deck is saved.
+    if (player.deck) {
+      const raw = player.deck;
+      deck = pruneDeck(raw, owned);
+      trimmedLegends = [...new Set(raw.cardIds)]
+        .filter((id) => cardById(id)?.rarity === 'Legendary' && countOf(raw, id) > countOf(deck, id))
+        .map((id) => cardById(id)!.name);
+    }
     // Keep an offline copy, so signing out does not empty the shelves.
     cacheOwned(owned);
   });
@@ -421,6 +431,13 @@
 
       {#if saveError}
         <p class="warn">{saveError}</p>
+      {/if}
+
+      {#if trimmedLegends.length > 0 && !saved}
+        <p class="warn">
+          {trimmedLegends.join(', ')} {trimmedLegends.length === 1 ? 'is' : 'are'} Legendary now: one copy per
+          deck, so the second has come out. You still own both.
+        </p>
       {/if}
 
       {#if capacity < DECK_SIZE}

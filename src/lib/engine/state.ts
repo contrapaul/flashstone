@@ -52,6 +52,8 @@ export interface PlayerState {
   heroClass: CardClass;
   /** Hero power used this turn. Cleared at the start of its controller's turn. */
   heroPowerUsedThisTurn: boolean;
+  /** This player's minions that have died this game, oldest first. Public, as the board was. */
+  graveyard: Card[];
 }
 
 /** What happened to one thing an action touched. */

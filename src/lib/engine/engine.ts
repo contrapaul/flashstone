@@ -58,7 +58,8 @@ function createPlayer(id: PlayerId, deck: Card[], heroClass: CardClass = 'Neutra
     weapon: null,
     heroAttacksThisTurn: 0,
     heroClass,
-    heroPowerUsedThisTurn: false
+    heroPowerUsedThisTurn: false,
+    graveyard: []
   };
 }
 
@@ -651,6 +652,7 @@ function checkDeaths(state: MatchState): void {
       state.players[owner].board = board.filter((m) => m.health > 0);
       for (const minion of dead) {
         state.log.push(`${minion.card.name} dies.`);
+        state.players[owner].graveyard.push(minion.card);
         // Credited to the action still being written or, for a death settled
         // after a turn's triggers, to the trigger that last hit it.
         note(state, state.openEntry ?? state.lastHit[minion.instanceId] ?? null, { ref: { kind: 'minion', instanceId: minion.instanceId }, result: 'killed' }, minion.card);
@@ -800,6 +802,13 @@ function resolveEffect(
     // every card written before tokens existed behaves exactly as it did.
     const token = (effect.condition && tokenById(effect.condition)) || STUDY_NOTE;
     for (let i = 0; i < value; i++) summon(state, owner, token);
+    return;
+  }
+
+  if (effect.action === 'Resummon') {
+    // The most recent first, as far as the board has room.
+    const fallen = state.players[owner].graveyard.slice(-value).reverse();
+    for (const card of fallen) summon(state, owner, card);
     return;
   }
 
