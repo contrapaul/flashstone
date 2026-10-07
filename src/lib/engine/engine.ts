@@ -13,6 +13,7 @@ import {
   canHeroAttack,
   canUseHeroPower,
   aimsAtMinions,
+  conditionMet,
   findMinion,
   spellPowerOf,
   legalTargets,
@@ -863,6 +864,7 @@ function resolveEffect(
    */
   spellPowered = false
 ): void {
+  if (effect.requires && !conditionMet(effect.requires, state.players[owner])) return;
   const rng = rngFor(state);
   const bonus = spellPowered && effect.action === 'DealDamage' ? spellPowerOf(state.players[owner]) : 0;
   const value = (effect.value ?? 1) + bonus;

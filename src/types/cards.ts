@@ -16,7 +16,8 @@
 //   `OnFriendlySpell` and `OnFriendlyPlay`; actions `ReturnToHand` and
 //   `Transform`; target `AllMinions`; actions `Resummon` and `DestroyLater`;
 //   `stage` on Effect, for text that cycles; `Passive` auras (with target
-//   `OtherFriendly` and the condition `opponents_turn`).
+//   `OtherFriendly` and the condition `opponents_turn`); `requires` on Effect,
+//   for text that only happens when its condition is met.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -134,7 +135,12 @@ export interface Effect {
    * Iterative Design. Unstaged effects on the same trigger fire every time.
    */
   stage?: number;
+  /** Only happens if this holds when it resolves. In hand, a card whose condition is met glows gold. */
+  requires?: Condition;
 }
+
+/** What `requires` can ask of the board. */
+export type Condition = 'controlTaunt' | 'heroDamaged';
 
 export interface Card {
   id: string; // UUIDv4 or deterministic hash (e.g., sha256(name+frontText))

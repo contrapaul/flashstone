@@ -110,6 +110,15 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     cost: 5, attack: 4, health: 5, rarity: 'Epic', keywords: ['Taunt'],
     effects: [{ trigger: 'Passive', action: 'BuffHealth', target: 'Self', value: 3, condition: 'opponents_turn' }]
   },
+  // It holds when something else is taking the weight.
+  'compressive-strength': {
+    effects: [{ trigger: 'Battlecry', action: 'BuffHealth', target: 'Self', value: 2, requires: 'controlTaunt' }]
+  },
+  // Plan for the worst case, and be ready when it comes.
+  'design-for-extremes': {
+    cost: 4, attack: 4, health: 4, rarity: 'Rare',
+    effects: [{ trigger: 'Battlecry', action: 'GainArmor', value: 5, requires: 'heroDamaged' }]
+  },
   // Built to fail, on a timer.
   'planned-obsolescence': {
     type: 'Spell', cost: 2, rarity: 'Epic', targeting: 'enemy',

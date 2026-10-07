@@ -1,4 +1,4 @@
-import type { CardType, Effect, Keyword, Rarity, Target } from '../../types/cards';
+import type { CardType, Condition, Effect, Keyword, Rarity, Target } from '../../types/cards';
 import { RARITY_WEIGHTS } from '../../utils/rarity';
 import { STUDY_NOTE, tokenById } from './tokens';
 
@@ -518,11 +518,19 @@ function auraPhrase(effect: Effect): string {
   return `Has ${stat}${during}.`;
 }
 
+const CONDITION_PHRASE: Record<Condition, string> = {
+  controlTaunt: 'If you control a Taunt minion',
+  heroDamaged: 'If your hero is damaged'
+};
+
 export function describeEffects(effects: Effect[], type: CardType): string {
   return effects
     .map((effect, i) => {
       if (effect.trigger === 'Passive') return auraPhrase(effect);
-      const body = `${phrase(effect)}.`;
+      const said = phrase(effect);
+      const body = effect.requires
+        ? `${CONDITION_PHRASE[effect.requires]}, ${said[0].toLowerCase()}${said.slice(1)}.`
+        : `${said}.`;
       // A spell is its effect, so it needs no trigger label; a minion does —
       // once per run, so three Battlecry effects read as one Battlecry.
       if (type !== 'Minion' || effects[i - 1]?.trigger === effect.trigger) return body;

@@ -4,6 +4,7 @@ const KeywordSchema = z.enum(['Taunt', 'Charge', 'DivineShield', 'Windfury', 'St
 
 const EffectSchema = z.object({
   stage: z.number().int().min(0).max(5).optional(),
+  requires: z.enum(['controlTaunt', 'heroDamaged']).optional(),
   trigger: z.enum([
     'Battlecry',
     'Deathrattle',

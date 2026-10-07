@@ -23,6 +23,7 @@
   import GoldCounter from './GoldCounter.svelte';
   import type { QuestMove } from '../quests/quests';
   import { audio, MATCH_TRACKS } from '../audio';
+  import { conditionsMet } from '../engine/state';
   import CardInspector from './CardInspector.svelte';
   import HeroPowerButton from './HeroPowerButton.svelte';
   import { heroPowerFor } from '../data/classes';
@@ -1390,6 +1391,7 @@
         <CardPreview
           {card}
           spellDamage={shown.me.spellDamage}
+          conditionMet={myTurn && canPlayFromView(view, i) && conditionsMet(card, shown.me)}
           playable={myTurn && canPlayFromView(view, i)}
           on:keydown={(e) => onCardKey(e, i)}
           on:pointerdown={(e) => onCardPointerDown(e, i)}

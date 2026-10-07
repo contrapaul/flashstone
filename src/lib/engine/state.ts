@@ -1,4 +1,4 @@
-import type { Action, Card, CardClass, CardType, Trigger } from '../../types/cards';
+import type { Action, Card, CardClass, CardType, Condition, Trigger } from '../../types/cards';
 import type { CueRef } from './events';
 
 export const HERO_HEALTH = 30;
@@ -276,6 +276,26 @@ export function canHeroAttack(player: PlayerState): boolean {
  * interesting one, since it means a Taunt wall stops attacks but not a fireball.
  * Stealth still hides a minion from being picked.
  */
+/**
+ * Whether a condition holds for one side of the board. Shaped to take an
+ * engine player or a view's side alike, so the engine resolving a card and the
+ * hand glowing gold over it can never disagree.
+ */
+export function conditionMet(condition: Condition, side: { board: { keywords: string[] }[]; health: number }): boolean {
+  switch (condition) {
+    case 'controlTaunt':
+      return side.board.some((m) => m.keywords.includes('Taunt'));
+    case 'heroDamaged':
+      return side.health < HERO_HEALTH;
+  }
+}
+
+/** A card with conditional text whose every condition holds now — it glows gold in hand. */
+export function conditionsMet(card: Card, side: { board: { keywords: string[] }[]; health: number }): boolean {
+  const conditions = card.effects.flatMap((e) => (e.requires ? [e.requires] : []));
+  return conditions.length > 0 && conditions.every((c) => conditionMet(c, side));
+}
+
 /** Aimed actions that only mean anything to a minion: a hero is not offered as their target. */
 export const MINION_ONLY: ReadonlySet<Action> = new Set([
   'Destroy',

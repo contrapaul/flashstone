@@ -16,6 +16,8 @@ import {
   BOARD_LIMIT,
   HERO_HEALTH,
   canAttack,
+  conditionMet,
+  conditionsMet,
   legalTargets,
   silence,
   type MatchState
@@ -1096,5 +1098,30 @@ describe('auras', () => {
     endTurn(state);
     expect([wall.health, wall.maxHealth]).toEqual([2, 3]);
     expect(state.players.player.board).toContain(wall);
+  });
+});
+
+describe('conditions', () => {
+  const armorIfTaunt = minionCard({ cost: 0, effects: [{ trigger: 'Battlecry', action: 'GainArmor', value: 4, requires: 'controlTaunt' }] });
+
+  it('skips conditional text when the condition does not hold', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', armorIfTaunt));
+    expect(state.players.player.armor).toBe(0);
+  });
+
+  it('resolves it when it does — and the hand can tell in advance', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, keywords: ['Taunt'] })));
+    expect(conditionsMet(armorIfTaunt, state.players.player)).toBe(true);
+    playCard(state, 'player', give(state, 'player', armorIfTaunt));
+    expect(state.players.player.armor).toBe(4);
+  });
+
+  it('knows a damaged hero, and a card with no conditions never glows', () => {
+    const hurt = { board: [], health: 29 };
+    expect(conditionMet('heroDamaged', hurt)).toBe(true);
+    expect(conditionMet('heroDamaged', { board: [], health: 30 })).toBe(false);
+    expect(conditionsMet(minionCard(), hurt)).toBe(false);
   });
 });

@@ -17,6 +17,8 @@
   export let gold = false;
   /** Extra damage your spells deal right now; a spell's damage is printed already raised. */
   export let spellDamage = 0;
+  /** Its conditional text would happen if played now: it glows gold, the colour of "special". */
+  export let conditionMet = false;
 
   $: isMinion = card.type === 'Minion';
   $: isWeapon = card.type === 'Weapon';
@@ -56,6 +58,7 @@
   class:playable
   class:drawn
   class:gold
+  class:met={conditionMet}
   style:--art={drawnArt ? `url("${drawnArt}") center / cover no-repeat` : artFor(card.name)}
   style:--rarity={RARITY_COLOR[card.rarity]}
   style:--ui-cost={ui('cost-crystal')}
@@ -244,6 +247,18 @@
   .rules b { font-weight: 700; }
   /* Raised by Spell Damage: green, as Hearthstone prints it. */
   .rules b.boosted { color: #0f9a2c; }
+
+  /* A condition met: gold rather than green, pulsing over the playable glow. */
+  .card.met {
+    box-shadow: 0 0 0 2px rgba(255, 214, 110, .95), 0 0 22px rgba(255, 196, 70, .75),
+      0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
+    animation: fs-condition 1.4s ease-in-out infinite;
+  }
+
+  @keyframes fs-condition {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(255, 214, 110, .95), 0 0 16px rgba(255, 196, 70, .55), 0 14px 26px rgba(0, 0, 0, .6); }
+    50% { box-shadow: 0 0 0 2px rgba(255, 236, 160, 1), 0 0 30px rgba(255, 196, 70, .95), 0 14px 26px rgba(0, 0, 0, .6); }
+  }
 
   .card.drawn { animation: fs-draw .5s cubic-bezier(.2, .9, .3, 1); }
 
