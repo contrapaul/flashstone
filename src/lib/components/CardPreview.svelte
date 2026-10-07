@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Card, Keyword } from '../../types/cards';
   import { RARITY_COLOR, artFor, artUrlFor, sigil, uiArtUrl } from '../../utils/art';
+  import { rulesText } from '../presentation/rulesText';
+  import LegendaryCrest from './LegendaryCrest.svelte';
 
   export let card: Card;
   /** Dimmed and non-interactive when false. */
@@ -13,6 +15,8 @@
    * docs/plan/DECISIONS.md §10.
    */
   export let gold = false;
+  /** Extra damage your spells deal right now; a spell's damage is printed already raised. */
+  export let spellDamage = 0;
 
   $: isMinion = card.type === 'Minion';
   $: isWeapon = card.type === 'Weapon';
@@ -27,6 +31,14 @@
   };
 
   $: keywordLine = card.keywords.map((k) => `${KEYWORD_LABEL[k]}.`).join(' ');
+  $: runs = rulesText(card.description, spellDamage, card.type === 'Spell');
+
+  /*
+   * Rarity, said twice: the frame's tint, which reads across a board, and a cut
+   * gem under the name, where Hearthstone puts it. `art/ui/rarity-gem-<rarity>`
+   * replaces the drawn one.
+   */
+  $: gemArt = uiArtUrl(`rarity-gem-${card.rarity.toLowerCase()}`);
 
   // Drawn art when there is a file for this card, the generated gradient when
   // there is not — so every card renders whether or not its art exists yet.
@@ -56,7 +68,9 @@
   tabindex="0"
 >
   <div class="bevel" aria-hidden="true"></div>
-  {#if gold}<div class="foil" aria-hidden="true"></div>{/if}
+  {#if gold}<div class="foil" aria-hidden="true"></div>
+  {:else if card.rarity === 'Legendary'}<div class="foil faint" aria-hidden="true"></div>{/if}
+  {#if card.rarity === 'Legendary'}<div class="crest"><LegendaryCrest /></div>{/if}
 
   <div class="cost">{card.cost}</div>
 
@@ -68,8 +82,23 @@
     <span>{card.name}</span>
   </div>
 
+  <span class="gem" title={card.rarity} aria-label={card.rarity}>
+    {#if gemArt}
+      <img src={gemArt} alt="" />
+    {:else}
+      <svg viewBox="0 0 12 14" aria-hidden="true">
+        <polygon class="g-body" points="6,0.6 11.4,4 11.4,10 6,13.4 0.6,10 0.6,4" />
+        <polygon class="g-top" points="6,0.6 11.4,4 6,6.2 0.6,4" />
+        <polygon class="g-side" points="11.4,4 11.4,10 6,13.4 6,6.2" />
+        <polygon class="g-shine" points="3.2,3.4 6,1.9 6.6,3.1 3.8,4.4" />
+      </svg>
+    {/if}
+  </span>
+
   <div class="rules">
-    <span class="desc" class:with-keywords={card.keywords.length > 0}>{card.description}</span>
+    <span class="desc" class:with-keywords={card.keywords.length > 0}>
+      {#each runs as run}{#if run.bold}<b>{run.text}</b>{:else if run.boosted}<b class="boosted">{run.text}</b>{:else}{run.text}{/if}{/each}
+    </span>
     {#if card.keywords.length > 0}
       <span class="keywords">{keywordLine}</span>
     {/if}
@@ -178,6 +207,44 @@
       0 14px 26px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 232, 180, .28);
   }
 
+  /* Epic: a soft light from inside the art. */
+  .card.rare-Epic .art { box-shadow: inset 0 -14px 24px rgba(0, 0, 0, .4), inset 0 0 18px color-mix(in srgb, var(--rarity) 70%, transparent); }
+
+  /* Legendary: the crest rises over the top of the frame. */
+  .crest {
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    top: -15px;
+    width: 76px;
+    height: 28px;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  /* The rarity gem, straddling the name plate and the rules panel. */
+  .gem {
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    top: calc(51.5% - 6px);
+    width: 12px;
+    height: 14px;
+    transform: translateX(-50%);
+    filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .6));
+  }
+  .gem svg, .gem img { display: block; width: 100%; height: 100%; }
+  .g-body { fill: color-mix(in srgb, var(--rarity) 80%, #000); stroke: #2a1a0a; stroke-width: .8; stroke-linejoin: round; }
+  .g-top { fill: color-mix(in srgb, var(--rarity) 60%, #fff); }
+  .g-side { fill: color-mix(in srgb, var(--rarity) 85%, #000); }
+  .g-shine { fill: #fff; opacity: .8; }
+  /* The gem sits in the rules panel's top padding; a little more keeps text clear of it. */
+  .rules { padding-top: 8px; }
+
+  .rules b { font-weight: 700; }
+  /* Raised by Spell Damage: green, as Hearthstone prints it. */
+  .rules b.boosted { color: #0f9a2c; }
+
   .card.drawn { animation: fs-draw .5s cubic-bezier(.2, .9, .3, 1); }
 
   /* Gold variant. Deliberately a frame-and-sheen treatment rather than separate
@@ -209,6 +276,9 @@
     animation: fs-foil 3.6s ease-in-out infinite;
     mix-blend-mode: screen;
   }
+
+  /* A Legendary's shimmer: the foil band, much fainter and slower. */
+  .foil.faint { opacity: .45; animation-duration: 6s; }
 
   @keyframes fs-foil {
     0%, 100% { background-position: 130% 0; }

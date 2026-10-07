@@ -2,6 +2,7 @@
   import { backOut, cubicOut } from 'svelte/easing';
   import type { MinionInstance } from '../engine/state';
   import { artFor, artUrlFor, sigil, uiArtUrl } from '../../utils/art';
+  import LegendaryCrest from './LegendaryCrest.svelte';
 
   /**
    * A minion on the board — a portrait, not a card.
@@ -206,7 +207,7 @@
     on:pointerleave
   >
     {#if legendary}
-      <span class="crest" aria-hidden="true"></span>
+      <span class="crest" aria-hidden="true"><LegendaryCrest /></span>
       <span class="motes" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
     {/if}
 
@@ -514,13 +515,10 @@
     position: absolute;
     z-index: 2;
     left: 50%;
-    top: -14px;
-    width: 52px;
+    top: -16px;
+    width: 70px;
     height: 26px;
     transform: translateX(-50%);
-    clip-path: polygon(50% 0, 62% 40%, 100% 26%, 74% 70%, 50% 100%, 26% 70%, 0 26%, 38% 40%);
-    background: linear-gradient(180deg, #fff1b8, #e0a531 55%, #8a5a18);
-    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6));
     pointer-events: none;
   }
 

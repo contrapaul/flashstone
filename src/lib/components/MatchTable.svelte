@@ -1387,6 +1387,7 @@
       >
         <CardPreview
           {card}
+          spellDamage={shown.me.spellDamage}
           playable={myTurn && canPlayFromView(view, i)}
           on:keydown={(e) => onCardKey(e, i)}
           on:pointerdown={(e) => onCardPointerDown(e, i)}
@@ -1397,7 +1398,7 @@
 
   {#if drag?.kind === 'card'}
     <div class="ghost" style:left={`${pointer.x}px`} style:top={`${pointer.y}px`} aria-hidden="true">
-      <CardPreview card={drag.card} playable />
+      <CardPreview card={drag.card} spellDamage={shown.me.spellDamage} playable />
     </div>
   {/if}
 

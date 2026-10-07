@@ -97,13 +97,14 @@ the frame**, and leave the outer 8% clear.
 | `charge` | *not used:* Charge has no lasting mark, as in Hearthstone — it is shown as streaks on arrival | — | — |
 | `spell-mark` | the type line's mark on a Spell card | 144 × 144 px | **yes** |
 | `weapon-mark` | the type line's mark on a Weapon card (Phase 1B) | 144 × 144 px | **yes** |
+| `rarity-gem-common` · `-uncommon` · `-rare` · `-epic` · `-legendary` | the cut gem under a card's name, one per rarity | 72 × 84 px | **yes** |
+| `legendary-crest` | the brass-gear crest rising over a Legendary's frame, in hand and on the board | 456 × 168 px | **yes** |
 
 Sizes are 6× the CSS size the element occupies, which covers a 2× display with
 the card inspected at 2.5×.
 
-> There was a `rarity-gem` here, an 11px lozenge on the nameplate. It has been
-> removed: **rarity is the card's border colour now**, which can be read across a
-> board rather than only up close. Nothing needs drawing for it.
+> Rarity is said twice: by the frame's tint, which reads across a board, and
+> (since REVISIONS R8.1) by the gem under the name, where Hearthstone puts it.
 
 > **Currently wired:** `cost-crystal`, `attack-gem` and `health-gem` on the card
 > face, and since REVISIONS R3 every board element in the table above —
