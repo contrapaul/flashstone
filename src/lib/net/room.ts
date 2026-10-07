@@ -2,6 +2,7 @@ import type { Card, CardClass } from '../../types/cards';
 import {
   attack,
   canPlayCard,
+  choose,
   createMatch,
   endTurn,
   heroAttack,
@@ -191,8 +192,14 @@ export function applyMessage(
     case 'endTurn':
       // endTurn reads state.current itself; the guard above already proved that
       // is `from`.
+      if (state.choices.length > 0) return { ok: false, error: 'Choose a card first.', events: [] };
       endTurn(state);
       return { ok: true, events: drain() };
+
+    case 'choose':
+      return choose(state, from, message.index)
+        ? { ok: true, events: drain() }
+        : { ok: false, error: 'There is nothing to choose.', events: [] };
 
     default:
       return { ok: false, error: 'Unsupported message.', events: [] };
@@ -203,6 +210,8 @@ export function applyMessage(
 export function forceEndTurn(state: MatchState): GameEvent[] {
   if (state.winner) return [];
   state.log.push('Turn timed out.');
+  // A choice left open when time runs out takes its first option.
+  while (state.choices.length > 0) choose(state, state.choices[0].owner, 0);
   endTurn(state);
   const events = [...(state.events ?? [])];
   state.events = [];
@@ -258,6 +267,8 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
     },
     log: state.log,
     history: state.history.slice(-HISTORY_SENT),
+    choice: state.choices[0]?.owner === viewer ? state.choices[0].options : null,
+    foeChoosing: state.choices[0]?.owner === opponentOf(viewer),
     turnEndsIn
   };
 }

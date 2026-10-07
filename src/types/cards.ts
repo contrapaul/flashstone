@@ -17,7 +17,8 @@
 //   `Transform`; target `AllMinions`; actions `Resummon` and `DestroyLater`;
 //   `stage` on Effect, for text that cycles; `Passive` auras (with target
 //   `OtherFriendly` and the condition `opponents_turn`); `requires` on Effect,
-//   for text that only happens when its condition is met.
+//   for text that only happens when its condition is met; action `Discover`
+//   with `discover` on Effect — choose one of three.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -86,7 +87,9 @@ export type Action =
   /** Summons fresh copies of the `value` friendly minions that died most recently this game. */
   | 'Resummon'
   /** Marks a minion to be destroyed at the end of the caster's opponent's next turn. */
-  | 'DestroyLater';
+  | 'DestroyLater'
+  /** Offers three options and lets the caster choose one — see `discover`. Battlecry only. */
+  | 'Discover';
 export type Target =
   | 'Self'
   | 'EnemyMinion'
@@ -137,6 +140,21 @@ export interface Effect {
   stage?: number;
   /** Only happens if this holds when it resolves. In hand, a card whose condition is met glows gold. */
   requires?: Condition;
+  /** What a `Discover` offers, and what becomes of the one chosen. */
+  discover?: Discover;
+}
+
+/**
+ * Choose one of three. The options come `from` a pool — cards of a type that
+ * the caster's class may field, a copy of something the opponent has played, or
+ * a set of keywords — and the one chosen goes to the hand, onto the board, or
+ * (keywords) onto the minion with the text.
+ */
+export interface Discover {
+  from: 'Minion' | 'Spell' | 'Weapon' | 'OpponentPlayed' | 'Keyword';
+  then: 'hand' | 'summon' | 'self';
+  /** For `from: 'Keyword'`: the keywords offered. */
+  keywords?: Keyword[];
 }
 
 /** What `requires` can ask of the board. */

@@ -212,6 +212,7 @@
   on:heroAttack={onHeroAttack}
   on:heroPower={onHeroPower}
   on:endTurn={onEndTurn}
+  on:choose={(e) => source?.choose(e.detail.index)}
   on:drained={onDrained}
   on:overAction={start}
 />

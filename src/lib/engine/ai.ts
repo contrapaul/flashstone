@@ -1,6 +1,7 @@
 import {
   attack,
   canPlayCard,
+  choose,
   endTurn,
   heroAttack,
   needsTarget,
@@ -64,18 +65,34 @@ export function* aiTurn(state: MatchState): AiTurn {
 
 /** Carries out one intent. Returns whether the engine accepted it. */
 export function applyAiIntent(state: MatchState, intent: AiIntent): boolean {
-  switch (intent.kind) {
-    case 'power':
-      return useHeroPower(state, 'ai', intent.target);
-    case 'play':
-      return playCard(state, 'ai', intent.handIndex, undefined, intent.target);
-    case 'attack':
-      return attack(state, 'ai', intent.instanceId, intent.target);
-    case 'heroAttack':
-      return heroAttack(state, 'ai', intent.target);
-    case 'end':
-      endTurn(state);
-      return true;
+  const done = (() => {
+    switch (intent.kind) {
+      case 'power':
+        return useHeroPower(state, 'ai', intent.target);
+      case 'play':
+        return playCard(state, 'ai', intent.handIndex, undefined, intent.target);
+      case 'attack':
+        return attack(state, 'ai', intent.instanceId, intent.target);
+      case 'heroAttack':
+        return heroAttack(state, 'ai', intent.target);
+      case 'end':
+        endTurn(state);
+        return true;
+    }
+  })();
+  settleChoices(state);
+  return done;
+}
+
+/**
+ * A Discover the AI cast: it picks at once — the most expensive card, or the
+ * first keyword offered — so its turn never waits on itself.
+ */
+function settleChoices(state: MatchState): void {
+  while (state.choices[0]?.owner === 'ai') {
+    const options = state.choices[0].options;
+    const best = options.reduce((b, c, i) => (c.cost > options[b].cost ? i : b), 0);
+    if (!choose(state, 'ai', best)) break;
   }
 }
 

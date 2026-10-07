@@ -6,6 +6,7 @@ import { playAiTurn } from '../engine/ai';
 import {
   attack,
   canPlayCard,
+  choose,
   COIN_CARD,
   createMatch,
   endTurn,
@@ -162,7 +163,8 @@ describe('replaying matches through applyCue', () => {
     draw: true, play: true, summon: true, attack: true, damage: true, heal: true, shield: true,
     death: true, freeze: true, silence: true, buff: true, keyword: true, turn: true, mana: true,
     equip: true, heroAttack: true, weaponBreak: true, armor: true, heroPower: true, trigger: true,
-    effect: true, burn: true, fatigue: true, bounce: true, transform: true, doom: true, stage: true
+    effect: true, burn: true, fatigue: true, bounce: true, transform: true, doom: true, stage: true,
+    discover: true, gain: true
   };
   const seen = new Set<string>();
 
@@ -197,6 +199,11 @@ describe('replaying matches through applyCue', () => {
           continue;
         }
         for (let step = 0; step < 20 && !state.winner; step++) {
+          // A Discover waits on its caster before anything else may happen.
+          if (state.choices[0]?.owner === 'player') {
+            check(state, () => choose(state, 'player', step % state.choices[0].options.length), `seed ${seed}, turn ${turn}, choice`);
+            continue;
+          }
           let acted = false;
           check(state, () => (acted = playerStep(state, rng)), `seed ${seed}, turn ${turn}, step ${step}`);
           intents++;

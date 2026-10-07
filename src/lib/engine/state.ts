@@ -60,6 +60,19 @@ export interface PlayerState {
   heroPowerUsedThisTurn: boolean;
   /** This player's minions that have died this game, oldest first. Public, as the board was. */
   graveyard: Card[];
+  /** Every card this player has played this game, in order. Public: each was shown as it was played. */
+  played: Card[];
+}
+
+/** A Discover waiting on its caster: three options, one to choose. */
+export interface Choice {
+  owner: PlayerId;
+  options: Card[];
+  then: 'hand' | 'summon' | 'self';
+  /** The minion whose text it was, for a choice that lands on it. */
+  source: string | null;
+  /** The history entry the choice belongs to, reopened while it resolves. */
+  entry: number | null;
 }
 
 /** What happened to one thing an action touched. */
@@ -137,6 +150,11 @@ export interface MatchState {
    * so an attack's two hits both land before either side reacts.
    */
   reactions: { owner: PlayerId; instanceId: string; trigger: Trigger }[];
+  /**
+   * Discovers waiting on their caster, oldest first. While one waits, nothing
+   * else may happen: the match is paused on a choice.
+   */
+  choices: Choice[];
   seed: number;
   nextInstanceId: number;
   /** Ordered animation cues drained by the UI. See events.ts. */

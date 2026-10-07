@@ -3,10 +3,13 @@ import type { Card } from '../../types/cards';
 import { buildDemoDeck } from '../data/demoDeck';
 import { CardSchema } from '../../validators/card.validator';
 import { DEMO_CARDS } from '../data/demoDeck';
+import { applyAiIntent } from './ai';
+import { forceEndTurn, viewFor } from '../net/room';
 import {
   COIN_CARD,
   attack,
   canPlayCard,
+  choose,
   createMatch,
   drawCard,
   endTurn,
@@ -1123,5 +1126,73 @@ describe('conditions', () => {
     expect(conditionMet('heroDamaged', hurt)).toBe(true);
     expect(conditionMet('heroDamaged', { board: [], health: 30 })).toBe(false);
     expect(conditionsMet(minionCard(), hurt)).toBe(false);
+  });
+});
+
+describe('discover', () => {
+  const discoverCard = (discover: NonNullable<Card['effects'][number]['discover']>, over: Partial<Card> = {}): Card =>
+    minionCard({ cost: 0, id: `disc-${discover.from}-${discover.then}`, effects: [{ trigger: 'Battlecry', action: 'Discover', discover }], ...over });
+
+  it('offers three, pauses the match until one is chosen, and summons it', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', discoverCard({ from: 'Minion', then: 'summon' })));
+    expect(state.choices).toHaveLength(1);
+    const options = state.choices[0].options;
+    expect(options).toHaveLength(3);
+    expect(options.every((c) => c.type === 'Minion')).toBe(true);
+    // Paused: nothing else goes until the choice is made.
+    const other = give(state, 'player', minionCard({ cost: 0 }));
+    expect(canPlayCard(state, 'player', other)).toBe(false);
+    endTurn(state);
+    expect(state.current).toBe('player');
+
+    expect(choose(state, 'player', 1)).toBe(true);
+    expect(state.choices).toHaveLength(0);
+    expect(state.players.player.board.at(-1)!.card.id).toBe(options[1].id);
+  });
+
+  it('shows the options to their chooser only', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', discoverCard({ from: 'Spell', then: 'hand' })));
+    expect(viewFor(state, 'player').choice).toHaveLength(3);
+    expect(viewFor(state, 'ai').choice).toBeNull();
+    expect(viewFor(state, 'ai').foeChoosing).toBe(true);
+    choose(state, 'player', 0);
+    expect(state.players.player.hand.at(-1)!.type).toBe('Spell');
+    // The cue that tells both players a card arrived does not say which.
+    expect(state.events.find((e) => e.type === 'gain')).not.toHaveProperty('card');
+  });
+
+  it('lets a minion choose its own keyword', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', discoverCard({ from: 'Keyword', then: 'self', keywords: ['Taunt', 'DivineShield', 'Stealth'] })));
+    expect(state.choices[0].options.map((o) => o.name)).toEqual(['Taunt', 'Divine Shield', 'Stealth']);
+    choose(state, 'player', 1);
+    expect(state.players.player.board[0].divineShield).toBe(true);
+  });
+
+  it('discovers from what the opponent has played', () => {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    const theirs = minionCard({ cost: 0, id: 'their-card', name: 'Theirs' });
+    playCard(state, 'ai', give(state, 'ai', theirs));
+    state.current = 'player';
+    playCard(state, 'player', give(state, 'player', discoverCard({ from: 'OpponentPlayed', then: 'hand' })));
+    expect(state.choices[0].options.map((o) => o.id)).toEqual(['their-card']);
+  });
+
+  it('takes the first option when the turn times out, and the AI never waits on itself', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', discoverCard({ from: 'Minion', then: 'summon' })));
+    const first = state.choices[0].options[0];
+    forceEndTurn(state);
+    expect(state.players.player.board.at(-1)!.card.id).toBe(first.id);
+    expect(state.current).toBe('ai');
+
+    state.players.ai.mana = 10;
+    state.players.ai.hand = [discoverCard({ from: 'Minion', then: 'summon' })];
+    expect(applyAiIntent(state, { kind: 'play', handIndex: 0 })).toBe(true);
+    expect(state.choices).toHaveLength(0);
   });
 });

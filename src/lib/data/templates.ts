@@ -477,6 +477,17 @@ function phrase(effect: Effect): string {
       return `Swap ${target}'s Attack and Health`;
     case 'GainArmor':
       return `Gain ${value} Armor`;
+    case 'Discover': {
+      const d = effect.discover;
+      if (!d) return 'Discover a card';
+      if (d.from === 'Keyword') {
+        const names = (d.keywords ?? ['Taunt', 'DivineShield', 'Stealth']).map((k) => KEYWORD_TEXT[k]);
+        return `Choose ${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
+      }
+      if (d.from === 'OpponentPlayed') return 'Discover a copy of a card your opponent has played this game';
+      const what = d.from === 'Minion' ? 'a minion' : d.from === 'Spell' ? 'a spell' : 'a weapon';
+      return d.then === 'summon' ? `Discover ${what} and summon it` : `Discover ${what}`;
+    }
     case 'DestroyLater':
       return effect.target === 'Chosen'
         ? "Choose an enemy minion. Destroy it at the end of your opponent's next turn"

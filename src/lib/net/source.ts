@@ -2,6 +2,7 @@ import type { Card, CardClass } from '../../types/cards';
 import {
   attack,
   canPlayCard,
+  choose,
   createMatch,
   endTurn,
   heroAttack,
@@ -31,6 +32,8 @@ export interface MatchSource {
   heroAttack(target: TargetRef): void;
   heroPower(target?: ChosenRef): void;
   endTurn(): void;
+  /** Picks one of a waiting Discover's options. */
+  choose(index: number): void;
   concede(): void;
   /** Local only — online matches restart by making a new game. */
   restart?(): void;
@@ -147,6 +150,10 @@ export class LocalSource implements MatchSource {
     this.publish();
   }
 
+  choose(index: number) {
+    if (choose(this.state, 'player', index)) this.publish();
+  }
+
   /**
    * What the AI will do next, or null when it is not its turn.
    *
@@ -241,6 +248,10 @@ export class RemoteSource implements MatchSource {
 
   endTurn() {
     this.connection.send({ type: 'endTurn' });
+  }
+
+  choose(index: number) {
+    this.connection.send({ type: 'choose', index });
   }
 
   concede() {

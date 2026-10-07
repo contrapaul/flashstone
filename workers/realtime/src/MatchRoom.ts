@@ -1,6 +1,6 @@
 import type { Card, CardClass } from '../../../src/types/cards';
 import type { MatchState, PlayerId } from '../../../src/lib/engine/state';
-import { resolveDeck, type Deck } from '../../../src/lib/decks/deck';
+import { resolveDeck, withinCopyLimits, type Deck } from '../../../src/lib/decks/deck';
 import { cardById } from '../../../src/lib/data/cards';
 import {
   MAX_MISSED_TURNS,
@@ -191,7 +191,7 @@ export class MatchRoom {
     try {
       const cardIds = JSON.parse(String(row.card_ids));
       if (!Array.isArray(cardIds)) return { cards: [], heroClass: 'Neutral' };
-      const deck: Deck = { name: String(row.name), cardIds: cardIds.map(String) };
+      const deck: Deck = withinCopyLimits({ name: String(row.name), cardIds: cardIds.map(String) });
       return {
         // Resolved through the registry, so an id that no longer exists is
         // simply dropped rather than becoming an undefined card mid-match.

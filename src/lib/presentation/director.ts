@@ -117,6 +117,7 @@ const EFFECT_COLOR: Record<Action, string> = {
   ReturnToHand: '#bfe3ff',
   Resummon: '#ffe7b0',
   DestroyLater: '#9a7cff',
+  Discover: '#ffe08a',
   Transform: '#e6d4ff'
 };
 
@@ -561,6 +562,36 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'stage':
       stage.advance(cue);
       return;
+
+    case 'discover': {
+      // Three options turn over in front of whoever cast it — shown, for them, when playback ends.
+      stage.advance(cue);
+      audio().play('card-flip');
+      const hero = stage.hero(stage.side(cue.owner));
+      if (hero) {
+        const at = centreOf(hero);
+        stage.fx()?.motes(at.x, at.y, { colors: ['#ffe08a', '#fff6d8'], count: 14, speed: 140, gravity: -120, life: 0.9, size: 6 });
+      }
+      return;
+    }
+
+    case 'gain': {
+      stage.advance(cue);
+      if (cue.lost) return;
+      audio().play('card-draw');
+      if (stage.side(cue.owner) === 'me') {
+        // A chosen card drops into the fan from above, rather than coming out of the deck.
+        const card = stage.nextDrawn();
+        await tick();
+        const face = card ? stage.handCard(card) : undefined;
+        if (face && spatial()) gsap.from(face, { y: -220, scale: 0.6, opacity: 0, duration: d(420) / 1000, ease: 'power2.out', clearProps: 'all' });
+        return;
+      }
+      await tick();
+      const arriving = liftOf(stage.foeBacks().at(-1));
+      if (arriving && spatial()) gsap.from(arriving, { y: 120, scale: 0.6, opacity: 0, duration: d(380) / 1000, ease: 'power2.out', clearProps: 'all' });
+      return;
+    }
 
     case 'doom': {
       // A clock settles on it: its time is now counted.

@@ -97,6 +97,13 @@ export function applyCue(shown: PlayerView, cue: GameEvent): PlayerView {
     case 'stage':
       return mapMinion(shown, cue.instanceId, (m) => ({ ...m, stage: cue.stage }));
 
+    case 'gain':
+      // Your own hand is read from the view; theirs is only ever a count.
+      return sideOf(cue.owner) === 'foe' ? patchSide(shown, 'foe', { handCount: cue.handCount }) : shown;
+
+    case 'discover':
+      return shown;
+
     case 'buff':
       return mapMinion(shown, cue.instanceId, (m) => ({
         ...m,

@@ -55,6 +55,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   /** Using the class hero power. `target` only for powers that are aimed. */
   z.object({ type: z.literal('heroPower'), target: ChosenRefSchema.optional() }),
   z.object({ type: z.literal('endTurn') }),
+  /** Picks one of a Discover's options, by position. */
+  z.object({ type: z.literal('choose'), index: z.number().int().min(0).max(2) }),
   z.object({ type: z.literal('concede') }),
   /** Asks for the full state again — used after a reconnect. */
   z.object({ type: z.literal('resync') })
@@ -115,6 +117,10 @@ export interface PlayerView {
    * the board, never one still in a hand or a deck.
    */
   history: HistoryEntry[];
+  /** A Discover waiting on **you**: its options. Never sent to the other player. */
+  choice: Card[] | null;
+  /** A Discover waiting on the other player — all you may know of it. */
+  foeChoosing: boolean;
   /** Seconds left on the current turn, so both clients show the same clock. */
   turnEndsIn: number;
 }

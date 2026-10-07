@@ -34,7 +34,8 @@ const EffectSchema = z.object({
     'ReturnToHand',
     'Transform',
     'Resummon',
-    'DestroyLater'
+    'DestroyLater',
+    'Discover'
   ]),
   target: z
     .enum([
@@ -55,8 +56,19 @@ const EffectSchema = z.object({
   // v0.3: GainKeyword's keyword, first-class. `condition` still carries it on
   // older data — engine.ts reads this first and falls back.
   keyword: KeywordSchema.optional(),
-  condition: z.string().nullable().optional()
-});
+  condition: z.string().nullable().optional(),
+  discover: z
+    .object({
+      from: z.enum(['Minion', 'Spell', 'Weapon', 'OpponentPlayed', 'Keyword']),
+      then: z.enum(['hand', 'summon', 'self']),
+      keywords: z.array(KeywordSchema).max(3).optional()
+    })
+    .optional()
+}).refine(
+  // Only ever on the caster's own turn, so a choice never waits on the other player.
+  (e) => e.action !== 'Discover' || (e.discover !== undefined && e.trigger === 'Battlecry'),
+  { message: 'A Discover needs its `discover` and must be a Battlecry.' }
+);
 
 /**
  * Two id shapes are legal, deliberately:

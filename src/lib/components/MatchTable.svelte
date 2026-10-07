@@ -109,6 +109,7 @@
     heroAttack: { target: TargetRef };
     heroPower: { target?: ChosenRef };
     endTurn: void;
+    choose: { index: number };
     drained: void;
     overAction: void;
   }>();
@@ -235,9 +236,13 @@
 
   /** Cards whose draw cue is still queued are held back, so a draw is first
       seen on its own animation rather than appearing a second earlier. */
-  $: pendingDraws = events.filter(
-    (e) => (e.type === 'draw' || (e.type === 'bounce' && !e.lost)) && e.owner === view.you
-  ).length;
+  $: pendingDraws = pendingHand(events);
+  /** Cards in the view's hand whose arrival — drawn, returned or discovered — has not played yet. */
+  function pendingHand(queue: GameEvent[]): number {
+    return queue.filter(
+      (e) => (e.type === 'draw' || ((e.type === 'bounce' || e.type === 'gain') && !e.lost)) && e.owner === view.you
+    ).length;
+  }
   $: visibleHand = view.me.hand.slice(0, view.me.hand.length - pendingDraws);
 
   /** The player at this seat: their name on the plate, their back on the deck. */
@@ -545,7 +550,7 @@
     },
     foeBacks: () => [...(foeHandEl?.querySelectorAll<HTMLElement>('.foe-card') ?? [])],
     foeDeck: () => foeDeckEl,
-    nextDrawn: () => view.me.hand[view.me.hand.length - events.filter((e) => e.type === 'draw' && e.owner === view.you).length - 1],
+    nextDrawn: () => view.me.hand[view.me.hand.length - pendingHand(events) - 1],
     handCard: (card) => {
       const index = visibleHand.indexOf(card);
       return index < 0 ? undefined : (handEl?.querySelector<HTMLElement>(`.hand-slot[data-index="${index}"] .card`) ?? undefined);
@@ -1514,6 +1519,29 @@
     on:quit={quitToMenu}
   />
 
+  {#if view.choice && !draining}
+    <!-- A Discover: three cards rise, and the match waits for one to be picked. -->
+    <div class="choosing" role="dialog" aria-label="Choose one">
+      <Logo word="CHOOSE ONE" height={110} />
+      <div class="options">
+        {#each view.choice as option, i (option.id + i)}
+          <button
+            class="option"
+            style:--i={i}
+            on:click={() => {
+              audio().play('card-play');
+              dispatch('choose', { index: i });
+            }}
+          >
+            <span class="lift"><CardPreview card={option} playable /></span>
+          </button>
+        {/each}
+      </div>
+    </div>
+  {:else if view.foeChoosing && !draining}
+    <div class="foe-choosing" aria-live="polite">{opponentName} is choosing…</div>
+  {/if}
+
   {#if versus}
     <!-- The face-off: your hero against theirs, before the first card is dealt. -->
     <div class="versus" out:fade={{ duration: d(320) }} aria-label={`${playerName} against ${opponentName}`}>
@@ -1929,6 +1957,68 @@
   .vs-class.echo { visibility: hidden; }
 
   .vs-mark { filter: drop-shadow(0 0 30px rgba(255, 210, 120, .45)); }
+
+  /* ── A Discover ── */
+
+  .choosing {
+    position: fixed;
+    inset: 0;
+    z-index: 380;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: radial-gradient(70% 60% at 50% 50%, rgba(40, 28, 12, .75), rgba(8, 6, 3, .9));
+    animation: fs-versus-in .25s ease-out both;
+  }
+
+  .options { display: flex; gap: 48px; }
+
+  .option {
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    animation: fs-option-rise .45s cubic-bezier(.2, 1.3, .4, 1) calc(var(--i) * 90ms) both;
+  }
+
+  /* Cards at twice their hand size, rising out of the table one after another. */
+  .option .lift {
+    display: block;
+    width: calc(134px * 1.9);
+    height: calc(168px * 1.9);
+    transition: transform .15s ease, filter .15s ease;
+  }
+  .option .lift :global(.card) { transform: scale(1.9); transform-origin: top left; }
+  .option:hover .lift { transform: translateY(-10px); filter: drop-shadow(0 0 24px rgba(255, 214, 110, .7)); }
+
+  @keyframes fs-option-rise {
+    from { transform: translateY(140px) scale(.7); opacity: 0; }
+  }
+
+  @media (max-width: 900px) {
+    .options { gap: 16px; }
+    .option .lift { width: calc(134px * 1.4); height: calc(168px * 1.4); }
+    .option .lift :global(.card) { transform: scale(1.4); }
+  }
+
+  .foe-choosing {
+    position: fixed;
+    z-index: 60;
+    left: 50%;
+    top: 30%;
+    transform: translateX(-50%);
+    padding: 8px 18px;
+    border: 1px solid #7a5c30;
+    border-radius: 18px;
+    background: rgba(20, 13, 7, .85);
+    font-family: var(--display);
+    font-size: 13px;
+    letter-spacing: .1em;
+    color: #e6d9bd;
+    pointer-events: none;
+  }
 
   /* Then the table assembles: decks slide in, heroes drop onto their stones. */
   .assembling .foe-corner :global(.deck-pile),

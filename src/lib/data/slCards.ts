@@ -119,6 +119,33 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     cost: 4, attack: 4, health: 4, rarity: 'Rare',
     effects: [{ trigger: 'Battlecry', action: 'GainArmor', value: 5, requires: 'heroDamaged' }]
   },
+  // The computer proposes; you choose.
+  'generative-design': {
+    cost: 5, attack: 3, health: 3, rarity: 'Legendary', keywords: [],
+    effects: [{ trigger: 'Battlecry', action: 'Discover', discover: { from: 'Minion', then: 'summon' } }]
+  },
+  // Diverge, then converge.
+  'design-thinking': {
+    type: 'Spell', cost: 5, rarity: 'Legendary',
+    effects: [
+      { trigger: 'Battlecry', action: 'Discover', discover: { from: 'Minion', then: 'hand' } },
+      { trigger: 'Battlecry', action: 'Discover', discover: { from: 'Spell', then: 'hand' } },
+      { trigger: 'Battlecry', action: 'Discover', discover: { from: 'Weapon', then: 'hand' } }
+    ],
+    description: 'Discover a minion, then a spell, then a weapon.'
+  },
+  // Taking apart what they made, to learn from it.
+  'reverse-engineering': {
+    type: 'Spell', cost: 2, rarity: 'Epic',
+    effects: [{ trigger: 'Battlecry', action: 'Discover', discover: { from: 'OpponentPlayed', then: 'hand' } }]
+  },
+  // It responds to its environment: you choose how.
+  'smart-materials': {
+    cost: 4, attack: 4, health: 4, rarity: 'Legendary', keywords: [],
+    effects: [
+      { trigger: 'Battlecry', action: 'Discover', discover: { from: 'Keyword', then: 'self', keywords: ['Taunt', 'DivineShield', 'Stealth'] } }
+    ]
+  },
   // Built to fail, on a timer.
   'planned-obsolescence': {
     type: 'Spell', cost: 2, rarity: 'Epic', targeting: 'enemy',

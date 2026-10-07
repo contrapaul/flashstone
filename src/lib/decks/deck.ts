@@ -215,6 +215,22 @@ export function deckEntries(deck: Deck): { card: Card; count: number }[] {
     .sort((a, b) => a.card.cost - b.card.cost || a.card.name.localeCompare(b.card.name));
 }
 
+/**
+ * Drops copies past each card's limit — a card saved twice before it became a
+ * Legendary. For the server, which plays saved decks without a collection to
+ * prune against.
+ */
+export function withinCopyLimits(deck: Deck): Deck {
+  const used = new Map<string, number>();
+  const cardIds = deck.cardIds.filter((id) => {
+    const card = cardById(id);
+    const n = (used.get(id) ?? 0) + 1;
+    used.set(id, n);
+    return !card || n <= copyLimitFor(card.rarity);
+  });
+  return { ...deck, cardIds };
+}
+
 /** Drops deck slots the player can no longer field, so a deck survives a change. */
 export function pruneDeck(deck: Deck, owned: Owned): Deck {
   const kept: string[] = [];

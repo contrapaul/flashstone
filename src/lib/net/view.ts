@@ -107,6 +107,8 @@ export function emptyView(): PlayerView {
     foe: { ...side, handCount: 0 },
     log: [],
     history: [],
+    choice: null,
+    foeChoosing: false,
     turnEndsIn: 0
   };
 }

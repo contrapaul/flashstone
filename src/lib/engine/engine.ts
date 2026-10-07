@@ -1,4 +1,5 @@
-import type { Card, CardClass, Effect, Trigger } from '../../types/cards';
+import type { Card, CardClass, Discover, Effect, Keyword, Trigger } from '../../types/cards';
+import { ALL_CARDS } from '../data/cards';
 import { HERO_POWERS } from '../data/classes';
 import { STUDY_NOTE, tokenById } from '../data/tokens';
 import type { CueRef, GameEvent } from './events';
@@ -60,7 +61,8 @@ function createPlayer(id: PlayerId, deck: Card[], heroClass: CardClass = 'Neutra
     heroAttacksThisTurn: 0,
     heroClass,
     heroPowerUsedThisTurn: false,
-    graveyard: []
+    graveyard: [],
+    played: []
   };
 }
 
@@ -90,6 +92,7 @@ export function createMatch(
     stamp: null,
     lastHit: {},
     reactions: [],
+    choices: [],
     seed,
     nextInstanceId: 1,
     events: []
@@ -276,7 +279,7 @@ function startTurn(state: MatchState, id: PlayerId): void {
 }
 
 export function endTurn(state: MatchState): void {
-  if (state.winner) return;
+  if (state.winner || state.choices.length > 0) return;
   const id = state.current;
   triggerBoard(state, id, 'EndOfTurn');
   if (state.winner) return;
@@ -339,7 +342,7 @@ export function drawCard(state: MatchState, id: PlayerId): void {
 }
 
 export function canPlayCard(state: MatchState, id: PlayerId, handIndex: number): boolean {
-  if (state.winner || state.current !== id) return false;
+  if (state.winner || state.current !== id || state.choices.length > 0) return false;
   const p = state.players[id];
   const card = p.hand[handIndex];
   if (!card) return false;
@@ -373,6 +376,7 @@ export function playCard(
   const p = state.players[id];
   p.hand.splice(handIndex, 1);
   p.mana -= card.cost;
+  p.played.push(card);
   state.log.push(`${id} plays ${card.name}.`);
   const opened = openEntry(state, { actor: id, kind: 'play', cardId: card.id, name: card.name, cardType: card.type });
   emit(state, {
@@ -421,7 +425,7 @@ export function useHeroPower(
   id: PlayerId,
   chosen?: Character
 ): boolean {
-  if (!canUseHeroPower(state, id)) return false;
+  if (!canUseHeroPower(state, id) || state.choices.length > 0) return false;
 
   const power = HERO_POWERS[state.players[id].heroClass];
   if (!power) return false;
@@ -495,7 +499,7 @@ function equipWeapon(state: MatchState, id: PlayerId, card: Card): void {
  * which is why this routes through `legalTargets` rather than reimplementing it.
  */
 export function heroAttack(state: MatchState, id: PlayerId, target: Character): boolean {
-  if (state.winner || state.current !== id) return false;
+  if (state.winner || state.current !== id || state.choices.length > 0) return false;
   const p = state.players[id];
   if (!canHeroAttack(p) || !p.weapon) return false;
 
@@ -582,7 +586,7 @@ export function attack(
   attackerInstanceId: string,
   target: { kind: 'minion'; instanceId: string } | { kind: 'hero' }
 ): boolean {
-  if (state.winner || state.current !== id) return false;
+  if (state.winner || state.current !== id || state.choices.length > 0) return false;
 
   const attacker = state.players[id].board.find((m) => m.instanceId === attackerInstanceId);
   if (!attacker || !canAttack(attacker)) return false;
@@ -707,6 +711,83 @@ function refreshAuras(state: MatchState): void {
       emitBuff(state, minion);
     }
   }
+}
+
+// ── Discover ───────────────────────────────────────────────────
+
+const KEYWORD_NAME: Record<Keyword, string> = {
+  Taunt: 'Taunt',
+  Charge: 'Charge',
+  DivineShield: 'Divine Shield',
+  Windfury: 'Windfury',
+  Stealth: 'Stealth'
+};
+
+/** A keyword offered as a choice, shaped as a card so it can be shown as one. */
+function keywordOption(keyword: Keyword): Card {
+  return {
+    id: `choice-${keyword.toLowerCase()}`,
+    name: KEYWORD_NAME[keyword],
+    cost: 0,
+    type: 'Spell',
+    rarity: 'Common',
+    keywords: [],
+    effects: [{ trigger: 'Battlecry', action: 'GainKeyword', target: 'Self', keyword }],
+    description: `Gain ${KEYWORD_NAME[keyword]}.`
+  };
+}
+
+/** Up to three distinct options, drawn with the match's own RNG so a replay offers the same. */
+function discoverOptions(state: MatchState, owner: PlayerId, discover: Discover, rng: Rng): Card[] {
+  if (discover.from === 'Keyword') {
+    return (discover.keywords ?? ['Taunt', 'DivineShield', 'Stealth']).map(keywordOption);
+  }
+  const heroClass = state.players[owner].heroClass;
+  const pool =
+    discover.from === 'OpponentPlayed'
+      ? [...new Map(state.players[opponentOf(owner)].played.map((c) => [c.id, c])).values()]
+      : ALL_CARDS.filter(
+          (c) => c.type === discover.from && ((c.class ?? 'Neutral') === 'Neutral' || c.class === heroClass)
+        );
+  return shuffle(rng, pool).slice(0, 3).map((c) => ({ ...c }));
+}
+
+/**
+ * Makes the waiting choice. The option goes where its Discover said: to the
+ * hand (lost if the hand is full), onto the board — summoned, so no Battlecry —
+ * or onto the minion whose text it was. Its results join the history entry of
+ * the card that offered it.
+ */
+export function choose(state: MatchState, id: PlayerId, index: number): boolean {
+  const choice = state.choices[0];
+  if (!choice || choice.owner !== id || state.winner) return false;
+  const option = choice.options[index];
+  if (!option) return false;
+  state.choices.shift();
+  const reopened = choice.entry !== null && state.openEntry === null;
+  if (reopened) state.openEntry = choice.entry;
+  // Named nowhere: the log goes to both players, and a pick for the hand is private.
+  state.log.push(`${id} makes a choice.`);
+  switch (choice.then) {
+    case 'hand': {
+      const p = state.players[id];
+      const lost = p.hand.length >= HAND_LIMIT;
+      if (!lost) p.hand.push(option);
+      emit(state, { type: 'gain', owner: id, handCount: p.hand.length, lost });
+      break;
+    }
+    case 'summon':
+      summon(state, id, option);
+      break;
+    case 'self': {
+      const found = choice.source ? findMinion(state, choice.source) : undefined;
+      if (found) for (const effect of option.effects) resolveEffect(state, id, found.minion, effect);
+      break;
+    }
+  }
+  checkDeaths(state);
+  if (reopened) state.openEntry = null;
+  return true;
 }
 
 /** Enough for any real chain of reactions; a loop between two minions stops here. */
@@ -879,6 +960,15 @@ function resolveEffect(
     // every card written before tokens existed behaves exactly as it did.
     const token = (effect.condition && tokenById(effect.condition)) || STUDY_NOTE;
     for (let i = 0; i < value; i++) summon(state, owner, token);
+    return;
+  }
+
+  if (effect.action === 'Discover') {
+    if (!effect.discover) return;
+    const options = discoverOptions(state, owner, effect.discover, rng);
+    if (options.length === 0) return;
+    state.choices.push({ owner, options, then: effect.discover.then, source: source?.instanceId ?? null, entry: state.openEntry });
+    emit(state, { type: 'discover', owner, count: options.length });
     return;
   }
 

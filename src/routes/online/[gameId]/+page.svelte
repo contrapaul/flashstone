@@ -168,6 +168,7 @@
     on:heroAttack={onHeroAttack}
     on:heroPower={onHeroPower}
     on:endTurn={() => source?.endTurn()}
+    on:choose={(e) => source?.choose(e.detail.index)}
     on:overAction={() => (location.href = '/play?mode=online')}
   />
 {/if}
