@@ -255,11 +255,6 @@
     animation: fs-condition 1.4s ease-in-out infinite;
   }
 
-  @keyframes fs-condition {
-    0%, 100% { box-shadow: 0 0 0 2px rgba(255, 214, 110, .95), 0 0 16px rgba(255, 196, 70, .55), 0 14px 26px rgba(0, 0, 0, .6); }
-    50% { box-shadow: 0 0 0 2px rgba(255, 236, 160, 1), 0 0 30px rgba(255, 196, 70, .95), 0 14px 26px rgba(0, 0, 0, .6); }
-  }
-
   .card.drawn { animation: fs-draw .5s cubic-bezier(.2, .9, .3, 1); }
 
   /* Gold variant. Deliberately a frame-and-sheen treatment rather than separate

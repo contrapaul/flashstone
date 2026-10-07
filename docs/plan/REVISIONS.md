@@ -919,18 +919,69 @@ R1–R5.
 Respects `DECISIONS.md` §14: **the rarity weights are not touched**. Variety comes
 from hand-authoring, as §8 anticipated.
 
-- [ ] **R8.1 — Rarity on the card face.** A faceted rarity gem under the art (where
+> ## Built 2026-10-07 — 448 tests, 0 check errors, production build passes. Not deployed.
+>
+> Thirteen commits, one per capability, each with its cards and tests. Every new
+> mechanic emits cues the replay test folds, and that test requires each new
+> cue type to turn up in its 200 random matches. **Changes protocol** (a
+> `choose` message; `choice` and `foeChoosing` on the view), so both deploys.
+>
+> **The new engine abilities (R8.4):**
+> - reaction triggers (`OnDamaged`, `OnFriendlyDeath`, `OnFriendlySpell`,
+>   `OnFriendlyPlay`), which fire once the action settles;
+> - return to hand, and transform;
+> - a graveyard and Resummon;
+> - delayed destroy, with an hourglass badge;
+> - staged text, with a ring of stages;
+> - auras, as a derived layer that comes and goes with its source;
+> - conditions, which make a card glow gold in hand when met;
+> - Discover: the options are private, the AI picks at once, and a timed-out
+>   turn takes the first.
+>
+> Shuffle and a standalone copy were not built, as no card needs them yet.
+> **Two rules gaps fixed on the way:**
+> - silence now stops a minion's triggers, not only its keywords;
+> - aimed effects that only mean anything to a minion no longer offer a hero
+>   as a target.
+>
+> **Curation (R8.5):**
+> - every syllabus Epic and Legendary now has an effect that is its term;
+> - The Jig gets a Battlecry;
+> - the 17 vanilla Uncommons each get one simple effect, which takes vanilla
+>   minions from 41% to 28% of the set;
+> - tests enforce R8.3: Epics and Legendaries have text, vanilla minions are
+>   Common, and a Common carries at most one keyword.
+>
+> **Circular Economy left the starter set.** It was two copies in every new
+> account's collection, which a Legendary cannot be. Tensile Strength (also 2
+> mana, Uncommon, A3.1) replaces it. A saved deck with two copies of a
+> now-Legendary card is trimmed to one on loading, and the deck builder names
+> the cards until the deck is saved; the realtime room trims too.
+> **Entrances (R8.6):** a Legendary's summon dims the table round it, raises
+> shafts of light, and lands with a gold shockwave and the legendary reveal
+> sound.
+> **Seen in a practice match**, dealt the new cards through a temporary hook
+> that has since been removed:
+> - Generative Design's entrance, then its Choose One, then the 9/9 it
+>   summoned;
+> - Focus Group raising its neighbours to 4/4 and 10/10;
+> - Smart Materials choosing Taunt, after which Compressive Strength glowed
+>   gold (the table's green pulse had been overriding it until fixed);
+> - Planned Obsolescence's hourglass;
+> - Iterative Design's four-segment ring.
+
+- [x] **R8.1 — Rarity on the card face.** A faceted rarity gem under the art (where
       Hearthstone puts it), coloured, in addition to the frame tint. **Legendary**
       cards get a crest over the top of the frame in brass gear filigree (the
       Flashstone answer to Hearthstone's dragon) and a faint shimmer in hand; on the
       board they get an ornate oval with a crest and drifting motes. **Epic** cards
       get a soft inner glow. Art slots: `ui/rarity-gem-<rarity>`,
       `ui/legendary-crest`.
-- [ ] **R8.2 — Card text with effects.** A small formatter for `description`: bold
+- [x] **R8.2 — Card text with effects.** A small formatter for `description`: bold
       keywords and trigger words (**Battlecry:**, **Taunt**), and damage numbers in
       green and raised when Spell Damage applies, as in Hearthstone. The card face
       still shows game text only (`DECISIONS.md` §8).
-- [ ] **R8.3 — What a rarity *means*.** A design rule for every card from now on:
+- [x] **R8.3 — What a rarity *means*.** A design rule for every card from now on:
 
       | Rarity | Identity |
       |---|---|
@@ -940,7 +991,7 @@ from hand-authoring, as §8 anticipated.
       | Epic | An engine piece: a trigger, a condition, an aura. |
       | Legendary | A **unique, named rule-bend** worth building a deck around, with its own entrance and sound. |
 
-- [ ] **R8.4 — New engine capabilities.** Each is its own step with tests;
+- [x] **R8.4 — New engine capabilities.** Each is its own step with tests;
       types and validator change in the same commit, and each emits cues.
 
       | Capability | Example | Size |
@@ -954,7 +1005,7 @@ from hand-authoring, as §8 anticipated.
       | Delayed | "Destroy it at the end of your opponent's next turn", with a ticking badge on the target | S–M |
       | Counters on an instance | Staged Legendaries (below) | S |
 
-- [ ] **R8.5 — The curation pass**, through `OVERRIDES` in `slCards.ts` (the
+- [x] **R8.5 — The curation pass**, through `OVERRIDES` in `slCards.ts` (the
       intended place for hand-tuning). Every existing Epic and Legendary gets an
       effect that *is* its term; the obvious headline terms are promoted. Proposals,
       each renameable:
@@ -984,10 +1035,10 @@ from hand-authoring, as §8 anticipated.
       **Caveat:** a card promoted to Legendary is limited to one copy per deck, so
       saved decks holding two become illegal. Default: auto-trim to one with a
       one-time notice; the collection keeps both copies (§16 Q7).
-- [ ] **R8.6 — Legendary entrances.** On summon: the screen dims slightly, light
+- [x] **R8.6 — Legendary entrances.** On summon: the screen dims slightly, light
       beams rise, the minion drops with a heavy slam and a gold shockwave, and its
       sound line plays (R7.3).
-- [ ] **R8.7 — The AI plays class cards.** `aiDeck.ts` builds per class: class cards
+- [x] **R8.7 — The AI plays class cards.** `aiDeck.ts` builds per class: class cards
       first, Neutral to fill, curve preserved. All four classes are then seen in
       practice, as Phase 6 intended.
       → **verify:** `aiDeck.test.ts` asserts each class deck is legal for its class

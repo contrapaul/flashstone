@@ -65,6 +65,8 @@ export interface Stage {
   setAimLine(line: { from: Point; to: Point; color: string } | null): void;
   /** The highlight that flickers across a random effect's candidates. */
   setRoulette(rect: DOMRect | null): void;
+  /** A Legendary arriving: the table dims round the point it lands on, and light rises from it. */
+  setSpotlight(at: Point | null): void;
   /** The End Turn button turning over to announce your turn. */
   setHandover(on: boolean): void;
   fx(): Fx | null;
@@ -207,7 +209,9 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       // Weight by cost: 1–3 taps down, 4–6 lands with a thud and a ring of
       // dust, 7 and up drops from above, slams, and shakes the table.
       const cost = cue.minion.card.cost;
-      const heavy = cost >= 7;
+      const legendary = cue.minion.card.rarity === 'Legendary';
+      // A Legendary always lands with the full weight, whatever it costs.
+      const heavy = cost >= 7 || legendary;
       const id = cue.instanceId;
       if (heavy) pulse(() => stage.mark('heavy', id, true), () => stage.mark('heavy', id, false), 760);
       pulse(() => stage.mark('summoning', id, true), () => stage.mark('summoning', id, false), heavy ? 760 : 620);
@@ -229,6 +233,22 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
         stage.fx()?.shards(ground.x, ground.y, { colors: dust, count: heavy ? 22 : 10, speed: heavy ? 320 : 200, size: 5, angle: -Math.PI / 2, spread: 1.3 });
         if (heavy && spatial()) pulse(() => stage.setQuake(1), () => stage.setQuake(0), 500);
       });
+      // A Legendary is an event: the table dims, light rises where it lands,
+      // and it comes down with a gold shockwave. Held, so nothing talks over it.
+      if (legendary) {
+        await tick();
+        const el = stage.unit(id);
+        const at = el ? centreOf(el) : undefined;
+        if (at) {
+          audio().play('reveal-legendary');
+          stage.setSpotlight(at);
+          await wait(430);
+          stage.fx()?.ring(at.x, at.y, { color: 'rgba(255, 200, 80, .95)', size: 280, life: 0.75 });
+          stage.fx()?.sparks(at.x, at.y, { colors: ['#fff3c4', '#ffd36a', '#ffb02e'], count: 34, speed: 620, gravity: 400 });
+          await wait(650);
+          stage.setSpotlight(null);
+        }
+      }
       // Charge: it arrives already moving — streaks off both flanks, no lasting mark.
       if (cue.minion.keywords.includes('Charge')) {
         void wait(200).then(() => {

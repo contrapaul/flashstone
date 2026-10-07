@@ -146,6 +146,8 @@
   let rouletteRect: DOMRect | null = null;
   /** The End Turn button announcing that the turn is yours. */
   let handover = false;
+  /** Where a Legendary is landing, while the table dims round it. */
+  let spotlight: { x: number; y: number } | null = null;
 
   /**
    * The board **on screen**, which is not always the board in `view`.
@@ -564,6 +566,7 @@
     },
     setHeroHit: (side) => (hitHero = side),
     setHeroDown: (side) => (heroDown = side),
+    setSpotlight: (at) => (spotlight = at),
     setQuake: (intensity) => (quake = intensity),
     setBanner: (text) => (banner = text),
     float: floatAt,
@@ -1519,6 +1522,13 @@
     on:quit={quitToMenu}
   />
 
+  {#if spotlight}
+    <!-- A Legendary's entrance: the table dims, and light rises from where it lands. -->
+    <div class="spotlight" style:--x={`${spotlight.x}px`} style:--y={`${spotlight.y}px`} out:fade={{ duration: d(300) }} aria-hidden="true">
+      <span class="beams"></span>
+    </div>
+  {/if}
+
   {#if view.choice && !draining}
     <!-- A Discover: three cards rise, and the match waits for one to be picked. -->
     <div class="choosing" role="dialog" aria-label="Choose one">
@@ -1957,6 +1967,44 @@
   .vs-class.echo { visibility: hidden; }
 
   .vs-mark { filter: drop-shadow(0 0 30px rgba(255, 210, 120, .45)); }
+
+  /* ── A Legendary's entrance ── */
+
+  .spotlight {
+    position: fixed;
+    inset: 0;
+    /* Over the boards, under the particles. */
+    z-index: 330;
+    pointer-events: none;
+    background: radial-gradient(circle at var(--x) var(--y), transparent 80px, rgba(10, 6, 2, .5) 300px);
+    animation: fs-spot-in .3s ease-out both;
+  }
+
+  @keyframes fs-spot-in { from { opacity: 0; } }
+
+  /* Shafts of light rising out of the landing point and fanning upwards. */
+  .beams {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 900px;
+    height: 900px;
+    transform: translate(-50%, -100%);
+    transform-origin: 50% 100%;
+    background: repeating-conic-gradient(from -40deg at 50% 100%,
+      rgba(255, 226, 150, .38) 0deg 3deg, transparent 3deg 9deg);
+    -webkit-mask-image: radial-gradient(circle at 50% 100%, #000 10%, transparent 70%);
+    mask-image: radial-gradient(circle at 50% 100%, #000 10%, transparent 70%);
+    clip-path: polygon(50% 100%, 0 0, 100% 0);
+    mix-blend-mode: screen;
+    animation: fs-beams 1.1s ease-out both;
+  }
+
+  @keyframes fs-beams {
+    0% { transform: translate(-50%, -100%) scaleY(.2); opacity: 0; }
+    35% { opacity: 1; }
+    100% { transform: translate(-50%, -100%) scaleY(1); opacity: .85; }
+  }
 
   /* ── A Discover ── */
 
@@ -2440,6 +2488,9 @@
   .ghost :global(.card.playable) {
     animation: fs-playable 1.7s ease-in-out infinite;
   }
+
+  /* A condition met outshines being merely playable. */
+  .hand :global(.card.playable.met:not(.drawn)) { animation: fs-condition 1.4s ease-in-out infinite; }
 
   /*
    * The opponent's played card, held left of centre — clear of the compact
