@@ -20,6 +20,7 @@
   import Splat from './Splat.svelte';
   import Chronicle from './Chronicle.svelte';
   import Logo from './Logo.svelte';
+  import Coach from './Coach.svelte';
   import GoldCounter from './GoldCounter.svelte';
   import type { QuestMove } from '../quests/quests';
   import { audio, MATCH_TRACKS } from '../audio';
@@ -552,6 +553,60 @@
     return { x: Math.cos(a) * 190, y: Math.sin(a) * 120 - 10 };
   };
 
+  // ── First-match coach ─────────────────────────────────────
+  /*
+   * In a player's very first match, three pointers, one at a time, each gone
+   * when its action is done: play a card, end the turn, attack. Remembered in
+   * this browser once finished or skipped.
+   */
+  const COACHED = 'flashstone.coached';
+  const COACH_LABEL = ['Drag a card onto the board to play it', 'End your turn', 'Drag a minion onto an enemy to attack'];
+  let coachStep: number | null = null;
+  if (typeof window !== 'undefined') {
+    try {
+      if (!localStorage.getItem(COACHED)) coachStep = 0;
+    } catch {
+      // Storage blocked: no coach, rather than one that never goes away.
+    }
+  }
+  let coachAt: { x: number; y: number } | null = null;
+
+  function coachNotify(action: 'play' | 'endTurn' | 'attack') {
+    if (coachStep === 0 && action === 'play') coachStep = 1;
+    else if (coachStep === 1 && action === 'endTurn') coachStep = 2;
+    else if (coachStep === 2 && action === 'attack') coachDone();
+  }
+
+  function coachDone() {
+    coachStep = null;
+    coachAt = null;
+    try {
+      localStorage.setItem(COACHED, '1');
+    } catch {
+      // Not remembered; it will simply show again.
+    }
+  }
+
+  /** Where the current step points, or nowhere while its moment has not come. */
+  function coachTarget(): { x: number; y: number } | null {
+    if (coachStep === null || draining || !myTurn || view.choice || drag) return null;
+    let el: Element | null | undefined = null;
+    if (coachStep === 0) el = handEl?.querySelector('.hand-slot .card.playable');
+    if (coachStep === 1) el = document.querySelector('.end-turn:not(:disabled)');
+    if (coachStep === 2) {
+      const i = shown.me.board.findIndex(canAttackFromView);
+      el = i < 0 ? null : myBoardEl?.querySelectorAll('.minion')[i];
+    }
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top };
+  }
+
+  const coachTimer = typeof window === 'undefined' ? undefined : setInterval(() => {
+    if (coachStep !== null) coachAt = coachTarget();
+  }, 250);
+  onDestroy(() => coachTimer && clearInterval(coachTimer));
+
   // ── The mulligan ─────────────────────────────────────────
   /** Opening-hand positions marked to go back. Cleared with each new match. */
   let replacing = new Set<number>();
@@ -870,6 +925,7 @@
   function castAt(target: ChosenRef) {
     if (!aiming) return;
     dispatch('playCard', { handIndex: aiming.handIndex, target });
+    coachNotify('play');
     aiming = null;
   }
 
@@ -1018,6 +1074,7 @@
         return;
       }
       dispatch('playCard', { handIndex: finished.handIndex, slot: finished.slot });
+      coachNotify('play');
     } else {
       if (!finished.target) {
         const refused = refusedAt(event.clientX, event.clientY);
@@ -1025,6 +1082,7 @@
         return;
       }
       dispatch('attack', { instanceId: finished.instanceId, target: finished.target });
+      coachNotify('attack');
     }
     selectedId = null;
   }
@@ -1077,6 +1135,7 @@
           instanceId: activeAttacker,
           target: { kind: 'minion', instanceId: minion.instanceId }
         });
+        coachNotify('attack');
         selectedId = null;
       } else {
         refuse({ kind: 'minion', instanceId: minion.instanceId });
@@ -1112,6 +1171,7 @@
     // only thing the hero portrait can do on the attacking side.
     if (activeAttacker && heroTargetable) {
       dispatch('attack', { instanceId: activeAttacker, target: { kind: 'hero' } });
+      coachNotify('attack');
       selectedId = null;
       return;
     }
@@ -1180,6 +1240,7 @@
     pressedEnd = true;
     void sleep(450).then(() => (pressedEnd = false));
     dispatch('endTurn');
+    coachNotify('endTurn');
   }
 
   // The aiming arrow, shared by dragging and tap-to-select.
@@ -1627,6 +1688,10 @@
       if (mutedFoe) said = { ...said, foe: undefined };
     }}
   />
+
+  {#if coachStep !== null}
+    <Coach target={coachAt} label={COACH_LABEL[coachStep]} on:skip={coachDone} />
+  {/if}
 
   {#if spotlight}
     <!-- A Legendary's entrance: the table dims, and light rises from where it lands. -->
