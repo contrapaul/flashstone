@@ -15,8 +15,10 @@
    */
 
   export let open = false;
+  /** The opponent's emotes are hidden — for a classroom, where one is enough. */
+  export let mutedFoe = false;
 
-  const dispatch = createEventDispatcher<{ close: void; quit: void }>();
+  const dispatch = createEventDispatcher<{ close: void; quit: void; mute: boolean }>();
 
   let showSettings = false;
   let confirmingQuit = false;
@@ -61,6 +63,10 @@
             <SettingsControls />
           </div>
         {/if}
+
+        <button class="option" aria-pressed={mutedFoe} on:click={() => dispatch('mute', !mutedFoe)}>
+          {mutedFoe ? "Unmute opponent's emotes" : "Mute opponent's emotes"}
+        </button>
 
         {#if confirmingQuit}
           <div class="confirm">

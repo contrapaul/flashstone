@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveDeck } from '../decks/deck';
 import { starterDeck } from '../data/starter';
 import { buildAiDeck } from '../data/aiDeck';
-import { applyMessage, createRoomState, forceEndTurn, viewFor } from './room';
+import { applyMessage, createRoomState, emoteAllowed, forceEndTurn, viewFor } from './room';
 import { parseClientMessage } from './protocol';
 import { cardById } from '../data/cards';
 import type { MatchState } from '../engine/state';
@@ -355,5 +355,18 @@ describe('the mulligan', () => {
   it('refuses a malformed choice at the wire', () => {
     expect(parseClientMessage(JSON.stringify({ type: 'mulligan', replace: [9] }))).toBeNull();
     expect(parseClientMessage(JSON.stringify({ type: 'mulligan', replace: [0, 1, 2, 3, 0] }))).toBeNull();
+  });
+});
+
+describe('emotes', () => {
+  it('lets a player emote once every three seconds', () => {
+    expect(emoteAllowed(undefined, 1000)).toBe(true);
+    expect(emoteAllowed(1000, 3999)).toBe(false);
+    expect(emoteAllowed(1000, 4000)).toBe(true);
+  });
+
+  it('accepts only the fixed phrases, by id — never free text', () => {
+    expect(parseClientMessage(JSON.stringify({ type: 'emote', emote: 'nice' }))).toEqual({ type: 'emote', emote: 'nice' });
+    expect(parseClientMessage(JSON.stringify({ type: 'emote', emote: 'You are bad' }))).toBeNull();
   });
 });

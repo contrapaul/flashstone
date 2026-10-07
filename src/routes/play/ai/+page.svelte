@@ -11,7 +11,7 @@
   import type { GameEvent } from '$lib/engine/events';
   import { LocalSource } from '$lib/net/source';
   import { emptyView } from '$lib/net/view';
-  import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
+  import type { ChosenRef, EmoteId, PlayerView, TargetRef } from '$lib/net/protocol';
   import { fetchQuests, questsMovedSince, reportProgress, type QuestTracks } from '$lib/quests/client';
   import type { QuestMove } from '$lib/quests/quests';
   import { account } from '$lib/account';
@@ -38,6 +38,8 @@
   let matchId = '';
   let rewarded = false;
   let goldWon = 0;
+  /** The latest emote, yours or the AI's, for the table to show. */
+  let emote: { from: string; id: EmoteId; at: number } | null = null;
   /** Quest progress as the match began, so the result can show what it moved. */
   let questsBefore: Promise<QuestTracks> | null = null;
   let questMoves: QuestMove[] = [];
@@ -80,7 +82,10 @@
       if (cues.length > 0) events = [...events, ...cues];
     },
     onStatus() {},
-    onError() {}
+    onError() {},
+    onEmote(from: string, id: EmoteId) {
+      emote = { from, id, at: Date.now() };
+    }
   };
 
   function onPlayCard(event: CustomEvent<{ handIndex: number; slot?: number; target?: ChosenRef }>) {
@@ -214,6 +219,8 @@
   on:endTurn={onEndTurn}
   on:choose={(e) => source?.choose(e.detail.index)}
   on:mulligan={(e) => source?.mulligan(e.detail.replace)}
+  on:emote={(e) => source?.emote(e.detail.id)}
+  {emote}
   on:drained={onDrained}
   on:overAction={start}
 />

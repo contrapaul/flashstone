@@ -6,7 +6,7 @@
   import { RemoteSource } from '$lib/net/source';
   import { emptyView } from '$lib/net/view';
   import type { GameEvent } from '$lib/engine/events';
-  import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
+  import type { ChosenRef, EmoteId, PlayerView, TargetRef } from '$lib/net/protocol';
   import type { MatchStatus } from '$lib/net/source';
   import { lobbyCall } from '$lib/net/client';
   import { fetchQuests, questsMovedSince, reportProgress, type QuestTracks } from '$lib/quests/client';
@@ -27,6 +27,8 @@
   let error: string | null = null;
   let joining = true;
   let counted = false;
+  /** The latest emote, for the table to show. */
+  let emote: { from: string; id: EmoteId; at: number } | null = null;
   /** Quest progress as the match began, so the result can show what it moved. */
   let questsBefore: Promise<QuestTracks> | null = null;
   let questMoves: QuestMove[] = [];
@@ -72,6 +74,9 @@
       },
       onError(message) {
         error = message;
+      },
+      onEmote(from, id) {
+        emote = { from, id, at: Date.now() };
       }
     });
   });
@@ -170,6 +175,8 @@
     on:endTurn={() => source?.endTurn()}
     on:choose={(e) => source?.choose(e.detail.index)}
     on:mulligan={(e) => source?.mulligan(e.detail.replace)}
+    on:emote={(e) => source?.emote(e.detail.id)}
+    {emote}
     on:overAction={() => (location.href = '/play?mode=online')}
   />
 {/if}

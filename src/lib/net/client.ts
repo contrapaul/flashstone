@@ -1,6 +1,7 @@
 import { browser } from '$app/environment';
 import type { GameEvent } from '../engine/events';
-import { parseServerMessage, type PlayerView, type ServerMessage } from './protocol';
+import { parseServerMessage, type EmoteId, type PlayerView, type ServerMessage } from './protocol';
+import type { PlayerId } from '../engine/state';
 
 /**
  * The browser's half of an online match.
@@ -16,6 +17,7 @@ export interface OnlineHandlers {
   onWaiting(): void;
   onOver(view: PlayerView, winner: string, goldAwarded: number): void;
   onOpponentLeft(): void;
+  onEmote(from: PlayerId, emote: EmoteId): void;
   onError(message: string): void;
   onDisconnected(): void;
 }
@@ -122,6 +124,8 @@ export function connectToMatch(gameId: string, handlers: OnlineHandlers): Online
         return handlers.onOver(message.view, message.winner, message.goldAwarded);
       case 'opponentLeft':
         return handlers.onOpponentLeft();
+      case 'emote':
+        return handlers.onEmote(message.from, message.emote);
       case 'error':
         return handlers.onError(message.message);
     }

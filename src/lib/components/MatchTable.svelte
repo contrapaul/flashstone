@@ -38,7 +38,7 @@
     legalTargetsFromView,
     turnIsSpent
   } from '../net/view';
-  import type { ChosenRef } from '../net/protocol';
+  import { EMOTES, type ChosenRef, type EmoteId } from '../net/protocol';
   import type { Card } from '../../types/cards';
   import { sceneUrl, uiArtUrl } from '../../utils/art';
   import GameMenu from './GameMenu.svelte';
@@ -102,6 +102,8 @@
   export let goldWon = 0;
   /** Quest bars this match moved, once its reports have landed. */
   export let questMoves: QuestMove[] = [];
+  /** The latest emote said, by either side — `at` tells two of the same apart. */
+  export let emote: { from: string; id: EmoteId; at: number } | null = null;
 
   const dispatch = createEventDispatcher<{
     playCard: { handIndex: number; slot?: number; target?: ChosenRef };
@@ -111,6 +113,7 @@
     endTurn: void;
     choose: { index: number };
     mulligan: { replace: number[] };
+    emote: { id: EmoteId };
     drained: void;
     overAction: void;
   }>();
@@ -499,6 +502,55 @@
     if (resultKind === 'draw') audio().music(null);
     else audio().sting(resultKind);
   }
+
+  // ── Emotes ────────────────────────────────────────────────
+  /** What each hero is saying, if anything. */
+  let said: Partial<Record<'me' | 'foe', { text: string; key: number }>> = {};
+  let mutedFoe = false;
+  let wheelOpen = false;
+  let lastEmoteAt = 0;
+
+  $: if (emote && emote.at !== lastEmoteAt) {
+    lastEmoteAt = emote.at;
+    const side = emote.from === view.you ? 'me' : 'foe';
+    if (side === 'me' || !mutedFoe) speak(side, EMOTES[emote.id]);
+  }
+
+  function speak(side: 'me' | 'foe', text: string) {
+    const key = Date.now();
+    said = { ...said, [side]: { text, key } };
+    audio().play('emote', { volume: side === 'me' ? 0.8 : 1 });
+    void sleep(2600).then(() => {
+      if (said[side]?.key === key) said = { ...said, [side]: undefined };
+    });
+  }
+
+  function sayEmote(id: EmoteId) {
+    wheelOpen = false;
+    dispatch('emote', { id });
+  }
+
+  /** Right-click your hero for the emotes — or, on a touch screen, hold it. */
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let held = false;
+  function onHeroHoldStart(event: PointerEvent) {
+    if (event.pointerType === 'mouse') return;
+    held = false;
+    holdTimer = setTimeout(() => {
+      held = true;
+      wheelOpen = true;
+    }, 500);
+  }
+  function onHeroHoldEnd() {
+    if (holdTimer) clearTimeout(holdTimer);
+  }
+
+  /** Six phrases on an arc above your hero. */
+  const EMOTE_ORDER: EmoteId[] = ['hello', 'thanks', 'nice', 'hmm', 'incoming', 'oops'];
+  const wheelSpot = (i: number) => {
+    const a = Math.PI + (i + 0.5) * (Math.PI / EMOTE_ORDER.length);
+    return { x: Math.cos(a) * 190, y: Math.sin(a) * 120 - 10 };
+  };
 
   // ── The mulligan ─────────────────────────────────────────
   /** Opening-hand positions marked to go back. Cleared with each new match. */
@@ -1103,6 +1155,11 @@
 
   function onMyHero() {
     if (swallowClick) return;
+    // A long press opened the emotes; its release is not also a click.
+    if (held) {
+      held = false;
+      return;
+    }
     if (aimingPower) {
       if (canAimMyHero) castPowerAt({ kind: 'hero', side: 'me' });
       else cancelAim();
@@ -1151,6 +1208,9 @@
 </script>
 
 <svelte:window
+  on:pointerdown={(e) => {
+    if (wheelOpen && !(e.target instanceof Element && e.target.closest('.emote-wheel'))) wheelOpen = false;
+  }}
   on:pointermove={onPointerMove}
   on:pointerup={onPointerUp}
   on:pointercancel={onPointerCancel}
@@ -1209,6 +1269,9 @@
 
     <div class="hero-block" bind:this={foeHeroEl}>
       <span class="plinth" aria-hidden="true"></span>
+      {#if said.foe}
+        {#key said.foe.key}<span class="bubble foe" role="status">{said.foe.text}</span>{/key}
+      {/if}
       <HeroPortrait
         label={opponentName}
         name={opponentName}
@@ -1348,8 +1411,30 @@
   <section class="hero-row you">
     <div></div>
 
-    <div class="hero-block" bind:this={myHeroEl}>
+    <div
+      class="hero-block"
+      role="group"
+      aria-label="Your hero — right-click or hold it for emotes"
+      bind:this={myHeroEl}
+      on:contextmenu|preventDefault={() => (wheelOpen = !wheelOpen)}
+      on:pointerdown={onHeroHoldStart}
+      on:pointerup={onHeroHoldEnd}
+      on:pointerleave={onHeroHoldEnd}
+    >
       <span class="plinth" aria-hidden="true"></span>
+      {#if said.me}
+        {#key said.me.key}<span class="bubble me" role="status">{said.me.text}</span>{/key}
+      {/if}
+      {#if wheelOpen}
+        <div class="emote-wheel" role="menu" aria-label="Emotes">
+          {#each EMOTE_ORDER as id, i}
+            {@const at = wheelSpot(i)}
+            <button role="menuitem" style:--x={`${at.x}px`} style:--y={`${at.y}px`} style:--i={i} on:click|stopPropagation={() => sayEmote(id)}>
+              {EMOTES[id]}
+            </button>
+          {/each}
+        </div>
+      {/if}
       <HeroPortrait
         label="You"
         name={playerName}
@@ -1534,8 +1619,13 @@
 
   <GameMenu
     open={menuOpen}
+    {mutedFoe}
     on:close={() => (menuOpen = false)}
     on:quit={quitToMenu}
+    on:mute={(e) => {
+      mutedFoe = e.detail;
+      if (mutedFoe) said = { ...said, foe: undefined };
+    }}
   />
 
   {#if spotlight}
@@ -1932,11 +2022,86 @@
    * the position it had, and the portrait no longer pays for it.
    */
   .hero-block {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 14px;
   }
+
+  /* ── Emotes ── */
+
+  /* A speech bubble beside the hero, its tail pointing back at the portrait. */
+  .bubble {
+    position: absolute;
+    z-index: 30;
+    left: 50%;
+    max-width: 220px;
+    padding: 9px 16px;
+    border: 2px solid #3a2a15;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #fffaf0, #eadcbc);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, .45);
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 700;
+    color: #2a1d10;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: fs-bubble 2.6s ease-out both;
+  }
+  .bubble.me { bottom: 100%; transform: translate(-130%, -6px); }
+  .bubble.foe { top: 70%; transform: translate(-130%, 0); }
+  .bubble::after {
+    content: '';
+    position: absolute;
+    right: 14px;
+    width: 12px;
+    height: 12px;
+    background: inherit;
+    border: inherit;
+    border-width: 0 2px 2px 0;
+  }
+  .bubble.me::after { bottom: -8px; transform: rotate(45deg); }
+  .bubble.foe::after { top: -8px; transform: rotate(-135deg); }
+
+  @keyframes fs-bubble {
+    0% { opacity: 0; scale: .6; }
+    10% { opacity: 1; scale: 1.06; }
+    16%, 85% { opacity: 1; scale: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* The emotes, fanned on an arc above your hero. */
+  .emote-wheel {
+    position: absolute;
+    z-index: 40;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+  }
+  .emote-wheel button {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    transform: translate(-50%, -50%);
+    padding: 7px 14px;
+    border: 1.5px solid #c9a46a;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #3a2814, #1f150a);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .55);
+    font-family: var(--display);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #f4e2b8;
+    white-space: nowrap;
+    cursor: pointer;
+    animation: fs-wheel-in .22s cubic-bezier(.2, 1.4, .4, 1) calc(var(--i) * 25ms) both;
+  }
+  .emote-wheel button:hover { border-color: #ffe08a; color: #fff6d8; box-shadow: 0 0 14px rgba(255, 210, 110, .5), 0 6px 14px rgba(0, 0, 0, .55); }
+
+  @keyframes fs-wheel-in { from { opacity: 0; transform: translate(-50%, 0) scale(.6); } }
 
   /* Both heroes alike, as in Hearthstone: weapon to the left, power to the right. */
   .hero-block > :global(.hero) { grid-column: 2; grid-row: 1; }

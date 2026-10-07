@@ -7,6 +7,7 @@ import {
   TURN_SECONDS,
   applyMessage,
   createRoomState,
+  emoteAllowed,
   forceEndTurn,
   viewFor
 } from '../../../src/lib/net/room';
@@ -39,6 +40,8 @@ export class MatchRoom {
   private info = new Map<PlayerId, { username: string; cardBack: string }>();
   private turnDeadline = 0;
   private missed: Record<PlayerId, number> = { player: 0, ai: 0 };
+  /** When each side last emoted, for the rate limit. */
+  private lastEmote: Partial<Record<PlayerId, number>> = {};
   private paidOut = false;
 
   constructor(state: DurableObjectState, env: any) {
@@ -216,6 +219,15 @@ export class MatchRoom {
       return;
     }
     if (!this.match) return this.send(seat, { type: 'error', message: 'The match has not started.' });
+
+    // Emotes carry no rules: rate-limited, then said to both seats, the sender included.
+    if (message.type === 'emote') {
+      const now = Date.now();
+      if (!emoteAllowed(this.lastEmote[seat.side], now)) return;
+      this.lastEmote[seat.side] = now;
+      for (const s of this.seats.values()) this.send(s, { type: 'emote', from: seat.side, emote: message.emote });
+      return;
+    }
 
     const result = applyMessage(this.match, seat.side, message);
     if (!result.ok) return this.send(seat, { type: 'error', message: result.error ?? 'Rejected.' });

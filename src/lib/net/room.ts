@@ -215,6 +215,14 @@ export function applyMessage(
   }
 }
 
+/** One emote per player per this long: friendly is the point, and a flood is not. */
+export const EMOTE_GAP_MS = 3000;
+
+/** Whether a player may emote again, given when they last did. */
+export function emoteAllowed(last: number | undefined, now: number): boolean {
+  return last === undefined || now - last >= EMOTE_GAP_MS;
+}
+
 /** Ends the turn of whoever is on the clock. Used by the turn timer. */
 export function forceEndTurn(state: MatchState): GameEvent[] {
   if (state.winner) return [];

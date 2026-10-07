@@ -14,7 +14,7 @@ import { aiMulligan, applyAiIntent, type AiIntent, type AiTurn } from '../engine
 import type { GameEvent } from '../engine/events';
 import { findMinion, opponentOf, type Character, type MatchState, type PlayerId } from '../engine/state';
 import { viewFor } from './room';
-import type { ChosenRef, PlayerView, TargetRef } from './protocol';
+import type { ChosenRef, EmoteId, PlayerView, TargetRef } from './protocol';
 import { connectToMatch, type OnlineConnection } from './client';
 
 /**
@@ -37,6 +37,8 @@ export interface MatchSource {
   choose(index: number): void;
   /** Keeps the opening hand but for these positions. */
   mulligan(replace: number[]): void;
+  /** Says one of the fixed emotes. */
+  emote(id: EmoteId): void;
   concede(): void;
   /** Local only — online matches restart by making a new game. */
   restart?(): void;
@@ -47,6 +49,8 @@ export interface SourceHandlers {
   onView(view: PlayerView, events: GameEvent[]): void;
   onStatus(status: MatchStatus): void;
   onError(message: string): void;
+  /** Someone said something — either side, yourself included. */
+  onEmote?(from: PlayerId, emote: EmoteId): void;
 }
 
 export interface MatchStatus {
@@ -106,6 +110,11 @@ export class LocalSource implements MatchSource {
   private publish(events: GameEvent[] = this.drain()) {
     this.handlers.onView(viewFor(this.state, 'player'), events);
     if (this.state.winner) this.handlers.onStatus({ kind: 'over' });
+    // A good loser, after the killing blow has had time to land.
+    if (this.state.winner === 'player' && !this.congratulated) {
+      this.congratulated = true;
+      this.later(() => this.handlers.onEmote?.('ai', 'nice'), 1800);
+    }
   }
 
   playCard(handIndex: number, slot?: number, target?: ChosenRef) {
@@ -158,13 +167,46 @@ export class LocalSource implements MatchSource {
   }
 
   mulligan(replace: number[]) {
-    if (mulligan(this.state, 'player', replace)) this.publish();
+    if (!mulligan(this.state, 'player', replace)) return;
+    this.publish();
+    // The match has begun: the AI says hello, unless you already did and it answered.
+    const state = this.state;
+    if (!this.answered) {
+      this.later(() => {
+        if (this.state !== state || this.answered) return;
+        this.answered = true;
+        this.handlers.onEmote?.('ai', 'hello');
+      }, 1600);
+    }
+  }
+
+  /**
+   * Your emote, and the AI's manners: it greets you as the match begins (or
+   * answers your Hello, if you got there first), and says "Nice design!" when
+   * you beat it.
+   */
+  emote(id: EmoteId) {
+    this.handlers.onEmote?.('player', id);
+    if (id === 'hello' && !this.answered) {
+      this.answered = true;
+      this.later(() => this.handlers.onEmote?.('ai', 'hello'), 1200);
+    }
+  }
+
+  private answered = false;
+  private congratulated = false;
+  private timers: ReturnType<typeof setTimeout>[] = [];
+
+  private later(fn: () => void, ms: number) {
+    this.timers.push(setTimeout(fn, ms));
   }
 
   /** A new match opens on the mulligan; the AI settles its hand at once. */
   private open(seed: number): MatchState {
     const state = createMatch(this.deck, this.foeDeck, seed, this.classes, { mulligan: true });
     mulligan(state, 'ai', aiMulligan(state));
+    this.answered = false;
+    this.congratulated = false;
     return state;
   }
 
@@ -219,7 +261,8 @@ export class LocalSource implements MatchSource {
   }
 
   destroy() {
-    // Nothing to release: the local match is plain objects.
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers = [];
   }
 }
 
@@ -239,6 +282,7 @@ export class RemoteSource implements MatchSource {
         handlers.onStatus({ kind: 'over', goldAwarded });
       },
       onOpponentLeft: () => handlers.onStatus({ kind: 'opponentLeft' }),
+      onEmote: (from, emote) => handlers.onEmote?.(from, emote),
       onError: (message) => handlers.onError(message),
       onDisconnected: () => handlers.onStatus({ kind: 'disconnected' })
     });
@@ -270,6 +314,10 @@ export class RemoteSource implements MatchSource {
 
   mulligan(replace: number[]) {
     this.connection.send({ type: 'mulligan', replace });
+  }
+
+  emote(id: EmoteId) {
+    this.connection.send({ type: 'emote', emote: id });
   }
 
   concede() {

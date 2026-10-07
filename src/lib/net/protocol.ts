@@ -18,6 +18,21 @@ import type { HistoryEntry, MinionSnapshot, PlayerId, WeaponSnapshot } from '../
 
 export const PROTOCOL_VERSION = 1;
 
+/**
+ * The emotes: a fixed, friendly set — never free text, which in a classroom
+ * is the whole point. Keyed so the wire carries an id, not a phrase.
+ */
+export const EMOTES = {
+  hello: 'Hello!',
+  nice: 'Nice design!',
+  thanks: 'Thanks!',
+  hmm: 'Hmm…',
+  oops: 'Back to the drawing board!',
+  incoming: 'Prototype incoming!'
+} as const;
+export type EmoteId = keyof typeof EMOTES;
+const EmoteSchema = z.enum(['hello', 'nice', 'thanks', 'hmm', 'oops', 'incoming']);
+
 // ── Client → server ──────────────────────────────────────────
 
 const TargetRefSchema = z.union([
@@ -57,6 +72,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('endTurn') }),
   /** Keeps the opening hand but for these positions, which go back for new cards. */
   z.object({ type: z.literal('mulligan'), replace: z.array(z.number().int().min(0).max(3)).max(4) }),
+  /** One of the fixed emotes. Rate-limited by the room. */
+  z.object({ type: z.literal('emote'), emote: EmoteSchema }),
   /** Picks one of a Discover's options, by position. */
   z.object({ type: z.literal('choose'), index: z.number().int().min(0).max(2) }),
   z.object({ type: z.literal('concede') }),
@@ -148,6 +165,8 @@ export type ServerMessage =
   | { type: 'state'; view: PlayerView; events: GameEvent[] }
   | { type: 'over'; view: PlayerView; winner: PlayerId | 'draw'; goldAwarded: number }
   | { type: 'opponentLeft' }
+  /** A player's emote, to both seats — the sender sees their own bubble from the same message. */
+  | { type: 'emote'; from: PlayerId; emote: EmoteId }
   | { type: 'error'; message: string };
 
 export const ServerMessageTypes = [
@@ -156,6 +175,7 @@ export const ServerMessageTypes = [
   'state',
   'over',
   'opponentLeft',
+  'emote',
   'error'
 ] as const;
 
