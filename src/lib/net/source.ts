@@ -195,6 +195,24 @@ export class LocalSource implements MatchSource {
 
   private answered = false;
   private congratulated = false;
+  /** Lines the AI has used this match: each is said at most once. */
+  private said = new Set<EmoteId>();
+
+  /**
+   * The AI's personality, in a few lines said once a match each: thinking
+   * aloud over its first big card, announcing a Legendary, and owning up when
+   * it is losing.
+   */
+  private once(id: EmoteId, ms: number) {
+    if (this.said.has(id)) return;
+    this.said.add(id);
+    this.later(() => this.handlers.onEmote?.('ai', id), ms);
+  }
+
+  private remark(played: Card | undefined) {
+    if (played?.rarity === 'Legendary') this.once('incoming', 400);
+    if (!this.state.winner && this.state.players.ai.health <= 10) this.once('oops', 900);
+  }
   private timers: ReturnType<typeof setTimeout>[] = [];
 
   private later(fn: () => void, ms: number) {
@@ -207,6 +225,7 @@ export class LocalSource implements MatchSource {
     mulligan(state, 'ai', aiMulligan(state));
     this.answered = false;
     this.congratulated = false;
+    this.said = new Set();
     return state;
   }
 
@@ -227,6 +246,10 @@ export class LocalSource implements MatchSource {
       const step = this.turn.next();
       this.pending = step.done ? null : step.value;
     }
+    // Thinking aloud, over its first big card, while the route lets it think.
+    const next = this.pending;
+    const card = next?.kind === 'play' ? this.state.players.ai.hand[next.handIndex] : undefined;
+    if (card && card.cost >= 5 && card.rarity !== 'Legendary') this.once('hmm', 0);
     return this.pending;
   }
 
@@ -240,7 +263,9 @@ export class LocalSource implements MatchSource {
   stepOpponent(): boolean {
     const intent = this.nextOpponentIntent();
     if (!intent || !this.turn) return false;
+    const card = intent.kind === 'play' ? this.state.players.ai.hand[intent.handIndex] : undefined;
     const step = this.turn.next(applyAiIntent(this.state, intent));
+    this.remark(card);
     this.pending = step.done ? null : step.value;
     if (step.done) this.turn = null;
     this.publish();

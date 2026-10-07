@@ -1048,7 +1048,41 @@ from hand-authoring, as §8 anticipated.
 
 ## 13. R9 — Gameplay staples
 
-- [ ] **R9.1 — Mulligan.** *Both deploys.* Each player sees their opening hand
+> ## Built 2026-10-07 — 458 tests, 0 check errors, production build passes. Not deployed.
+>
+> **Changes protocol** (`mulligan` and `emote` messages; an `emote` server
+> message; `mulligan` on the view), so both deploys.
+> **Mulligan:**
+> - an opt-in phase in the engine: practice and online matches open on it,
+>   while a match made for a test still starts on turn 1;
+> - the Coin is given after it, so it can never be sent back;
+> - online, a timeout keeps the hand without counting as a missed turn, and
+>   the first turn's clock starts when the last hand is settled;
+> - a fresh match is now recognised by an empty table rather than turn 0,
+>   since the mulligan spends turn 0 with hands dealt.
+>
+> **Emotes:**
+> - six fixed phrases, sent as ids and rate-limited by the room;
+> - open them by right-clicking or holding your own hero;
+> - the mute is in the game menu.
+>
+> **Keyword help:** a tested glossary of 12 rules words, shown in the
+> inspector even with definitions off. Its wording follows this engine:
+> Stealth is never lost on attacking here, and the text says so.
+> **Coach:** three pointers, after Tome's `coach.ts`: play, then End Turn
+> (playing comes before attacking in a real first turn), then attack once a
+> minion can. Remembered in this browser.
+> **AI personality:** with R2's pacing, it greets you once the match begins
+> (or answers your Hello), says "Hmm…" while weighing its first big card,
+> "Prototype incoming!" over a Legendary, "Back to the drawing board!" at 10
+> health, and "Nice design!" when beaten. Each line is said once a match.
+> **Seen in a practice match:** the mulligan (one card replaced, and the face-off
+> not replayed after it), the greeting after it, the emote wheel and a bubble,
+> the inspector's glossary, and the coach's first two steps (the third waited
+> correctly, the minion having died).
+> **Not yet seen:** two people mulliganing at once online, or the mute.
+
+- [x] **R9.1 — Mulligan.** *Both deploys.* Each player sees their opening hand
       (3, or 4 plus the Coin), taps any card to mark it for replacement, and
       confirms. Replaced cards shuffle back into the deck. Engine: a `mulligan`
       phase and intent. Online, both players choose at once and the room waits for
@@ -1057,21 +1091,21 @@ from hand-authoring, as §8 anticipated.
       → **verify:** `engine.test.ts` (the deck is conserved; replaced cards never
       come straight back) and `room.test.ts` (simultaneous choices; a timeout keeps
       the hand).
-- [ ] **R9.2 — Emotes.** *Both deploys.* Right-click or long-press your hero to open
+- [x] **R9.2 — Emotes.** *Both deploys.* Right-click or long-press your hero to open
       a small wheel of **fixed, friendly phrases**, never free text: *Hello!* ·
       *Nice design!* · *Thanks!* · *Hmm…* · *Back to the drawing board!* ·
       *Prototype incoming!*. They appear as a speech bubble by the hero with a
       sound. Rate-limited to one per 3 seconds on the server. **Mute opponent**
       sits in the game menu, which matters in a classroom. The AI emotes too: a
       greeting at the start and "Nice design!" when it loses.
-- [ ] **R9.3 — Keyword tooltips.** The inspector gains a short explanation of each
+- [x] **R9.3 — Keyword tooltips.** The inspector gains a short explanation of each
       keyword on the card, beside it (as the definition panel already is):
       *"Taunt — enemies must attack this first."* Teaching without putting
       text on the board.
-- [ ] **R9.4 — First-match coach marks.** In a player's very first match only, three
+- [x] **R9.4 — First-match coach marks.** In a player's very first match only, three
       wordless-ish pointers: an arrow and *Drag to play*, *Drag to attack*, then
       a pulse on End Turn. Tome's `coach.ts` is the pattern.
-- [ ] **R9.5 — AI pacing and personality** (R2.1 plus the emotes) rather than
+- [x] **R9.5 — AI pacing and personality** (R2.1 plus the emotes) rather than
       difficulty levels. Out of scope still: spectating and rematch
       (`OPEN-QUESTIONS.md` #7).
 
