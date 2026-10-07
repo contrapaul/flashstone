@@ -1,4 +1,5 @@
-import type { Card, CardClass } from '../../types/cards';
+import type { Card, CardClass, CardType, Trigger } from '../../types/cards';
+import type { CueRef } from './events';
 
 export const HERO_HEALTH = 30;
 export const MAX_MANA = 10;
@@ -53,12 +54,71 @@ export interface PlayerState {
   heroPowerUsedThisTurn: boolean;
 }
 
+/** What happened to one thing an action touched. */
+export type HistoryResult =
+  | 'damage'
+  | 'heal'
+  | 'killed'
+  | 'buff'
+  | 'frozen'
+  | 'silenced'
+  | 'shielded'
+  | 'summoned'
+  | 'armor';
+
+export interface HistoryTarget {
+  ref: CueRef;
+  /** The minion's card, or absent for a hero. */
+  cardId?: string;
+  name: string;
+  result: HistoryResult;
+  amount?: number;
+}
+
+/**
+ * One action, and what came of it — the match's play history.
+ *
+ * Entries are made by the engine as actions happen: a card played, an attack,
+ * a hero power, a turn trigger, fatigue, a burn. Everything the action caused
+ * — Battlecries, Deathrattles and all — is folded into its `targets`.
+ *
+ * **Public information only**, by construction: every card it names has been
+ * played, has attacked, sits on the board, or was burned in plain sight. A
+ * draw is never an entry. `view.test.ts` holds it to that.
+ */
+export interface HistoryEntry {
+  /** Its place in the match's history, counting from 0. Survives trimming. */
+  n: number;
+  turn: number;
+  actor: PlayerId;
+  kind: 'play' | 'attack' | 'heroPower' | 'trigger' | 'fatigue' | 'burn';
+  /** The card that acted; absent for a hero power and for fatigue. */
+  cardId?: string;
+  name: string;
+  cardType?: CardType;
+  /** Which text fired, for a `trigger`. */
+  trigger?: Trigger;
+  /** The class whose hero power it was, for a `heroPower`. */
+  heroClass?: CardClass;
+  /** Fatigue's damage. */
+  amount?: number;
+  targets: HistoryTarget[];
+}
+
 export interface MatchState {
   players: Record<PlayerId, PlayerState>;
   current: PlayerId;
   turnNumber: number;
   winner: PlayerId | 'draw' | null;
   log: string[];
+  /** The play history — see HistoryEntry. */
+  history: HistoryEntry[];
+  /** The entry being written, while an action resolves. Engine bookkeeping. */
+  openEntry: number | null;
+  /** An entry just opened, waiting to be stamped on the next cue. Engine bookkeeping. */
+  stamp: number | null;
+  /** Which entry last damaged or destroyed each minion, to credit its death. Engine bookkeeping. */
+  lastHit: Record<string, number>;
   seed: number;
   nextInstanceId: number;
   /** Ordered animation cues drained by the UI. See events.ts. */

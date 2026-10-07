@@ -20,6 +20,8 @@ import {
   snapshotWeapon,
   spellTargets,
   type Character,
+  type HistoryEntry,
+  type HistoryTarget,
   type MatchState,
   type MinionInstance,
   type PlayerId,
@@ -79,6 +81,10 @@ export function createMatch(
     turnNumber: 0,
     winner: null,
     log: [],
+    history: [],
+    openEntry: null,
+    stamp: null,
+    lastHit: {},
     seed,
     nextInstanceId: 1,
     events: []
@@ -97,7 +103,94 @@ export function createMatch(
 
 /** Queues an animation cue. Cosmetic only — no rule depends on the queue. */
 function emit(state: MatchState, event: GameEvent): void {
+  // The first cue of a new history entry carries its number.
+  if (state.stamp !== null) {
+    event = { ...event, entry: state.stamp };
+    state.stamp = null;
+  }
   state.events.push(event);
+  record(state, event);
+}
+
+// ── History ────────────────────────────────────────────────────
+
+/**
+ * Opens a history entry for an action, unless one is already open — in which
+ * case this action is part of it (a Battlecry's damage, a Deathrattle's
+ * summon) and returns false, so the caller knows not to close it.
+ */
+function openEntry(
+  state: MatchState,
+  entry: Omit<HistoryEntry, 'n' | 'turn' | 'targets'>
+): boolean {
+  if (state.openEntry !== null) return false;
+  const n = state.history.length;
+  state.history.push({ ...entry, n, turn: state.turnNumber, targets: [] });
+  state.openEntry = n;
+  state.stamp = n;
+  return true;
+}
+
+function closeEntry(state: MatchState, opened: boolean): void {
+  if (!opened) return;
+  state.openEntry = null;
+  state.stamp = null;
+}
+
+/** Adds a result to an entry, merging repeats of the same result on the same thing. */
+function note(state: MatchState, index: number | null, target: Omit<HistoryTarget, 'name' | 'cardId'>, card?: Card): void {
+  if (index === null) return;
+  const entry = state.history[index];
+  if (!entry) return;
+  const same = (t: HistoryTarget) =>
+    t.result === target.result &&
+    (t.ref.kind === 'hero'
+      ? target.ref.kind === 'hero' && t.ref.owner === target.ref.owner
+      : target.ref.kind === 'minion' && t.ref.instanceId === target.ref.instanceId);
+  const existing = entry.targets.find(same);
+  if (existing) {
+    if (target.amount !== undefined) existing.amount = (existing.amount ?? 0) + target.amount;
+    return;
+  }
+  const ref = target.ref;
+  const minion =
+    ref.kind === 'minion'
+      ? [...state.players.player.board, ...state.players.ai.board].find((m) => m.instanceId === ref.instanceId)
+      : undefined;
+  const shown = card ?? minion?.card;
+  entry.targets.push({
+    ...target,
+    cardId: target.ref.kind === 'minion' ? shown?.id : undefined,
+    name: target.ref.kind === 'minion' ? (shown?.name ?? 'Minion') : 'Hero'
+  });
+}
+
+/** Folds what a cue did into the entry being written. */
+function record(state: MatchState, event: GameEvent): void {
+  const index = state.openEntry;
+  if (index === null) return;
+  switch (event.type) {
+    case 'damage':
+      if (event.target.kind === 'minion') state.lastHit[event.target.instanceId] = index;
+      return note(state, index, { ref: event.target, result: 'damage', amount: event.amount });
+    case 'heal':
+      return note(state, index, { ref: event.target, result: 'heal', amount: event.amount });
+    case 'shield':
+      return note(state, index, { ref: { kind: 'minion', instanceId: event.instanceId }, result: 'shielded' });
+    case 'freeze':
+      return note(state, index, { ref: { kind: 'minion', instanceId: event.instanceId }, result: 'frozen' });
+    case 'silence':
+      return note(state, index, { ref: { kind: 'minion', instanceId: event.instanceId }, result: 'silenced' });
+    case 'buff':
+    case 'keyword':
+      return note(state, index, { ref: { kind: 'minion', instanceId: event.instanceId }, result: 'buff' });
+    case 'armor':
+      return note(state, index, { ref: { kind: 'hero', owner: event.owner }, result: 'armor' });
+    case 'summon':
+      // The minion a card *is* is not something it did.
+      if (event.minion.card.id === state.history[index]?.cardId) return;
+      return note(state, index, { ref: { kind: 'minion', instanceId: event.instanceId }, result: 'summoned' }, event.minion.card);
+  }
 }
 
 function refOf(target: Character): CueRef {
@@ -151,10 +244,13 @@ function triggerBoard(state: MatchState, id: PlayerId, trigger: Trigger): void {
   // Snapshot: effects can kill minions mid-loop.
   for (const minion of [...state.players[id].board]) {
     if (!state.players[id].board.includes(minion)) continue;
+    const fires = minion.card.effects.some((e) => e.trigger === trigger);
+    const opened = fires && openEntry(state, { actor: id, kind: 'trigger', cardId: minion.card.id, name: minion.card.name, trigger });
     emitTrigger(state, minion, trigger);
     for (const effect of minion.card.effects) {
       if (effect.trigger === trigger) resolveEffect(state, id, minion, effect);
     }
+    closeEntry(state, opened);
   }
   checkDeaths(state);
 }
@@ -167,13 +263,17 @@ export function drawCard(state: MatchState, id: PlayerId): void {
   if (!card) {
     p.fatigue++;
     state.log.push(`${id} is out of cards — ${p.fatigue} fatigue damage.`);
+    const opened = openEntry(state, { actor: id, kind: 'fatigue', name: 'Fatigue', amount: p.fatigue });
     emit(state, { type: 'fatigue', owner: id, amount: p.fatigue });
     damageHero(state, id, p.fatigue);
+    closeEntry(state, opened);
     return;
   }
   if (p.hand.length >= HAND_LIMIT) {
     state.log.push(`${id}'s hand is full — ${card.name} burned.`);
+    const opened = openEntry(state, { actor: id, kind: 'burn', cardId: card.id, name: card.name, cardType: card.type });
     emit(state, { type: 'burn', owner: id, card, deckCount: p.deck.length });
+    closeEntry(state, opened);
     return;
   }
   p.hand.push(card);
@@ -216,6 +316,7 @@ export function playCard(
   p.hand.splice(handIndex, 1);
   p.mana -= card.cost;
   state.log.push(`${id} plays ${card.name}.`);
+  const opened = openEntry(state, { actor: id, kind: 'play', cardId: card.id, name: card.name, cardType: card.type });
   emit(state, {
     type: 'play',
     owner: id,
@@ -243,6 +344,7 @@ export function playCard(
   }
 
   checkDeaths(state);
+  closeEntry(state, opened);
   return true;
 }
 
@@ -273,6 +375,7 @@ export function useHeroPower(
   p.mana -= HERO_POWER_COST;
   p.heroPowerUsedThisTurn = true;
   state.log.push(`${id} uses ${power.name}.`);
+  const opened = openEntry(state, { actor: id, kind: 'heroPower', name: power.name, heroClass: p.heroClass });
   emit(state, { type: 'heroPower', owner: id, mana: p.mana });
 
   for (const effect of power.effects(state, id)) {
@@ -280,6 +383,7 @@ export function useHeroPower(
   }
 
   checkDeaths(state);
+  closeEntry(state, opened);
   return true;
 }
 
@@ -345,6 +449,7 @@ export function heroAttack(state: MatchState, id: PlayerId, target: Character): 
   if (!match) return false;
 
   p.heroAttacksThisTurn++;
+  const opened = openEntry(state, { actor: id, kind: 'attack', cardId: p.weapon.card.id, name: p.weapon.card.name, cardType: 'Weapon' });
   emit(state, {
     type: 'heroAttack',
     owner: id,
@@ -370,6 +475,7 @@ export function heroAttack(state: MatchState, id: PlayerId, target: Character): 
   }
 
   checkDeaths(state);
+  closeEntry(state, opened);
   return true;
 }
 
@@ -431,6 +537,7 @@ export function attack(
   if (!chosen) return false;
 
   attacker.attacksThisTurn++;
+  const opened = openEntry(state, { actor: id, kind: 'attack', cardId: attacker.card.id, name: attacker.card.name, cardType: 'Minion' });
   emit(state, {
     type: 'attack',
     owner: id,
@@ -457,6 +564,7 @@ export function attack(
   }
 
   checkDeaths(state);
+  closeEntry(state, opened);
   return true;
 }
 
@@ -507,6 +615,10 @@ function checkDeaths(state: MatchState): void {
       state.players[owner].board = board.filter((m) => m.health > 0);
       for (const minion of dead) {
         state.log.push(`${minion.card.name} dies.`);
+        // Credited to the action still being written or, for a death settled
+        // after a turn's triggers, to the trigger that last hit it.
+        note(state, state.openEntry ?? state.lastHit[minion.instanceId] ?? null, { ref: { kind: 'minion', instanceId: minion.instanceId }, result: 'killed' }, minion.card);
+        delete state.lastHit[minion.instanceId];
         // The flare comes first, while the minion is still there to flare.
         emitTrigger(state, minion, 'Deathrattle');
         emit(state, { type: 'death', owner, instanceId: minion.instanceId });
@@ -728,7 +840,10 @@ function resolveEffect(
         break;
 
       case 'Destroy':
-        if (target.kind === 'minion') target.minion.health = 0;
+        if (target.kind === 'minion') {
+          target.minion.health = 0;
+          if (state.openEntry !== null) state.lastHit[target.minion.instanceId] = state.openEntry;
+        }
         break;
 
       case 'SwapStats':

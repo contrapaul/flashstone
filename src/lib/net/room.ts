@@ -41,6 +41,8 @@ import type { ChosenRef, ClientMessage, PlayerView, TargetRef } from './protocol
 export const TURN_SECONDS = 60;
 /** Missing this many turns in a row concedes. */
 export const MAX_MISSED_TURNS = 2;
+/** How much of the Chronicle each view carries — more than the column shows. */
+const HISTORY_SENT = 60;
 
 export interface ApplyResult {
   ok: boolean;
@@ -255,6 +257,7 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
       spellDamage: spellPowerOf(foe)
     },
     log: state.log,
+    history: state.history.slice(-HISTORY_SENT),
     turnEndsIn
   };
 }

@@ -689,7 +689,37 @@ projector.
 **Goal:** the cards that were played, and what they did, with no turn headers.
 **Depends on:** R1.1 (results to record). **Both deploys.**
 
-- [ ] **R5.1 — Structured history.** `state.history: HistoryEntry[]` alongside `log`
+> ## Built 2026-10-07 — 409 tests, 0 check errors. Not deployed.
+>
+> **How it works:** the engine opens an entry when an action starts (a card
+> played, an attack, a hero power, a turn trigger, fatigue, a burn), and every
+> result cue emitted until it closes is folded into it. A Battlecry's damage or
+> a Deathrattle's summon belongs to the action that caused it. A minion's
+> death is credited to the open entry, or else to the trigger that last hit it.
+> The cue that opens an entry carries its number (`GameEvent.entry`), so the
+> table uncovers each tile once that cue has played. The tile lands as the
+> opponent's card finishes its reveal, never ahead of it. The view sends the
+> last 60 entries.
+> **Guarded by:** five engine tests (a spell's damage, a trade with its kill, a
+> Battlecry folded into its play, a turn trigger credited with a later death,
+> one stamped cue per entry). Also a `view.test.ts` case that plays 40
+> random-deck matches and checks that every card id the history names had
+> already been played, burned or summoned in public. A planted leak (naming
+> the next card in hand) fails it.
+> **Layout:** the column is 56px at the left edge. `DESIGN_WIDTH` grew from 980
+> to 1060, so at iPad portrait a seven-minion board starts at 68px, clear of
+> the column's 64. The left doodads moved in to match; the right ones did not
+> move. Text mode is the default at ≥1500px and a toggle otherwise.
+> **Seen in a practice match** at 1280×800, 1920×1080, 1024×768 and 768×1024:
+> - the AI's tiles arrive one at a time during its turn;
+> - the hover panel for a weapon attack shows the killed minion greyed with a
+>   −2 and the attacker's hero with −1;
+> - text mode shows the turn divider in the side's colour and strikes through
+>   kills.
+>
+> Not yet seen live: the tap behaviour on a real touch screen.
+
+- [x] **R5.1 — Structured history.** `state.history: HistoryEntry[]` alongside `log`
       (which stays for tests and debugging):
       ```ts
       { actor: PlayerId; kind: 'play' | 'attack' | 'heroPower' | 'trigger' | 'fatigue' | 'burn';
@@ -700,22 +730,22 @@ projector.
       Results are gathered from the cues emitted while an entry is open.
       → **verify:** a `view.test.ts` case shows history never names a card from the
       opponent's hand or deck, only played, revealed or burned ones.
-- [ ] **R5.2 — Protocol.** `PlayerView.history`, card ids resolved on the client
+- [x] **R5.2 — Protocol.** `PlayerView.history`, card ids resolved on the client
       through `cardById` and tokens. MatchRoom gets the same change.
       → **verify:** `room.test.ts` and `MatchRoom.test.ts`.
-- [ ] **R5.3 — The tile column.** Down the left edge, a column of tiles (about 56px
+- [x] **R5.3 — The tile column.** Down the left edge, a column of tiles (about 56px
       wide, so it fits at every viewport and the 1500px threshold goes): each tile
       shows the card's art in a frame, **blue-edged for you, red for the opponent**,
       with an action icon (sword, burst, cog, recycle). The newest slides in at the
       top. **Hover or tap** opens a panel with the full `CardPreview` and an arrow
       to a mini-portrait of each target, carrying its result splat (−3,
       destroyed, +2, frozen).
-- [ ] **R5.4 — Text mode** (the rail at ≥1500px, or a toggle). One line per entry
+- [x] **R5.4 — Text mode** (the rail at ≥1500px, or a toggle). One line per entry
       with text effects: the actor shown as a coloured pip, not a word; card names
       in Cinzel, rarity-coloured, with a hover popover; numbers styled (red damage,
       green heals); deaths struck through with a recycle mark; keywords bold. Turn
       boundaries are a thin divider in the side's colour, never words.
-- [ ] **R5.5 — Names.** "You", the opponent's username, or "Opponent". Never seat
+- [x] **R5.5 — Names.** "You", the opponent's username, or "Opponent". Never seat
       ids, anywhere.
 
 ---

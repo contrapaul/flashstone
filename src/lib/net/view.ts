@@ -105,6 +105,7 @@ export function emptyView(): PlayerView {
     me: { ...side, hand: [], canHeroAttack: false, canUseHeroPower: false },
     foe: { ...side, handCount: 0 },
     log: [],
+    history: [],
     turnEndsIn: 0
   };
 }

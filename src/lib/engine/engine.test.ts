@@ -46,6 +46,7 @@ function bareMatch(): MatchState {
   state.players.ai.health = HERO_HEALTH;
   state.players.player.fatigue = 0;
   state.players.ai.fatigue = 0;
+  state.history = [];
   state.players.player.mana = 10;
   state.players.player.maxMana = 10;
   return state;
@@ -721,5 +722,106 @@ describe('event queue', () => {
     const attackerId = state.players.player.board[0].instanceId;
     expect(state.events).toContainEqual({ type: 'shield', instanceId: attackerId });
     expect(state.players.player.board[0].health).toBe(4);
+  });
+});
+
+describe('history', () => {
+  it('writes a play with what it did, and stamps the cue that starts it', () => {
+    const state = bareMatch();
+    state.events = [];
+    const bolt: Card = {
+      ...minionCard({ cost: 0 }),
+      id: '33333333-3333-4333-8333-333333333333',
+      name: 'Bolt',
+      type: 'Spell',
+      attack: undefined,
+      health: undefined,
+      effects: [{ trigger: 'Battlecry', action: 'DealDamage', target: 'Hero', value: 3 }]
+    };
+    playCard(state, 'player', give(state, 'player', bolt));
+
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0]).toMatchObject({
+      n: 0,
+      actor: 'player',
+      kind: 'play',
+      cardId: bolt.id,
+      name: 'Bolt',
+      targets: [{ ref: { kind: 'hero', owner: 'ai' }, result: 'damage', amount: 3 }]
+    });
+    expect(state.events.filter((e) => e.entry !== undefined)).toEqual([
+      expect.objectContaining({ type: 'play', entry: 0 })
+    ]);
+    expect(state.openEntry).toBeNull();
+  });
+
+  it('writes a trade as one attack: damage both ways, and the kill', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, attack: 5, health: 5, keywords: ['Charge'] })));
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    const victim = minionCard({ cost: 0, attack: 1, health: 1, name: 'Victim', id: '44444444-4444-4444-8444-444444444444' });
+    playCard(state, 'ai', give(state, 'ai', victim));
+    state.current = 'player';
+
+    const attacker = state.players.player.board[0];
+    const defender = state.players.ai.board[0];
+    attack(state, 'player', attacker.instanceId, { kind: 'minion', instanceId: defender.instanceId });
+
+    const entry = state.history.at(-1)!;
+    expect(entry).toMatchObject({ kind: 'attack', actor: 'player', name: 'Test Minion' });
+    expect(entry.targets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ref: { kind: 'minion', instanceId: defender.instanceId }, result: 'damage', amount: 5 }),
+        expect.objectContaining({ ref: { kind: 'minion', instanceId: attacker.instanceId }, result: 'damage', amount: 1 }),
+        expect.objectContaining({ cardId: victim.id, name: 'Victim', result: 'killed' })
+      ])
+    );
+  });
+
+  it('folds a Battlecry into its play, and never lists the minion as its own summon', () => {
+    const state = bareMatch();
+    playCard(
+      state,
+      'player',
+      give(state, 'player', minionCard({ cost: 0, effects: [{ trigger: 'Battlecry', action: 'SummonToken', value: 1 }] }))
+    );
+    expect(state.history).toHaveLength(1);
+    expect(state.history[0].targets.map((t) => t.result)).toEqual(['summoned']);
+  });
+
+  it('gives a turn trigger its own entry, and credits a death it causes after it closes', () => {
+    const state = bareMatch();
+    playCard(
+      state,
+      'player',
+      give(
+        state,
+        'player',
+        minionCard({ cost: 0, name: 'Ticker', effects: [{ trigger: 'EndOfTurn', action: 'DealDamage', target: 'AllEnemies', value: 1 }] })
+      )
+    );
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 1, health: 1, name: 'Frail' })));
+    state.current = 'player';
+
+    endTurn(state);
+    const tick = state.history.find((e) => e.kind === 'trigger')!;
+    expect(tick).toMatchObject({ actor: 'player', name: 'Ticker', trigger: 'EndOfTurn' });
+    expect(tick.targets).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Frail', result: 'killed' })]));
+  });
+
+  it('stamps exactly one cue per entry', () => {
+    const state = createMatch(buildDemoDeck(), buildDemoDeck(), 11);
+    for (let turn = 0; turn < 30 && !state.winner; turn++) {
+      const p = state.players[state.current];
+      for (let i = p.hand.length - 1; i >= 0; i--) {
+        if (canPlayCard(state, state.current, i) && !p.hand[i].targeting) playCard(state, state.current, i);
+      }
+      endTurn(state);
+    }
+    const stamps = state.events.filter((e) => e.entry !== undefined).map((e) => e.entry);
+    expect(stamps).toEqual(state.history.map((e) => e.n));
   });
 });

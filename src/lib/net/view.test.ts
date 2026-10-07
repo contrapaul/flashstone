@@ -12,6 +12,11 @@ import {
   turnIsSpent
 } from './view';
 import type { SerialisedMinion } from './protocol';
+import { ALL_CARDS } from '../data/cards';
+import { playAiTurn } from '../engine/ai';
+import { attack, canPlayCard, endTurn, needsTarget, playCard } from '../engine/engine';
+import type { GameEvent } from '../engine/events';
+import { createRng, pick } from '../engine/rng';
 
 function view(side: 'player' | 'ai' = 'player') {
   const state = createRoomState(resolveDeck(starterDeck()), buildAiDeck(1), 999);
@@ -154,5 +159,51 @@ describe('the empty view', () => {
     expect(v.foe.handCount).toBe(0);
     expect(isMyTurn(v)).toBe(true);
     expect(turnIsSpent(v)).toBe(true);
+  });
+});
+
+describe('the Chronicle', () => {
+  /** The ids a cue shows to both players: a card played, burned or summoned. */
+  function shownBy(cue: GameEvent): string | undefined {
+    if (cue.type === 'play' || cue.type === 'burn') return cue.card.id;
+    if (cue.type === 'summon') return cue.minion.card.id;
+  }
+
+  it('never names a card still in a hand or a deck', () => {
+    let named = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = createRng(seed * 31);
+      const deck = () => Array.from({ length: 30 }, () => pick(rng, ALL_CARDS)!);
+      const state = createRoomState(deck(), deck(), seed);
+      const shown = new Set<string>();
+
+      for (let turn = 0; turn < 50 && !state.winner; turn++) {
+        if (state.current === 'ai') playAiTurn(state);
+        else {
+          const p = state.players.player;
+          for (let i = p.hand.length - 1; i >= 0; i--) {
+            if (canPlayCard(state, 'player', i) && !needsTarget(p.hand[i])) playCard(state, 'player', i);
+          }
+          for (const m of [...p.board]) attack(state, 'player', m.instanceId, { kind: 'hero' });
+          endTurn(state);
+        }
+        for (const cue of state.events) {
+          const id = shownBy(cue);
+          if (id) shown.add(id);
+        }
+        state.events = [];
+
+        for (const side of ['player', 'ai'] as const) {
+          for (const entry of viewFor(state, side).history) {
+            for (const id of [entry.cardId, ...entry.targets.map((t) => t.cardId)]) {
+              if (id === undefined) continue;
+              named++;
+              expect(shown.has(id), `seed ${seed}, turn ${turn}: ${entry.name}`).toBe(true);
+            }
+          }
+        }
+      }
+    }
+    expect(named).toBeGreaterThan(1000);
   });
 });

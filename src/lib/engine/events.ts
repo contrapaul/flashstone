@@ -20,7 +20,15 @@ export type CueRef = { kind: 'minion'; instanceId: string } | { kind: 'hero'; ow
  * and the table snaps to the view when playback ends. Nothing here may reveal
  * a hidden card — `draw` names no card, because both players receive every cue.
  */
-export type GameEvent =
+export type GameEvent = Cue & {
+  /**
+   * Set on the cue that begins a history entry (`state.history[n]`), so the
+   * table can uncover that entry once its action has begun to play.
+   */
+  entry?: number;
+};
+
+type Cue =
   | { type: 'draw'; owner: PlayerId; deckCount: number }
   /**
    * A card left a hand. Emitted before anything it does, so the table can show

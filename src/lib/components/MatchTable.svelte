@@ -189,17 +189,20 @@
   const DESIGN_HEIGHT = 824;
   /*
    * The table scales to whichever axis is shorter of what it needs: 824px of
-   * height, and 980px of width — seven minions a side with room at the ends.
+   * height, and 1060px of width — seven minions a side, clear of the
+   * Chronicle's column of tiles at each end.
    * Big screens scale **up** (clamped at 1, the board was a small island on
    * anything past 1440x900), and a narrow one scales down by its width: iPad
    * portrait used to scale by height alone, and a full board ran off both edges.
    */
-  const DESIGN_WIDTH = 980;
+  const DESIGN_WIDTH = 1060;
   $: fit = Math.max(0.62, Math.min(1.35, handHeight / DESIGN_HEIGHT, handWidth / DESIGN_WIDTH));
   const RAIL_MIN_WIDTH = 1500;
   $: railed = handWidth >= RAIL_MIN_WIDTH;
-  /** The board toys sit at the ends of the boards, clear of the rail when it is out. */
+  /** The board toys sit at the ends of the boards, clear of the rail when it is out —
+      and on the left, of the Chronicle's tiles. */
   $: doodadInset = railed ? 300 / fit : 18;
+  $: doodadLeft = railed ? doodadInset : 76 / fit;
 
   $: myTurn = interactive && isMyTurn(view) && !draining;
   $: activeAttacker = drag?.kind === 'attack' ? drag.instanceId : selectedId;
@@ -329,41 +332,18 @@
   // With nothing to play, the board on screen is simply the view.
   $: if (events.length === 0 && !draining) {
     shown = view;
-    logShown = view.log.length;
+    historyShown = afterLast(view);
   }
 
   /**
-   * How much of the log the Chronicle shows. It follows playback rather than
-   * the view, or it reads out the opponent's whole turn before any of it has
-   * happened on the board — locally the view even shares the engine's own
-   * log array, so it is never behind.
+   * How much of the history the Chronicle shows: entries numbered below this.
+   * It follows playback rather than the view, or it would tell the opponent's
+   * whole turn before any of it had happened on the board. The cue that starts
+   * an entry carries its number, and uncovers it once it has played.
    */
-  let logShown = 0;
-  $: chronicleLines = view.log.slice(0, logShown);
-
-  /** The line each cue writes, so the cue can uncover it as it plays. */
-  const LOG_LINE: Partial<Record<GameEvent['type'], RegExp>> = {
-    turn: /^— /,
-    play: / plays /,
-    heroPower: / uses /,
-    attack: / (attacks|hits) /,
-    shield: /Divine Shield/,
-    death: / dies\.$/,
-    weaponBreak: / breaks\.$/,
-    burn: / burned\.$/,
-    fatigue: / fatigue damage\.$/
-  };
-
-  function uncoverLog(event: GameEvent) {
-    const pattern = LOG_LINE[event.type];
-    if (!pattern) return;
-    for (let i = logShown; i < view.log.length; i++) {
-      if (pattern.test(view.log[i])) {
-        logShown = i + 1;
-        return;
-      }
-    }
-  }
+  let historyShown = 0;
+  $: chronicleEntries = view.history.filter((e) => e.n < historyShown);
+  const afterLast = (v: PlayerView) => (v.history.at(-1)?.n ?? -1) + 1;
 
   async function drain() {
     if (draining) return;
@@ -381,8 +361,10 @@
       // or, for the cue that hands the turn over, whose it is becoming.
       opponentTurn((event.type === 'turn' ? event.owner : shown.turn) !== shown.you);
       pace = d(1000) / 1000;
-      uncoverLog(event);
       await direct(event, stage);
+      // An action's tile lands once its first move has been seen — the card
+      // revealed, the attack thrown — never ahead of it.
+      if (event.entry !== undefined) historyShown = Math.max(historyShown, event.entry + 1);
       await sleep(hold(event, events[0]));
     }
     opponentTurn(false);
@@ -394,7 +376,7 @@
       if (drift.length > 0) console.warn('[playback] the board on screen drifted from the match:', drift);
     }
     shown = view;
-    logShown = view.log.length;
+    historyShown = afterLast(view);
     draining = false;
     dispatch('drained');
   }
@@ -407,7 +389,7 @@
   function startingPoint(from: PlayerView, to: PlayerView, queue: GameEvent[]): PlayerView {
     const freshMatch = from.turnNumber === 0 || to.turnNumber < from.turnNumber;
     if (!freshMatch) return { ...from, you: to.you, turnEndsIn: to.turnEndsIn };
-    logShown = 0;
+    historyShown = 0;
     heroDown = null;
     const draws = (owner: string) => queue.filter((e) => e.type === 'draw' && e.owner === owner).length;
     const foeId = to.you === 'player' ? 'ai' : 'player';
@@ -1105,7 +1087,8 @@
     </div>
   </section>
 
-  <section class="board" style:--doodad-inset={`${doodadInset}px`} bind:this={foeBoardEl}>
+  <section class="board" style:--doodad-inset={`${doodadInset}px`}
+    style:--doodad-left={`${doodadLeft}px`} bind:this={foeBoardEl}>
     <span class="doodad-at left"><Doodad kind="lamp" /></span>
     <span class="doodad-at right"><Doodad kind="printer" /></span>
     {#each shown.foe.board as minion (minion.instanceId)}
@@ -1177,6 +1160,7 @@
     class="board mine"
     class:drop-open={drag?.kind === 'card'}
     style:--doodad-inset={`${doodadInset}px`}
+    style:--doodad-left={`${doodadLeft}px`}
     bind:this={myBoardEl}
   >
     <span class="doodad-at left"><Doodad kind="vise" /></span>
@@ -1384,7 +1368,14 @@
   />
 
   <TurnBanner text={banner} />
-  <Chronicle lines={chronicleLines} you={view.you} {opponentName} rail={railed} />
+  <Chronicle
+    entries={chronicleEntries}
+    you={view.you}
+    {opponentName}
+    myClass={shown.me.heroClass}
+    foeClass={shown.foe.heroClass}
+    rail={railed}
+  />
 
   <GameMenu
     open={menuOpen}
@@ -1712,7 +1703,7 @@
     top: 50%;
     transform: translateY(-50%);
   }
-  .doodad-at.left { left: var(--doodad-inset); }
+  .doodad-at.left { left: var(--doodad-left); }
   .doodad-at.right { right: var(--doodad-inset); }
 
   /* One per minion: what `animate:flip` slides and what an attack lunges. */

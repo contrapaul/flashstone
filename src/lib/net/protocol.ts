@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Card, CardClass } from '../../types/cards';
 import type { GameEvent } from '../engine/events';
-import type { MinionSnapshot, PlayerId, WeaponSnapshot } from '../engine/state';
+import type { HistoryEntry, MinionSnapshot, PlayerId, WeaponSnapshot } from '../engine/state';
 
 /**
  * The wire between the browser and the match Durable Object.
@@ -109,6 +109,12 @@ export interface PlayerView {
     spellDamage: number;
   };
   log: string[];
+  /**
+   * The latest actions, each with what it did — the Chronicle. Public by
+   * construction: an entry names only cards that were played, burned or on
+   * the board, never one still in a hand or a deck.
+   */
+  history: HistoryEntry[];
   /** Seconds left on the current turn, so both clients show the same clock. */
   turnEndsIn: number;
 }
