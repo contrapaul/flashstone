@@ -1033,3 +1033,30 @@ describe('planned obsolescence', () => {
     expect(state.players.ai.board).toContain(target);
   });
 });
+
+describe('staged text', () => {
+  it('fires one stage per trigger, in order, and comes round again', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({
+      cost: 0,
+      effects: [
+        { trigger: 'StartOfTurn', action: 'GainArmor', value: 1, stage: 0 },
+        { trigger: 'StartOfTurn', action: 'GainArmor', value: 10, stage: 1 }
+      ]
+    })));
+    const minion = state.players.player.board[0];
+    // A deck, so fatigue does not eat the armor being counted.
+    state.players.player.deck = Array.from({ length: 10 }, () => minionCard());
+    state.players.ai.deck = Array.from({ length: 10 }, () => minionCard());
+    const yourNextTurn = () => {
+      endTurn(state);
+      endTurn(state);
+    };
+    yourNextTurn();
+    expect([state.players.player.armor, minion.stage]).toEqual([1, 1]);
+    yourNextTurn();
+    expect([state.players.player.armor, minion.stage]).toEqual([11, 0]);
+    yourNextTurn();
+    expect([state.players.player.armor, minion.stage]).toEqual([12, 1]);
+  });
+});

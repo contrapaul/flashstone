@@ -14,7 +14,8 @@
 //   and `SelfHero` targets, and per-card `spellDamage`.
 // v0.6 (REVISIONS R8.4) adds reactions: triggers `OnDamaged`, `OnFriendlyDeath`,
 //   `OnFriendlySpell` and `OnFriendlyPlay`; actions `ReturnToHand` and
-//   `Transform`; target `AllMinions`; actions `Resummon` and `DestroyLater`.
+//   `Transform`; target `AllMinions`; actions `Resummon` and `DestroyLater`;
+//   `stage` on Effect, for text that cycles.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -122,6 +123,12 @@ export interface Effect {
    */
   keyword?: Keyword;
   condition?: string | null; // Optional: "if_target_has_taunt", "only_if_empty_board", etc.
+  /**
+   * Staged text. A minion whose effects for a trigger carry stages fires only
+   * the current stage's each time, then moves to the next, round and round —
+   * Iterative Design. Unstaged effects on the same trigger fire every time.
+   */
+  stage?: number;
 }
 
 export interface Card {

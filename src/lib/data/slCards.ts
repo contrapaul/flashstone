@@ -88,6 +88,19 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     type: 'Spell', cost: 4, rarity: 'Epic', targeting: 'any',
     effects: [{ trigger: 'Battlecry', action: 'Transform', target: 'Chosen' }]
   },
+  // Iteration: make, test, refine, and round again.
+  'iterative-design': {
+    cost: 5, attack: 4, health: 6, rarity: 'Legendary',
+    effects: [
+      { trigger: 'StartOfTurn', action: 'DrawCard', value: 1, stage: 0 },
+      { trigger: 'StartOfTurn', action: 'BuffAttack', target: 'AllFriendly', value: 1, stage: 1 },
+      { trigger: 'StartOfTurn', action: 'BuffHealth', target: 'AllFriendly', value: 1, stage: 1 },
+      { trigger: 'StartOfTurn', action: 'SummonToken', condition: 'token-working-prototype', stage: 2 },
+      { trigger: 'StartOfTurn', action: 'Heal', target: 'SelfHero', value: 4, stage: 3 }
+    ],
+    description:
+      'At the start of your turn, advance a stage: draw a card; give your minions +1/+1; summon a 3/3 Working Prototype; restore 4 Health to your hero.'
+  },
   // Built to fail, on a timer.
   'planned-obsolescence': {
     type: 'Spell', cost: 2, rarity: 'Epic', targeting: 'enemy',

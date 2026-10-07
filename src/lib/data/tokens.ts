@@ -85,7 +85,21 @@ export const DESIGN_IDEAS: Card[] = [
   }
 ];
 
-const BY_ID = new Map([STUDY_NOTE, ...DESIGN_IDEAS].map((c) => [c.id, c]));
+/** What Iterative Design's third stage builds. */
+export const WORKING_PROTOTYPE: Card = {
+  id: 'token-working-prototype',
+  name: 'Working Prototype',
+  cost: 3,
+  type: 'Minion',
+  rarity: 'Common',
+  attack: 3,
+  health: 3,
+  keywords: [],
+  effects: [],
+  description: ''
+};
+
+const BY_ID = new Map([STUDY_NOTE, WORKING_PROTOTYPE, ...DESIGN_IDEAS].map((c) => [c.id, c]));
 
 export function tokenById(id: string): Card | undefined {
   return BY_ID.get(id);

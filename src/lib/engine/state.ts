@@ -26,6 +26,8 @@ export interface MinionInstance {
   buffed: boolean;
   /** Destroyed at the end of this turn number — Planned Obsolescence. Silence lifts it. */
   doomAt?: number;
+  /** Which stage its staged text is on, from 0. */
+  stage?: number;
 }
 
 /** An equipped weapon. Replaced, never stacked — equipping destroys the old one. */
@@ -159,6 +161,8 @@ export interface MinionSnapshot {
   buffed: boolean;
   /** Marked to be destroyed at the end of a coming turn: it wears a ticking clock. */
   doomed?: boolean;
+  /** The stage its staged text will fire next. */
+  stage?: number;
 }
 
 export interface WeaponSnapshot {
@@ -181,7 +185,8 @@ export function snapshotMinion(minion: MinionInstance): MinionSnapshot {
     frozen: minion.frozen,
     silenced: minion.silenced,
     buffed: minion.buffed,
-    doomed: minion.doomAt !== undefined
+    doomed: minion.doomAt !== undefined,
+    stage: minion.stage ?? 0
   };
 }
 

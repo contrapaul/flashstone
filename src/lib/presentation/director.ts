@@ -558,6 +558,10 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       audio().play('mana-fill');
       return;
 
+    case 'stage':
+      stage.advance(cue);
+      return;
+
     case 'doom': {
       // A clock settles on it: its time is now counted.
       audio().play('fatigue', { volume: 0.7 });

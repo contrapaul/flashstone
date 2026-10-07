@@ -3,6 +3,7 @@ import { z } from 'zod';
 const KeywordSchema = z.enum(['Taunt', 'Charge', 'DivineShield', 'Windfury', 'Stealth']);
 
 const EffectSchema = z.object({
+  stage: z.number().int().min(0).max(5).optional(),
   trigger: z.enum([
     'Battlecry',
     'Deathrattle',
@@ -82,7 +83,8 @@ export const CardSchema = z.object({
   spellDamage: z.number().int().min(1).max(3).optional(),
   targeting: z.enum(['any', 'enemy', 'friendly']).optional(),
   keywords: z.array(KeywordSchema).default([]),
-  effects: z.array(EffectSchema).max(3),
+  // Six, not three: staged text (Iterative Design) spends one effect per stage.
+  effects: z.array(EffectSchema).max(6),
   // Empty is valid and common: a vanilla card has no game text at all, and a
   // keyword-only card's text is rendered from `keywords`, not from here.
   description: z.string().max(200),

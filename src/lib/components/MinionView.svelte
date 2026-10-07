@@ -74,6 +74,16 @@
   $: spellDamage = minion.card.spellDamage ?? 0;
   $: hasBadges = deathrattle || turnTrigger || spellDamage > 0;
 
+  /** Staged text: how many stages, for the ring that shows which is next. */
+  $: stages = minion.card.effects.reduce((n, e) => (e.stage === undefined ? n : Math.max(n, e.stage + 1)), 0);
+  /** One arc of the ring, `i` of `n`, with a small gap either side. */
+  function arc(i: number, n: number): string {
+    const a0 = (i / n) * Math.PI * 2 - Math.PI / 2 + 0.18;
+    const a1 = ((i + 1) / n) * Math.PI * 2 - Math.PI / 2 - 0.18;
+    const p = (a: number) => `${(12 + Math.cos(a) * 9).toFixed(2)} ${(12 + Math.sin(a) * 9).toFixed(2)}`;
+    return `M ${p(a0)} A 9 9 0 0 1 ${p(a1)}`;
+  }
+
   /**
    * Hearthstone's colour code on the numbers: green when above what the card
    * says, red when health is below its most. Damage wins.
@@ -295,6 +305,14 @@
           <span class="badge cog" class:drawn={art.trigger} style:--ui={art.trigger}>
             {#if !art.trigger}
               <svg viewBox="0 0 24 24"><polygon points={COG} /><circle cx="12" cy="12" r="3.2" /></svg>
+            {/if}
+            {#if stages > 1}
+              <!-- Iterative: a ring of stages round the cog, the next one lit. -->
+              <svg class="stages" viewBox="0 0 24 24" aria-label={`Stage ${(minion.stage ?? 0) + 1} of ${stages} next`}>
+                {#each Array(stages) as _, i}
+                  <path d={arc(i, stages)} class:lit={i === (minion.stage ?? 0)} />
+                {/each}
+              </svg>
             {/if}
           </span>
         {/if}
@@ -780,7 +798,11 @@
   .badge.deathrattle svg path { fill: none; stroke: #c9f5a8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .badge.cog { background: radial-gradient(circle at 40% 35%, #6a5636, #2a2012); }
+  .badge.cog { position: relative; }
   .badge.cog polygon { fill: #f0d38a; }
+  .stages { position: absolute; inset: -6px; width: 34px !important; height: 34px !important; overflow: visible; }
+  .stages path { fill: none; stroke: rgba(255, 230, 170, .35); stroke-width: 2.6; stroke-linecap: round; }
+  .stages path.lit { stroke: #ffd36a; filter: drop-shadow(0 0 3px rgba(255, 200, 90, .9)); }
   .badge.cog circle { fill: #2a2012; }
 
   .badge.spell { background: radial-gradient(circle at 40% 35%, #b98cff, #4b1d8f); border-color: #e8d4ff; }

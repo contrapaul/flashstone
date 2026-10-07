@@ -94,6 +94,9 @@ export function applyCue(shown: PlayerView, cue: GameEvent): PlayerView {
     case 'doom':
       return mapMinion(shown, cue.instanceId, (m) => ({ ...m, doomed: true }));
 
+    case 'stage':
+      return mapMinion(shown, cue.instanceId, (m) => ({ ...m, stage: cue.stage }));
+
     case 'buff':
       return mapMinion(shown, cue.instanceId, (m) => ({
         ...m,
@@ -164,7 +167,8 @@ export function presented(view: PlayerView) {
     frozen: m.frozen,
     silenced: m.silenced,
     buffed: m.buffed,
-    doomed: !!m.doomed
+    doomed: !!m.doomed,
+    stage: m.stage ?? 0
   });
   const side = (s: PlayerView['me'] | PlayerView['foe']) => ({
     health: s.health,

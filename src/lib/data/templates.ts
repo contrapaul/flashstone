@@ -458,8 +458,11 @@ function phrase(effect: Effect): string {
       return `Give ${target} +${value} Attack`;
     case 'BuffHealth':
       return `Give ${target} +${value} Health`;
-    case 'SummonToken':
-      return value === 1 ? 'Summon a 1/1 Study Note' : `Summon ${value} 1/1 Study Notes`;
+    case 'SummonToken': {
+      const token = (effect.condition && tokenById(effect.condition)) || STUDY_NOTE;
+      const stats = `${token.attack}/${token.health}`;
+      return value === 1 ? `Summon a ${stats} ${token.name}` : `Summon ${value} ${stats} ${token.name}s`;
+    }
     case 'Destroy':
       return `Destroy ${target}`;
     case 'Freeze':

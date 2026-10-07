@@ -206,7 +206,18 @@ function refOf(target: Character): CueRef {
  * trigger exactly as it stops a keyword.
  */
 function effectsFor(minion: MinionInstance, trigger: Trigger): Effect[] {
-  return minion.silenced ? [] : minion.card.effects.filter((e) => e.trigger === trigger);
+  if (minion.silenced) return [];
+  const stage = minion.stage ?? 0;
+  return minion.card.effects.filter((e) => e.trigger === trigger && (e.stage === undefined || e.stage === stage));
+}
+
+/** After staged text fires, the next stage comes round. */
+function advanceStage(state: MatchState, minion: MinionInstance, trigger: Trigger): void {
+  const stages = minion.card.effects.filter((e) => e.trigger === trigger && e.stage !== undefined);
+  if (stages.length === 0 || minion.silenced) return;
+  const count = Math.max(...stages.map((e) => e.stage ?? 0)) + 1;
+  minion.stage = ((minion.stage ?? 0) + 1) % count;
+  emit(state, { type: 'stage', instanceId: minion.instanceId, stage: minion.stage });
 }
 
 /** Lights a minion's text before it fires, when it has any for this trigger. */
@@ -293,6 +304,7 @@ function triggerBoard(state: MatchState, id: PlayerId, trigger: Trigger): void {
     const opened = effects.length > 0 && openEntry(state, { actor: id, kind: 'trigger', cardId: minion.card.id, name: minion.card.name, trigger });
     emitTrigger(state, minion, trigger);
     for (const effect of effects) resolveEffect(state, id, minion, effect);
+    advanceStage(state, minion, trigger);
     closeEntry(state, opened);
   }
   checkDeaths(state);
@@ -1001,6 +1013,7 @@ function transform(state: MatchState, minion: MinionInstance, into: Card): void 
   minion.buffed = false;
   minion.summonedThisTurn = true;
   delete minion.doomAt;
+  delete minion.stage;
   emit(state, { type: 'transform', instanceId: minion.instanceId, minion: snapshotMinion(minion) });
 }
 

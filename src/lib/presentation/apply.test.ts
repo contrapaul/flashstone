@@ -162,7 +162,7 @@ describe('replaying matches through applyCue', () => {
     draw: true, play: true, summon: true, attack: true, damage: true, heal: true, shield: true,
     death: true, freeze: true, silence: true, buff: true, keyword: true, turn: true, mana: true,
     equip: true, heroAttack: true, weaponBreak: true, armor: true, heroPower: true, trigger: true,
-    effect: true, burn: true, fatigue: true, bounce: true, transform: true, doom: true
+    effect: true, burn: true, fatigue: true, bounce: true, transform: true, doom: true, stage: true
   };
   const seen = new Set<string>();
 
