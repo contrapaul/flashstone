@@ -50,6 +50,8 @@ export interface Stage {
   /** That card's face in the fan, once it is there. */
   handCard(card: Card): HTMLElement | undefined;
   myDeck(): HTMLElement | undefined;
+  /** The last `n` cards of your hand, as drawn — the newest. */
+  newestHandCards(n: number): HTMLElement[];
   mark(kind: Mark, instanceId: string, on: boolean): void;
   setHeroHit(side: Side | null): void;
   /** A hero brought to 0: its portrait breaks apart. */
@@ -582,6 +584,35 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'stage':
       stage.advance(cue);
       return;
+
+    case 'mulligan': {
+      // Your new cards come out of the deck into the fan; theirs are only a count.
+      stage.advance(cue);
+      if (cue.replaced === 0) return;
+      audio().play('card-draw');
+      if (stage.side(cue.owner) !== 'me' || !spatial()) return;
+      await tick();
+      const deck = stage.myDeck();
+      const faces = stage.newestHandCards(cue.replaced);
+      if (!deck) return;
+      const from = centreOf(deck);
+      faces.forEach((face, i) => {
+        const to = centreOf(face);
+        const k = drawnScale(face);
+        gsap.from(face, {
+          x: (from.x - to.x) / k,
+          y: (from.y - to.y) / k,
+          scale: 0.42,
+          rotationY: -100,
+          transformPerspective: 800,
+          duration: d(460) / 1000,
+          delay: (i * d(120)) / 1000,
+          ease: 'power2.out',
+          clearProps: 'transform'
+        });
+      });
+      return;
+    }
 
     case 'discover': {
       // Three options turn over in front of whoever cast it — shown, for them, when playback ends.

@@ -159,7 +159,9 @@ export class MatchRoom {
       {
         player: bySide.get('player')?.heroClass,
         ai: bySide.get('ai')?.heroClass
-      }
+      },
+      // Both players keep or replace their opening hands, at once, before turn 1.
+      { mulligan: true }
     );
     this.resetTurnClock();
   }
@@ -218,7 +220,9 @@ export class MatchRoom {
     const result = applyMessage(this.match, seat.side, message);
     if (!result.ok) return this.send(seat, { type: 'error', message: result.error ?? 'Rejected.' });
 
-    if (message.type === 'endTurn' || message.type === 'playCard') this.resetTurnClock();
+    // The first turn's clock starts when the last opening hand is settled.
+    const opened = message.type === 'mulligan' && !this.match.mulligan;
+    if (message.type === 'endTurn' || message.type === 'playCard' || opened) this.resetTurnClock();
     if (message.type === 'endTurn') this.missed[seat.side] = 0;
 
     await this.publish(result.events);
@@ -234,6 +238,14 @@ export class MatchRoom {
     if (!this.match || this.match.winner) return;
     if (Date.now() < this.turnDeadline - 500) {
       void this.state.storage.setAlarm(this.turnDeadline);
+      return;
+    }
+
+    // Out of time on the mulligan: hands are kept, and nobody has missed a turn.
+    if (this.match.mulligan) {
+      const events = forceEndTurn(this.match);
+      this.resetTurnClock();
+      await this.publish(events);
       return;
     }
 

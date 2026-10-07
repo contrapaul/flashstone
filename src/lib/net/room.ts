@@ -4,6 +4,7 @@ import {
   canPlayCard,
   choose,
   createMatch,
+  mulligan,
   endTurn,
   heroAttack,
   isLegalChosenTarget,
@@ -56,9 +57,10 @@ export function createRoomState(
   playerDeck: Card[],
   foeDeck: Card[],
   seed: number,
-  classes: { player?: CardClass; ai?: CardClass } = {}
+  classes: { player?: CardClass; ai?: CardClass } = {},
+  options: { mulligan?: boolean } = {}
 ): MatchState {
-  return createMatch(playerDeck, foeDeck, seed, classes);
+  return createMatch(playerDeck, foeDeck, seed, classes, options);
 }
 
 /** Turns a wire-level spell target into the engine's `Character`. */
@@ -113,6 +115,13 @@ export function applyMessage(
     state.winner = from === 'player' ? 'ai' : 'player';
     state.log.push(`${from} concedes.`);
     return { ok: true, events: drain() };
+  }
+
+  // The mulligan is the one decision both players make at once, before any turn.
+  if (message.type === 'mulligan') {
+    return mulligan(state, from, message.replace)
+      ? { ok: true, events: drain() }
+      : { ok: false, error: 'Your opening hand is already settled.', events: [] };
   }
 
   // Everything else mutates the board, and none of it is reachable out of turn.
@@ -209,6 +218,13 @@ export function applyMessage(
 /** Ends the turn of whoever is on the clock. Used by the turn timer. */
 export function forceEndTurn(state: MatchState): GameEvent[] {
   if (state.winner) return [];
+  // Out of time before the first turn: whoever has not decided keeps their hand.
+  if (state.mulligan) {
+    for (const id of Object.keys(state.mulligan) as PlayerId[]) mulligan(state, id, []);
+    const events = [...(state.events ?? [])];
+    state.events = [];
+    return events;
+  }
   state.log.push('Turn timed out.');
   // A choice left open when time runs out takes its first option.
   while (state.choices.length > 0) choose(state, state.choices[0].owner, 0);
@@ -267,6 +283,7 @@ export function viewFor(state: MatchState, viewer: PlayerId, turnEndsIn = 0): Pl
     },
     log: state.log,
     history: state.history.slice(-HISTORY_SENT),
+    mulligan: state.mulligan ? (state.mulligan[viewer] ? 'choose' : 'waiting') : null,
     choice: state.choices[0]?.owner === viewer ? state.choices[0].options : null,
     foeChoosing: state.choices[0]?.owner === opponentOf(viewer),
     turnEndsIn

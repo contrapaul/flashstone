@@ -55,6 +55,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   /** Using the class hero power. `target` only for powers that are aimed. */
   z.object({ type: z.literal('heroPower'), target: ChosenRefSchema.optional() }),
   z.object({ type: z.literal('endTurn') }),
+  /** Keeps the opening hand but for these positions, which go back for new cards. */
+  z.object({ type: z.literal('mulligan'), replace: z.array(z.number().int().min(0).max(3)).max(4) }),
   /** Picks one of a Discover's options, by position. */
   z.object({ type: z.literal('choose'), index: z.number().int().min(0).max(2) }),
   z.object({ type: z.literal('concede') }),
@@ -117,6 +119,11 @@ export interface PlayerView {
    * the board, never one still in a hand or a deck.
    */
   history: HistoryEntry[];
+  /**
+   * Before the first turn: `choose` while your opening hand awaits keep-or-replace,
+   * `waiting` once yours is settled and theirs is not, null after.
+   */
+  mulligan: 'choose' | 'waiting' | null;
   /** A Discover waiting on **you**: its options. Never sent to the other player. */
   choice: Card[] | null;
   /** A Discover waiting on the other player — all you may know of it. */

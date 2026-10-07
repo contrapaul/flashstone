@@ -110,6 +110,7 @@
     heroPower: { target?: ChosenRef };
     endTurn: void;
     choose: { index: number };
+    mulligan: { replace: number[] };
     drained: void;
     overAction: void;
   }>();
@@ -432,12 +433,15 @@
   }
 
   /**
-   * The first view of a match, or "Play again": the turn count went back, or
-   * a finished match is unfinished again — a match over on turn 1 restarts on
-   * turn 1, which the turn count alone misses.
+   * The first view of a match, or "Play again": an empty table, the turn count
+   * going back, or a finished match unfinished again — a match over on turn 1
+   * restarts on turn 1, which the turn count alone misses. "Empty" rather than
+   * turn 0, because a match spends turn 0 on its mulligan with hands dealt.
    */
   const freshMatch = (from: PlayerView, to: PlayerView) =>
-    from.turnNumber === 0 || to.turnNumber < from.turnNumber || (from.winner !== null && to.winner === null);
+    (from.turnNumber === 0 && from.me.hand.length === 0 && from.foe.handCount === 0) ||
+    to.turnNumber < from.turnNumber ||
+    (from.winner !== null && to.winner === null);
 
   /**
    * Before the opening hand: both heroes, names and classes, face each other
@@ -494,6 +498,16 @@
     stung = true;
     if (resultKind === 'draw') audio().music(null);
     else audio().sting(resultKind);
+  }
+
+  // ── The mulligan ─────────────────────────────────────────
+  /** Opening-hand positions marked to go back. Cleared with each new match. */
+  let replacing = new Set<number>();
+  $: if (view.mulligan !== 'choose') replacing = new Set();
+
+  function keepHand() {
+    audio().play('turn-end');
+    dispatch('mulligan', { replace: [...replacing] });
   }
 
   // ── The result ──────────────────────────────────────────
@@ -558,6 +572,8 @@
       return index < 0 ? undefined : (handEl?.querySelector<HTMLElement>(`.hand-slot[data-index="${index}"] .card`) ?? undefined);
     },
     myDeck: () => myDeckEl,
+    newestHandCards: (n) =>
+      [...(handEl?.querySelectorAll<HTMLElement>('.hand-slot .card') ?? [])].slice(-n),
     mark: (kind, id, on) => {
       const next = new Set(marks[kind]);
       if (on) next.add(id);
@@ -1529,7 +1545,35 @@
     </div>
   {/if}
 
-  {#if view.choice && !draining}
+  {#if view.mulligan === 'choose' && !draining}
+    <!-- The opening hand, large: tap what you want rid of, then keep the rest. -->
+    <div class="choosing mulligan" role="dialog" aria-label="Your opening hand">
+      <Logo word="KEEP OR REPLACE" height={100} />
+      <p class="hint">Tap the cards you want to send back. You draw new ones in their place.</p>
+      <div class="options">
+        {#each view.me.hand as card, i (card)}
+          <button
+            class="option"
+            class:marked={replacing.has(i)}
+            style:--i={i}
+            aria-pressed={replacing.has(i)}
+            on:click={() => {
+              audio().play('card-flip', { volume: 0.6 });
+              replacing = new Set(replacing.has(i) ? [...replacing].filter((x) => x !== i) : [...replacing, i]);
+            }}
+          >
+            <span class="lift"><CardPreview {card} playable /></span>
+            {#if replacing.has(i)}<span class="cross" aria-hidden="true"></span>{/if}
+          </button>
+        {/each}
+      </div>
+      <button class="confirm" on:click={keepHand}>
+        {replacing.size === 0 ? 'Keep all' : `Replace ${replacing.size}`}
+      </button>
+    </div>
+  {:else if view.mulligan === 'waiting' && !draining}
+    <div class="foe-choosing" aria-live="polite">Waiting for {opponentName} to keep their hand…</div>
+  {:else if view.choice && !draining}
     <!-- A Discover: three cards rise, and the match waits for one to be picked. -->
     <div class="choosing" role="dialog" aria-label="Choose one">
       <Logo word="CHOOSE ONE" height={110} />
@@ -2039,6 +2083,11 @@
     transition: transform .15s ease, filter .15s ease;
   }
   .option .lift :global(.card) { transform: scale(1.9); transform-origin: top left; }
+  /* A choice, not a play: full strength, without the green "you can play this" halo. */
+  .option .lift :global(.card.playable) {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(255, 230, 170, .35), 0 18px 30px rgba(0, 0, 0, .65);
+  }
   .option:hover .lift { transform: translateY(-10px); filter: drop-shadow(0 0 24px rgba(255, 214, 110, .7)); }
 
   @keyframes fs-option-rise {
@@ -2049,6 +2098,41 @@
     .options { gap: 16px; }
     .option .lift { width: calc(134px * 1.4); height: calc(168px * 1.4); }
     .option .lift :global(.card) { transform: scale(1.4); }
+  }
+
+  /* The mulligan: the same rising cards, a red cross on those going back. */
+  .mulligan .hint {
+    margin: -6px 0 4px;
+    font-family: var(--body);
+    font-size: 15px;
+    font-style: italic;
+    color: #c9b994;
+  }
+  .mulligan .option { position: relative; }
+  .mulligan .option.marked .lift { filter: grayscale(.6) brightness(.6); transform: translateY(14px); }
+  .cross {
+    position: absolute;
+    inset: 22% 18%;
+    pointer-events: none;
+    background:
+      linear-gradient(45deg, transparent 44%, #ff3b2a 44% 56%, transparent 56%),
+      linear-gradient(-45deg, transparent 44%, #ff3b2a 44% 56%, transparent 56%);
+    filter: drop-shadow(0 0 6px rgba(0, 0, 0, .9));
+    animation: fs-prize-pop .25s cubic-bezier(.2, 1.6, .4, 1) both;
+  }
+  .confirm {
+    padding: 12px 34px;
+    border: 1px solid #e3bf72;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #b98a34, #7a5620);
+    color: #1a1207;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5);
   }
 
   .foe-choosing {

@@ -155,6 +155,11 @@ export interface MatchState {
    * else may happen: the match is paused on a choice.
    */
   choices: Choice[];
+  /**
+   * The mulligan, before the first turn: who has yet to keep or replace their
+   * opening hand. Null once both have — or for a match made without one.
+   */
+  mulligan: Partial<Record<PlayerId, true>> | null;
   seed: number;
   nextInstanceId: number;
   /** Ordered animation cues drained by the UI. See events.ts. */

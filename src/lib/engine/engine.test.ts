@@ -3,7 +3,7 @@ import type { Card } from '../../types/cards';
 import { buildDemoDeck } from '../data/demoDeck';
 import { CardSchema } from '../../validators/card.validator';
 import { DEMO_CARDS } from '../data/demoDeck';
-import { applyAiIntent } from './ai';
+import { aiMulligan, applyAiIntent } from './ai';
 import { forceEndTurn, viewFor } from '../net/room';
 import {
   COIN_CARD,
@@ -11,6 +11,7 @@ import {
   canPlayCard,
   choose,
   createMatch,
+  mulligan,
   drawCard,
   endTurn,
   playCard
@@ -1194,5 +1195,21 @@ describe('discover', () => {
     state.players.ai.hand = [discoverCard({ from: 'Minion', then: 'summon' })];
     expect(applyAiIntent(state, { kind: 'play', handIndex: 0 })).toBe(true);
     expect(state.choices).toHaveLength(0);
+  });
+});
+
+describe('mulligan', () => {
+  it('opens before turn 1 when asked, and the AI sends back what costs 4 or more', () => {
+    const deck = Array.from({ length: 30 }, (_, i) => minionCard({ id: `c${i}`, cost: i % 8 }));
+    const state = createMatch(deck, deck, 3, {}, { mulligan: true });
+    expect([state.turnNumber, state.players.ai.hand.length]).toEqual([0, 4]);
+    expect(endTurn(state)).toBeUndefined();
+    expect(state.turnNumber).toBe(0);
+    const expensive = state.players.ai.hand.flatMap((c, i) => (c.cost >= 4 ? [i] : []));
+    expect(aiMulligan(state)).toEqual(expensive);
+    expect(mulligan(state, 'ai', aiMulligan(state))).toBe(true);
+    expect(mulligan(state, 'ai', [])).toBe(false);
+    expect(mulligan(state, 'player', [])).toBe(true);
+    expect(state.turnNumber).toBe(1);
   });
 });

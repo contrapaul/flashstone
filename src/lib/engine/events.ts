@@ -82,6 +82,8 @@ type Cue =
    * Public: it was on the board. `handCount` is the hand after it.
    */
   | { type: 'bounce'; owner: PlayerId; instanceId: string; handCount: number; lost: boolean }
+  /** A player sends `replaced` cards of their opening hand back and draws as many. Never says which. */
+  | { type: 'mulligan'; owner: PlayerId; replaced: number }
   /** A Discover offers its caster `count` options. Which ones is the caster's business only. */
   | { type: 'discover'; owner: PlayerId; count: number }
   /** A card joins a hand without being drawn — a Discover's pick. Never names it. */
@@ -159,6 +161,7 @@ export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   stage: 200,
   discover: 300,
   gain: 420,
+  mulligan: 500,
   burn: 900,
   fatigue: 700
 };

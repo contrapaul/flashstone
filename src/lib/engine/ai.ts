@@ -19,7 +19,8 @@ import {
   spellTargets,
   type Character,
   type MatchState,
-  type MinionInstance
+  type MinionInstance,
+  type PlayerId
 } from './state';
 import type { Card } from '../../types/cards';
 import { heroPowerFor } from '../data/classes';
@@ -82,6 +83,11 @@ export function applyAiIntent(state: MatchState, intent: AiIntent): boolean {
   })();
   settleChoices(state);
   return done;
+}
+
+/** The AI's opening hand: anything costing 4 or more goes back, as a curve-minded player would. */
+export function aiMulligan(state: MatchState, id: PlayerId = 'ai'): number[] {
+  return state.players[id].hand.flatMap((card, i) => (card.cost >= 4 ? [i] : []));
 }
 
 /**

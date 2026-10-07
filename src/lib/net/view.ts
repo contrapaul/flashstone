@@ -15,7 +15,7 @@ import type { ChosenRef, PlayerView, SerialisedMinion, TargetRef } from './proto
  */
 
 export function isMyTurn(view: PlayerView): boolean {
-  return view.turn === view.you && !view.winner;
+  return view.turn === view.you && !view.winner && !view.mulligan;
 }
 
 /** Whether a hand card can be played right now — mana, board space, turn. */
@@ -107,6 +107,7 @@ export function emptyView(): PlayerView {
     foe: { ...side, handCount: 0 },
     log: [],
     history: [],
+    mulligan: null,
     choice: null,
     foeChoosing: false,
     turnEndsIn: 0

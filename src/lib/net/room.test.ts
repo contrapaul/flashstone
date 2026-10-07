@@ -308,3 +308,52 @@ describe('parsing what arrives on the wire', () => {
     expect(parseClientMessage(`{"type":"attack","instanceId":"${long}","target":{"kind":"hero"}}`)).toBeNull();
   });
 });
+
+describe('the mulligan', () => {
+  const opening = () => createRoomState(resolveDeck(starterDeck()), buildAiDeck(1), 777, {}, { mulligan: true });
+  const ids = (cards: { id: string }[]) => cards.map((c) => c.id).sort();
+
+  it('waits for both players, in either order and at once, before turn 1', () => {
+    const state = opening();
+    expect(state.turnNumber).toBe(0);
+    expect(viewFor(state, 'player').mulligan).toBe('choose');
+    // Not a turn: neither side can play, and the second player may go first.
+    expect(applyMessage(state, 'player', { type: 'playCard', handIndex: 0 }).ok).toBe(false);
+    expect(applyMessage(state, 'ai', { type: 'mulligan', replace: [3] }).ok).toBe(true);
+    expect(viewFor(state, 'ai').mulligan).toBe('waiting');
+    expect(state.turnNumber).toBe(0);
+    expect(applyMessage(state, 'ai', { type: 'mulligan', replace: [] }).ok).toBe(false);
+    expect(applyMessage(state, 'player', { type: 'mulligan', replace: [0, 1] }).ok).toBe(true);
+    expect(state.turnNumber).toBe(1);
+    expect(viewFor(state, 'player').mulligan).toBeNull();
+    // The Coin comes after the mulligan, so it can never be sent back.
+    expect(state.players.ai.hand.some((c) => c.name === 'The Coin')).toBe(true);
+  });
+
+  it('conserves the deck, and never deals a replaced card straight back', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const state = createRoomState(resolveDeck(starterDeck()), buildAiDeck(seed), seed, {}, { mulligan: true });
+      const p = state.players.player;
+      const before = ids([...p.hand, ...p.deck]);
+      const sentBack = p.hand.slice(0, 2);
+      applyMessage(state, 'player', { type: 'mulligan', replace: [0, 1] });
+      // New cards are drawn before the old ones are shuffled in, so neither comes straight back.
+      expect(sentBack.some((c) => p.hand.includes(c)), `seed ${seed}`).toBe(false);
+      expect(ids([...p.hand, ...p.deck]), `seed ${seed}`).toEqual(before);
+    }
+  });
+
+  it('keeps the hand of anyone who runs out of time, and starts the match', () => {
+    const state = opening();
+    const hand = [...state.players.player.hand];
+    applyMessage(state, 'ai', { type: 'mulligan', replace: [0] });
+    forceEndTurn(state);
+    expect(state.players.player.hand.slice(0, 3)).toEqual(hand);
+    expect(state.turnNumber).toBe(1);
+  });
+
+  it('refuses a malformed choice at the wire', () => {
+    expect(parseClientMessage(JSON.stringify({ type: 'mulligan', replace: [9] }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'mulligan', replace: [0, 1, 2, 3, 0] }))).toBeNull();
+  });
+});

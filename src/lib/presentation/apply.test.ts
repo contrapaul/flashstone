@@ -9,6 +9,7 @@ import {
   choose,
   COIN_CARD,
   createMatch,
+  mulligan,
   endTurn,
   heroAttack,
   needsTarget,
@@ -164,7 +165,7 @@ describe('replaying matches through applyCue', () => {
     death: true, freeze: true, silence: true, buff: true, keyword: true, turn: true, mana: true,
     equip: true, heroAttack: true, weaponBreak: true, armor: true, heroPower: true, trigger: true,
     effect: true, burn: true, fatigue: true, bounce: true, transform: true, doom: true, stage: true,
-    discover: true, gain: true
+    discover: true, gain: true, mulligan: true
   };
   const seen = new Set<string>();
 
@@ -186,11 +187,17 @@ describe('replaying matches through applyCue', () => {
       // what it unlocks, which would hide a missing cue; the test player plays
       // it whenever it is drawn, so its result is what the step is checked on.
       const size = seed % 10 === 0 ? 12 : 30;
-      const state = createMatch([...randomDeck(rng, size), COIN_CARD], randomDeck(rng, size), seed, {
-        player: PLAYABLE_CLASSES[seed % 4],
-        ai: PLAYABLE_CLASSES[(seed + 1) % 4]
-      });
+      const state = createMatch(
+        [...randomDeck(rng, size), COIN_CARD],
+        randomDeck(rng, size),
+        seed,
+        { player: PLAYABLE_CLASSES[seed % 4], ai: PLAYABLE_CLASSES[(seed + 1) % 4] },
+        { mulligan: true }
+      );
       state.events = [];
+      // Both opening hands are kept or replaced before the first turn, as in a real match.
+      check(state, () => mulligan(state, 'ai', [0, 2]), `seed ${seed} (ai mulligan)`);
+      check(state, () => mulligan(state, 'player', seed % 2 ? [1] : []), `seed ${seed} (player mulligan)`);
 
       for (let turn = 0; turn < 60 && !state.winner; turn++) {
         if (state.current === 'ai') {

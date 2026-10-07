@@ -5,11 +5,12 @@ import {
   choose,
   createMatch,
   endTurn,
+  mulligan,
   heroAttack,
   playCard,
   useHeroPower
 } from '../engine/engine';
-import { applyAiIntent, type AiIntent, type AiTurn } from '../engine/ai';
+import { aiMulligan, applyAiIntent, type AiIntent, type AiTurn } from '../engine/ai';
 import type { GameEvent } from '../engine/events';
 import { findMinion, opponentOf, type Character, type MatchState, type PlayerId } from '../engine/state';
 import { viewFor } from './room';
@@ -34,6 +35,8 @@ export interface MatchSource {
   endTurn(): void;
   /** Picks one of a waiting Discover's options. */
   choose(index: number): void;
+  /** Keeps the opening hand but for these positions. */
+  mulligan(replace: number[]): void;
   concede(): void;
   /** Local only — online matches restart by making a new game. */
   restart?(): void;
@@ -86,7 +89,7 @@ export class LocalSource implements MatchSource {
     this.handlers = handlers;
     this.aiTurn = aiTurn;
     this.classes = classes;
-    this.state = createMatch(deck, foeDeck, Date.now() % 100000, classes);
+    this.state = this.open(Date.now() % 100000);
     this.publish();
   }
 
@@ -154,6 +157,17 @@ export class LocalSource implements MatchSource {
     if (choose(this.state, 'player', index)) this.publish();
   }
 
+  mulligan(replace: number[]) {
+    if (mulligan(this.state, 'player', replace)) this.publish();
+  }
+
+  /** A new match opens on the mulligan; the AI settles its hand at once. */
+  private open(seed: number): MatchState {
+    const state = createMatch(this.deck, this.foeDeck, seed, this.classes, { mulligan: true });
+    mulligan(state, 'ai', aiMulligan(state));
+    return state;
+  }
+
   /**
    * What the AI will do next, or null when it is not its turn.
    *
@@ -199,7 +213,7 @@ export class LocalSource implements MatchSource {
   restart() {
     this.turn = null;
     this.pending = null;
-    this.state = createMatch(this.deck, this.foeDeck, Date.now() % 100000, this.classes);
+    this.state = this.open(Date.now() % 100000);
     this.handlers.onStatus({ kind: 'playing' });
     this.publish();
   }
@@ -252,6 +266,10 @@ export class RemoteSource implements MatchSource {
 
   choose(index: number) {
     this.connection.send({ type: 'choose', index });
+  }
+
+  mulligan(replace: number[]) {
+    this.connection.send({ type: 'mulligan', replace });
   }
 
   concede() {

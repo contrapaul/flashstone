@@ -71,7 +71,13 @@ export function createMatch(
   aiDeck: Card[],
   seed = 1,
   /** Each side's class, which is what decides their hero power. */
-  classes: { player?: CardClass; ai?: CardClass } = {}
+  classes: { player?: CardClass; ai?: CardClass } = {},
+  /**
+   * Open on a mulligan: both players look at their opening hands and may send
+   * cards back before the first turn. Off by default, so a match made for a
+   * test starts on turn 1 as it always has.
+   */
+  options: { mulligan?: boolean } = {}
 ): MatchState {
   const rng = createRng(seed);
   // Each copy becomes its own object. A deck resolved from the registry holds
@@ -93,6 +99,7 @@ export function createMatch(
     lastHit: {},
     reactions: [],
     choices: [],
+    mulligan: options.mulligan ? { player: true, ai: true } : null,
     seed,
     nextInstanceId: 1,
     events: []
@@ -101,12 +108,41 @@ export function createMatch(
   // The player moves first; the AI gets an extra card and The Coin to compensate.
   for (let i = 0; i < 3; i++) drawCard(state, 'player');
   for (let i = 0; i < 4; i++) drawCard(state, 'ai');
+  if (!state.mulligan) begin(state);
+  return state;
+}
+
+/** After the opening hands are settled: The Coin to the second player, and the first turn. */
+function begin(state: MatchState): void {
   state.players.ai.hand.push(COIN_CARD);
   // Seen arriving like any card, so the hand on screen counts it.
   emit(state, { type: 'draw', owner: 'ai', deckCount: state.players.ai.deck.length });
-
   startTurn(state, 'player');
-  return state;
+}
+
+/**
+ * Keeps or replaces an opening hand. The cards at `replace` (positions in the
+ * hand) go back; as many are drawn from the top of the deck **first**, and only
+ * then are the replaced ones shuffled in, so a card sent back can never be dealt
+ * straight back. Each player decides once; when both have, the match begins.
+ */
+export function mulligan(state: MatchState, id: PlayerId, replace: number[]): boolean {
+  if (!state.mulligan?.[id]) return false;
+  const p = state.players[id];
+  const chosen = [...new Set(replace)].filter((i) => Number.isInteger(i) && i >= 0 && i < p.hand.length);
+  const back = chosen.map((i) => p.hand[i]);
+  const kept = p.hand.filter((_, i) => !chosen.includes(i));
+  const fresh = p.deck.splice(0, back.length);
+  p.hand = [...kept, ...fresh];
+  p.deck = shuffle(rngFor(state), [...p.deck, ...back]);
+  state.log.push(`${id} replaces ${back.length} card${back.length === 1 ? '' : 's'}.`);
+  emit(state, { type: 'mulligan', owner: id, replaced: back.length });
+  delete state.mulligan[id];
+  if (Object.keys(state.mulligan).length === 0) {
+    state.mulligan = null;
+    begin(state);
+  }
+  return true;
 }
 
 /** Queues an animation cue. Cosmetic only — no rule depends on the queue. */
@@ -279,7 +315,7 @@ function startTurn(state: MatchState, id: PlayerId): void {
 }
 
 export function endTurn(state: MatchState): void {
-  if (state.winner || state.choices.length > 0) return;
+  if (state.winner || state.choices.length > 0 || state.mulligan) return;
   const id = state.current;
   triggerBoard(state, id, 'EndOfTurn');
   if (state.winner) return;
@@ -342,7 +378,7 @@ export function drawCard(state: MatchState, id: PlayerId): void {
 }
 
 export function canPlayCard(state: MatchState, id: PlayerId, handIndex: number): boolean {
-  if (state.winner || state.current !== id || state.choices.length > 0) return false;
+  if (state.winner || state.current !== id || state.choices.length > 0 || state.mulligan) return false;
   const p = state.players[id];
   const card = p.hand[handIndex];
   if (!card) return false;
@@ -425,7 +461,7 @@ export function useHeroPower(
   id: PlayerId,
   chosen?: Character
 ): boolean {
-  if (!canUseHeroPower(state, id) || state.choices.length > 0) return false;
+  if (!canUseHeroPower(state, id) || state.choices.length > 0 || state.mulligan) return false;
 
   const power = HERO_POWERS[state.players[id].heroClass];
   if (!power) return false;
@@ -499,7 +535,7 @@ function equipWeapon(state: MatchState, id: PlayerId, card: Card): void {
  * which is why this routes through `legalTargets` rather than reimplementing it.
  */
 export function heroAttack(state: MatchState, id: PlayerId, target: Character): boolean {
-  if (state.winner || state.current !== id || state.choices.length > 0) return false;
+  if (state.winner || state.current !== id || state.choices.length > 0 || state.mulligan) return false;
   const p = state.players[id];
   if (!canHeroAttack(p) || !p.weapon) return false;
 
@@ -586,7 +622,7 @@ export function attack(
   attackerInstanceId: string,
   target: { kind: 'minion'; instanceId: string } | { kind: 'hero' }
 ): boolean {
-  if (state.winner || state.current !== id || state.choices.length > 0) return false;
+  if (state.winner || state.current !== id || state.choices.length > 0 || state.mulligan) return false;
 
   const attacker = state.players[id].board.find((m) => m.instanceId === attackerInstanceId);
   if (!attacker || !canAttack(attacker)) return false;

@@ -102,6 +102,8 @@ export function applyCue(shown: PlayerView, cue: GameEvent): PlayerView {
       return sideOf(cue.owner) === 'foe' ? patchSide(shown, 'foe', { handCount: cue.handCount }) : shown;
 
     case 'discover':
+    case 'mulligan':
+      // Counts do not change: as many cards come back as went.
       return shown;
 
     case 'buff':

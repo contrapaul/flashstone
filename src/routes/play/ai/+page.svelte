@@ -213,6 +213,7 @@
   on:heroPower={onHeroPower}
   on:endTurn={onEndTurn}
   on:choose={(e) => source?.choose(e.detail.index)}
+  on:mulligan={(e) => source?.mulligan(e.detail.replace)}
   on:drained={onDrained}
   on:overAction={start}
 />
