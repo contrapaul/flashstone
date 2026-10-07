@@ -587,6 +587,33 @@ fallback.
 **Goal:** a board that reads like Hearthstone at a glance, on a laptop, an iPad and a
 projector.
 
+> ## Built 2026-10-07 — 403 tests, 0 check errors. Not deployed.
+>
+> **Checked at all five sizes** — 1024×768, 768×1024, 1280×800, 1920×1080 and
+> the 1280×720 projector — with seven minions a side and ten cards in hand,
+> through a temporary sandbox page (removed before committing) that also kept
+> the site nav on screen, a stricter test than a match. Nothing collides.
+> **Fixed on the way:** the table only ever scaled by height, so at iPad
+> portrait a full board ran off both edges. It now scales by whichever axis is
+> short of what it needs (824 high, 980 wide), which also replaces D9's rule.
+>
+> **What changed:** heroes in class frames with their emblem (`ClassEmblem`),
+> a Hearthstone-sized health gem on the frame's corner and a nameplate; the
+> weapon left and the power right for both players; `DeckPile` for both decks,
+> thinning with the count and flickering at three or fewer; mana that grows in,
+> drains right to left, pulses what the hovered card would cost and flashes red
+> when you pick up what you cannot afford; the fanned hand, capped at a full
+> hand's 30% overlap, with the hovered card rising to 1.5× over everything;
+> draws flying out of your deck; End Turn gold → green → grey, turning over as
+> it is pressed; the fuse; grain, a carved lip, tray art slots; the heartbeat at
+> 10 health; and the four doodads (lamp, printer, vise, pencil pot).
+> **Glow language:** the attack aim is red now, a selected attacker green, and
+> End Turn's "nothing left" pulse green — gold is left for "special".
+>
+> **Seen in a practice match:** the opening hand dealt out of the deck one card
+> at a time, the not-enough-mana flash, End Turn turning green and flipping.
+> **Not seen live:** the fuse in a real online match (only in the sandbox).
+
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
 │ ▣ history   ╭ opponent's hand tray (fan hangs off the top) ╮   ▤ deck  │
@@ -599,16 +626,16 @@ projector.
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- [ ] **R4.1 — Scale both ways** (D9), and re-budget rows for the larger heroes and
+- [x] **R4.1 — Scale both ways** (D9), and re-budget rows for the larger heroes and
       minions.
-- [ ] **R4.2 — The surface.** The play field becomes a framed board: the warm centre
+- [x] **R4.2 — The surface.** The play field becomes a framed board: the warm centre
       you chose (a subtle texture and a soft overhead spotlight) inside a dark carved
       rim. Your hand sits on a dark **hand tray** ledge and the opponent's on a
       mirrored one. These are the per-player hand-area elements you described.
       Art slots: `ui/tray-you`, `ui/tray-foe`; `scene/table` paints over the lot,
       as now.
       → **verify:** every glow on the table sits on dark ground.
-- [ ] **R4.3 — The fan.** Cards on an arc (about ±3.5° per card, with vertical arc
+- [x] **R4.3 — The fan.** Cards on an arc (about ±3.5° per card, with vertical arc
       offset), overlapping down to −30% as the hand fills. **Hover:** the card rises
       clear of the hand to about 1.5× and its neighbours part sideways (Flip).
       *This changes Phase 2's 1.12 lift (§16 Q3):* that was reduced because 1.75×
@@ -616,36 +643,36 @@ projector.
       hides nothing.
       → **verify:** at 10 cards, every cost gem is visible when nothing is hovered,
       and the hovered card is fully readable.
-- [ ] **R4.4 — Draws from the deck.** The card leaves your deck pile, flips face-up
+- [x] **R4.4 — Draws from the deck.** The card leaves your deck pile, flips face-up
       in flight, and slots into the fan; the fan re-spaces. The opening hand deals
       one card at a time.
-- [ ] **R4.5 — Mana, finished.** Refill crystal by crystal with a rising chime; a
+- [x] **R4.5 — Mana, finished.** Refill crystal by crystal with a rising chime; a
       new maximum crystal *grows in*; spending drains crystals right-to-left as the
       card lands; **hovering a playable card makes the crystals it would cost
       pulse**; dragging a card you can't afford flashes the crystals red and the card
       snaps back. That last one is show-not-tell for "not enough mana".
-- [ ] **R4.6 — Glow language.** Green means playable or ready. **Gold** is reserved
+- [x] **R4.6 — Glow language.** Green means playable or ready. **Gold** is reserved
       for "special": a condition met (R8.4) or a held-back lethal hint. Red means
       target or danger. Blue means mana. Nothing else glows.
-- [ ] **R4.7 — End Turn.** A large button on the right edge of the centre line with
+- [x] **R4.7 — End Turn.** A large button on the right edge of the centre line with
       three states: **End Turn** (gold, you still have plays), **End Turn** (green
       pulse, nothing left to do — replaces today's blue), **Enemy Turn** (grey).
       Pressing it flips the button.
-- [ ] **R4.8 — The fuse (online turn timer).** With 20 seconds left, a burning wire
+- [x] **R4.8 — The fuse (online turn timer).** With 20 seconds left, a burning wire
       appears along the centre line, sparks travelling toward End Turn, and reaches
       it at 0. It replaces the `XXs` text, and is Hearthstone's rope, in D&T
       materials. Local matches have none.
-- [ ] **R4.9 — Heroes by class.** Class frames and emblems in SVG until art exists:
+- [x] **R4.9 — Heroes by class.** Class frames and emblems in SVG until art exists:
       Designer (compass and pen nib), Engineer (gear and wrench), Consumer (price
       tag and coin), Manufacturer (robot arm). The health gem grows to Hearthstone
       size. A nameplate shows the player's name (D10).
-- [ ] **R4.10 — Hero power** as a round disc with the class icon and a cost gem; it
+- [x] **R4.10 — Hero power** as a round disc with the class icon and a cost gem; it
       glows when usable and flips when used (R3.7).
-- [ ] **R4.11 — Decks** for both players on the right edge, their thickness tracking
+- [x] **R4.11 — Decks** for both players on the right edge, their thickness tracking
       the count. When three or fewer cards remain, the pile flickers a warning:
       fatigue is close.
-- [ ] **R4.12 — Low health.** At ≤10, a faint red heartbeat vignette on your side.
-- [ ] **R4.13 — Board doodads** *(delight; stretch).* One clickable object in each
+- [x] **R4.12 — Low health.** At ≤10, a faint red heartbeat vignette on your side.
+- [x] **R4.13 — Board doodads** *(delight; stretch).* One clickable object in each
       corner of the table, as Hearthstone's boards have: a desk lamp that toggles
       warm light, a 3D printer that prints a tiny trinket, a bench vise you can
       crank, a pencil pot that rattles. Each is an SVG with a sound. They do

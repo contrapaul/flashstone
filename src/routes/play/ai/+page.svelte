@@ -25,7 +25,6 @@
    */
 
   let deckCards: Card[] = resolveDeck(starterDeck());
-  let deckName = 'Starter deck';
   let heroClass: CardClass = DEFAULT_CLASS;
   /** The opponent rotates class per match, so all four get seen in practice. */
   let aiClass: CardClass = 'Manufacturer';
@@ -47,7 +46,6 @@
     void loadPlayer().then((player) => {
       if (player.deck && isLegal(player.deck, player.owned)) {
         deckCards = resolveDeck(player.deck);
-        deckName = player.deck.name;
         heroClass = player.deck.class ?? DEFAULT_CLASS;
         if (view.turnNumber <= 1 && view.me.board.length === 0) start();
       }
@@ -192,7 +190,6 @@
   {view}
   bind:events
   interactive={!aiThinking}
-  {deckName}
   opponentName={aiClass}
   {overTitle}
   {overNote}

@@ -482,8 +482,9 @@
     }
   }
 
+  /* Picked to attack: lifted, and its ready green turned up. Gold is kept for "special". */
   .minion.selected .oval {
-    box-shadow: 0 16px 30px rgba(0, 0, 0, .6), 0 0 0 3px var(--gold-bright), 0 0 26px rgba(240, 214, 138, .8);
+    box-shadow: 0 16px 30px rgba(0, 0, 0, .6), 0 0 0 3px #b8ffc8, 0 0 30px rgba(90, 255, 130, 1);
   }
 
   .minion.targetable { cursor: crosshair; }

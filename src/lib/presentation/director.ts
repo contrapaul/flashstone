@@ -43,7 +43,9 @@ export interface Stage {
   foeDeck(): HTMLElement | undefined;
   /** Your hand card a `draw` cue is delivering. */
   nextDrawn(): Card | undefined;
-  setDrawn(card: Card, on: boolean): void;
+  /** That card's face in the fan, once it is there. */
+  handCard(card: Card): HTMLElement | undefined;
+  myDeck(): HTMLElement | undefined;
   mark(kind: Mark, instanceId: string, on: boolean): void;
   setHeroHit(side: Side | null): void;
   /** A hero brought to 0: its portrait breaks apart. */
@@ -410,8 +412,30 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'draw': {
       stage.advance(cue);
       if (stage.side(cue.owner) === 'me') {
+        // Yours leaves your deck, turns face up in flight, and lands in the fan.
         const card = stage.nextDrawn();
-        if (card) pulse(() => stage.setDrawn(card, true), () => stage.setDrawn(card, false), 500);
+        await tick();
+        const face = card ? stage.handCard(card) : undefined;
+        const deck = stage.myDeck();
+        if (!face || !deck) return;
+        if (!spatial()) {
+          gsap.from(face, { opacity: 0, duration: d(200) / 1000, clearProps: 'opacity' });
+          return;
+        }
+        const from = centreOf(deck);
+        const to = centreOf(face);
+        const k = drawnScale(face);
+        gsap.from(face, {
+          x: (from.x - to.x) / k,
+          y: (from.y - to.y) / k,
+          scale: 0.42,
+          rotationY: -100,
+          rotation: -20,
+          transformPerspective: 800,
+          duration: d(460) / 1000,
+          ease: 'power2.out',
+          clearProps: 'transform'
+        });
         return;
       }
       // Theirs slides out of their deck and into the fan.

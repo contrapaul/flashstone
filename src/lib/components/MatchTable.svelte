@@ -6,6 +6,9 @@
   import HeroPortrait from './HeroPortrait.svelte';
   import ManaTray from './ManaTray.svelte';
   import CardBack from './CardBack.svelte';
+  import DeckPile from './DeckPile.svelte';
+  import Doodad from './Doodad.svelte';
+  import { account } from '../account';
   import TurnBanner from './TurnBanner.svelte';
   import FloatingNumber from './FloatingNumber.svelte';
   import Splat from './Splat.svelte';
@@ -26,7 +29,7 @@
   } from '../net/view';
   import type { ChosenRef } from '../net/protocol';
   import type { Card } from '../../types/cards';
-  import { sceneUrl } from '../../utils/art';
+  import { sceneUrl, uiArtUrl } from '../../utils/art';
   import GameMenu from './GameMenu.svelte';
   import { goto } from '$app/navigation';
   import { applyCue, presentedDiff } from '../presentation/apply';
@@ -51,6 +54,11 @@
    */
   const tableArt = sceneUrl('table');
   const portraitArt = sceneUrl('table-portrait');
+  /** The two hand areas, when drawn (`ui/tray-you`, `ui/tray-foe`). */
+  const trayArt = {
+    you: uiArtUrl('tray-you') ? `url("${uiArtUrl('tray-you')}")` : null,
+    foe: uiArtUrl('tray-foe') ? `url("${uiArtUrl('tray-foe')}")` : null
+  };
 
   /** The in-game menu. A match hides the nav, so this is the only way out. */
   let menuOpen = false;
@@ -73,7 +81,6 @@
   /** Blocks input while the opponent is thinking, or a match has not started. */
   export let interactive = true;
   export let opponentBack = 'default';
-  export let deckName = '';
   /** The opponent's username online, or the AI's class in practice. Never a seat id. */
   export let opponentName = 'Opponent';
   /** Game-over overlay. Owned by the table so its styles are not orphaned. */
@@ -108,7 +115,6 @@
   let heroDown: 'me' | 'foe' | null = null;
   /** Numbers pinned to what they happened to. */
   let splats: { id: number; kind: 'damage' | 'heal' | 'armor'; amount: number; x: number; y: number; intensity: number }[] = [];
-  let drawnCards = new Set<Card>();
   let hitHero: 'me' | 'foe' | null = null;
   let banner: string | null = null;
   let floats: { id: number; text: string; color: string; x: number; y: number }[] = [];
@@ -161,6 +167,8 @@
   let myHeroEl: HTMLElement | undefined;
   let foeHandEl: HTMLElement | undefined;
   let foeDeckEl: HTMLElement | undefined;
+  let myDeckEl: HTMLElement | undefined;
+  let handEl: HTMLElement | undefined;
 
   if (typeof window !== 'undefined') {
     handWidth = window.innerWidth;
@@ -180,19 +188,18 @@
    */
   const DESIGN_HEIGHT = 824;
   /*
-   * Big screens scale **up** as well as small ones down. Clamped at 1 the board
-   * was a small island on anything past 1440x900. Growing needs room on both
-   * axes, so width only ever limits the growth — below 1 the height alone
-   * decides, exactly as before, and iPad sizes are untouched.
+   * The table scales to whichever axis is shorter of what it needs: 824px of
+   * height, and 980px of width — seven minions a side with room at the ends.
+   * Big screens scale **up** (clamped at 1, the board was a small island on
+   * anything past 1440x900), and a narrow one scales down by its width: iPad
+   * portrait used to scale by height alone, and a full board ran off both edges.
    */
-  const DESIGN_WIDTH = 1300;
-  $: growth = Math.min(handHeight / DESIGN_HEIGHT, handWidth / DESIGN_WIDTH);
-  $: fit =
-    growth > 1
-      ? Math.min(1.35, growth)
-      : Math.max(0.7, Math.min(1, handHeight / DESIGN_HEIGHT));
+  const DESIGN_WIDTH = 980;
+  $: fit = Math.max(0.62, Math.min(1.35, handHeight / DESIGN_HEIGHT, handWidth / DESIGN_WIDTH));
   const RAIL_MIN_WIDTH = 1500;
   $: railed = handWidth >= RAIL_MIN_WIDTH;
+  /** The board toys sit at the ends of the boards, clear of the rail when it is out. */
+  $: doodadInset = railed ? 300 / fit : 18;
 
   $: myTurn = interactive && isMyTurn(view) && !draining;
   $: activeAttacker = drag?.kind === 'attack' ? drag.instanceId : selectedId;
@@ -210,13 +217,85 @@
   $: pendingDraws = events.filter((e) => e.type === 'draw' && e.owner === view.you).length;
   $: visibleHand = view.me.hand.slice(0, view.me.hand.length - pendingDraws);
 
-  // With the rail out, the hand keeps clear of it on both sides — scaled up on
-  // a wide screen, ten cards would otherwise run under the log.
+  /** The player at this seat: their name on the plate, their back on the deck. */
+  $: playerName = $account.user?.username ?? 'You';
+  $: myBack = $account.cardBack;
+
+  // ── The hand, fanned ─────────────────────────────────────
+  /**
+   * Room for the hand, in the table's own pixels. With the rail out the hand
+   * keeps clear of it on both sides — scaled up on a wide screen, ten cards
+   * would otherwise run under the log.
+   */
+  $: handRoom = Math.min((handWidth - (railed ? 580 : 0)) / fit - 90, 1300);
+
+  const CARD_WIDTH = 134;
+  /** Cards sit a hand's-breadth apart when there is room, and overlap by at most 30%. */
+  const SPREAD = CARD_WIDTH + 10;
+  const TIGHTEST = CARD_WIDTH * 0.7;
+  /**
+   * The widest a fan grows, so a full hand stays a hand held in the middle
+   * rather than a row across the whole table: ten cards at 30% overlap.
+   */
+  const WIDEST = CARD_WIDTH + TIGHTEST * 9;
+
+  /** The card under the pointer, which rises clear of the fan. */
+  let hovered: number | null = null;
+
+  /**
+   * Where each card sits on the arc: its offset from the centre, how far it
+   * drops at the ends, and its tilt. A hovered card's neighbours part to let
+   * it through — further when the fan is tight, since they overlap it more.
+   */
+  $: fan = layoutFan(visibleHand.length, hovered, handRoom);
+
+  function layoutFan(n: number, lifted: number | null, room: number) {
+    const width = Math.min(room, WIDEST);
+    const step = n > 1 ? Math.max(TIGHTEST, Math.min(SPREAD, (width - CARD_WIDTH) / (n - 1))) : 0;
+    const mid = (n - 1) / 2;
+    const parting = step < SPREAD ? 62 : 26;
+    return Array.from({ length: n }, (_, i) => {
+      const o = i - mid;
+      const gap = lifted === null || i === lifted ? 0 : Math.abs(i - lifted);
+      const part = gap === 0 ? 0 : Math.sign(i - (lifted ?? 0)) * Math.max(0, parting - 16 * (gap - 1));
+      return { x: o * step + part, y: o * o * 1.8, r: o * 3.5 };
+    });
+  }
+
+  /** Only shrinks when even the tightest fan will not fit. */
   $: handScale = Math.min(
     1,
-    Math.min((handWidth - (railed ? 580 : 0)) / fit - 90, 1260) /
-      (Math.max(1, visibleHand.length) * 146)
+    handRoom / (CARD_WIDTH + TIGHTEST * Math.max(0, visibleHand.length - 1))
   );
+
+  /** What the card under the pointer would cost, so the crystals it would spend pulse. */
+  $: previewCost =
+    hovered !== null && myTurn && canPlayFromView(view, hovered) ? (visibleHand[hovered]?.cost ?? 0) : 0;
+
+  /** The tray flashes red when a card you cannot afford is picked up. */
+  let manaWarn = false;
+  /** The card that was refused, shaking its head in the fan. */
+  let refusedCard: number | null = null;
+
+  function cannotAfford(index: number) {
+    manaWarn = true;
+    refusedCard = index;
+    void sleep(600).then(() => {
+      manaWarn = false;
+      refusedCard = null;
+    });
+  }
+
+  /** End Turn turning over as it is pressed. */
+  let pressedEnd = false;
+
+  /**
+   * The fuse: with 20 seconds left on an online turn, a burning wire along the
+   * centre line that reaches End Turn at 0. Null when there is no clock or
+   * plenty of time. Measured as the fraction already burnt.
+   */
+  const FUSE_SECONDS = 20;
+  $: fuse = showClock && secondsLeft <= FUSE_SECONDS ? 1 - Math.max(0, secondsLeft) / FUSE_SECONDS : null;
 
   /**
    * The turn clock.
@@ -361,12 +440,11 @@
     foeBacks: () => [...(foeHandEl?.querySelectorAll<HTMLElement>('.foe-card') ?? [])],
     foeDeck: () => foeDeckEl,
     nextDrawn: () => view.me.hand[view.me.hand.length - events.filter((e) => e.type === 'draw' && e.owner === view.you).length - 1],
-    setDrawn: (card, on) => {
-      const next = new Set(drawnCards);
-      if (on) next.add(card);
-      else next.delete(card);
-      drawnCards = next;
+    handCard: (card) => {
+      const index = visibleHand.indexOf(card);
+      return index < 0 ? undefined : (handEl?.querySelector<HTMLElement>(`.hand-slot[data-index="${index}"] .card`) ?? undefined);
     },
+    myDeck: () => myDeckEl,
     mark: (kind, id, on) => {
       const next = new Set(marks[kind]);
       if (on) next.add(id);
@@ -700,6 +778,13 @@
 
       if (press.kind === 'card') {
         const card = view.me.hand[press.handIndex];
+        // Picking up a card you cannot afford: the mana says so, the card
+        // shakes its head, and nothing lifts. Shown once per press.
+        if (card && myTurn && card.cost > view.me.mana) {
+          cannotAfford(press.handIndex);
+          press = null;
+          return;
+        }
         if (!card || !canPlayFromView(view, press.handIndex) || !myTurn) return;
         drag = { kind: 'card', handIndex: press.handIndex, card, slot: view.me.board.length };
       } else {
@@ -903,6 +988,8 @@
   function onEndTurn() {
     if (!myTurn) return;
     selectedId = null;
+    pressedEnd = true;
+    void sleep(450).then(() => (pressedEnd = false));
     dispatch('endTurn');
   }
 
@@ -955,9 +1042,15 @@
     where the boards are; the edges and both hand areas darken, so the playable
     glow, the mana and the card backs have something to burn against.
   -->
+  <div class="grain" aria-hidden="true"></div>
   <div class="rim" aria-hidden="true"></div>
-  <div class="tray-band foe" aria-hidden="true"></div>
-  <div class="tray-band you" aria-hidden="true"></div>
+  <div class="frame" aria-hidden="true"></div>
+  <div class="tray-band foe" style:--tray={trayArt.foe} aria-hidden="true"></div>
+  <div class="tray-band you" style:--tray={trayArt.you} aria-hidden="true"></div>
+  {#if shown.me.health <= 10 && shown.me.health > 0 && !view.winner}
+    <!-- Low health: a faint red heartbeat on your side of the table. -->
+    <div class="heartbeat" aria-hidden="true"></div>
+  {/if}
 
   <!--
     What is left of the header. The nav is hidden for the length of a match, so
@@ -984,6 +1077,8 @@
     <div class="hero-block" bind:this={foeHeroEl}>
       <HeroPortrait
         label={opponentName}
+        name={opponentName}
+        heroClass={shown.foe.heroClass}
         side="foe"
         health={shown.foe.health}
         armor={shown.foe.armor}
@@ -996,10 +1091,6 @@
       />
 
       <div class="hero-side">
-        <div class="hero-meta">
-          <span class="name">{opponentName}</span>
-        </div>
-
         <HeroPowerButton
           heroClass={shown.foe.heroClass}
           used={shown.foe.heroPowerUsed}
@@ -1010,14 +1101,13 @@
 
     <div class="foe-corner">
       <ManaTray side="foe" mana={shown.foe.mana} maxMana={shown.foe.maxMana} />
-      <div class="deck-pile" bind:this={foeDeckEl}>
-        <CardBack backId={opponentBack} scale={0.34} />
-        <span class="deck-count">{shown.foe.deckCount}</span>
-      </div>
+      <DeckPile count={shown.foe.deckCount} backId={opponentBack} label="Their deck" bind:el={foeDeckEl} />
     </div>
   </section>
 
-  <section class="board" bind:this={foeBoardEl}>
+  <section class="board" style:--doodad-inset={`${doodadInset}px`} bind:this={foeBoardEl}>
+    <span class="doodad-at left"><Doodad kind="lamp" /></span>
+    <span class="doodad-at right"><Doodad kind="printer" /></span>
     {#each shown.foe.board as minion (minion.instanceId)}
       <div class="slot" animate:flipZoomed={{ duration: flipMs }}>
         <MinionView
@@ -1045,16 +1135,29 @@
     banner already say whose turn it is.
   -->
   <div class="centre">
-    <span class="rule"></span>
+    <span class="rule">
+      {#if fuse !== null}
+        <!--
+          The fuse: a wire burning along the centre line towards End Turn,
+          reaching it as the time runs out. Hearthstone's rope, in workshop
+          materials. Only online turns have a clock.
+        -->
+        <span class="fuse" class:urgent={secondsLeft <= 10} style:--burnt={fuse.toFixed(3)} aria-hidden="true">
+          <span class="wire"></span>
+          <span class="flame"></span>
+        </span>
+      {/if}
+    </span>
     {#if showClock}
-      <span class="clock" class:urgent={secondsLeft <= 10} aria-live="off">
-        {secondsLeft}s
+      <span class="sr-only" aria-live={secondsLeft === 10 || secondsLeft === 5 ? 'polite' : 'off'}>
+        {secondsLeft} seconds left in this turn
       </span>
     {/if}
     <!-- Labelled by whose turn it is on screen, not by whether input is open —
          so your own plays animating do not flash it to "Enemy Turn", and the
-         opponent's do not flip it back before their turn has finished playing. -->
-    <button class="end-turn" class:spent class:handover on:click={onEndTurn} disabled={!myTurn}>
+         opponent's do not flip it back before their turn has finished playing.
+         Gold while you have plays, green once you have none, grey on theirs. -->
+    <button class="end-turn" class:spent class:handover class:pressed={pressedEnd} on:click={onEndTurn} disabled={!myTurn}>
       <!-- Keyed on the words, so each change turns the button over. -->
       {#key endTurnLabel}
         <span class="turnover">{endTurnLabel}</span>
@@ -1070,7 +1173,14 @@
     </div>
   {/if}
 
-  <section class="board mine" class:drop-open={drag?.kind === 'card'} bind:this={myBoardEl}>
+  <section
+    class="board mine"
+    class:drop-open={drag?.kind === 'card'}
+    style:--doodad-inset={`${doodadInset}px`}
+    bind:this={myBoardEl}
+  >
+    <span class="doodad-at left"><Doodad kind="vise" /></span>
+    <span class="doodad-at right"><Doodad kind="pencils" /></span>
     {#each shown.me.board as minion, i (minion.instanceId)}
       <div class="slot" animate:flipZoomed={{ duration: flipMs }}>
         {#if drag?.kind === 'card' && drag.slot === i}
@@ -1102,22 +1212,11 @@
   <section class="hero-row you">
     <div></div>
 
-    <div class="hero-block reverse" bind:this={myHeroEl}>
-      <div class="hero-side">
-        <div class="hero-meta right">
-          <span class="name">{deckName || 'You'}</span>
-          <span>Deck {shown.me.deckCount}</span>
-        </div>
-        <HeroPowerButton
-          heroClass={shown.me.heroClass}
-          usable={myTurn && view.me.canUseHeroPower}
-          used={shown.me.heroPowerUsed}
-          on:click={onHeroPower}
-        />
-      </div>
-
+    <div class="hero-block" bind:this={myHeroEl}>
       <HeroPortrait
         label="You"
+        name={playerName}
+        heroClass={shown.me.heroClass}
         side="you"
         health={shown.me.health}
         armor={shown.me.armor}
@@ -1128,26 +1227,57 @@
         destroyed={heroDown === 'me'}
         on:click={onMyHero}
       />
+
+      <div class="hero-side">
+        <HeroPowerButton
+          heroClass={shown.me.heroClass}
+          usable={myTurn && view.me.canUseHeroPower}
+          used={shown.me.heroPowerUsed}
+          on:click={onHeroPower}
+        />
+      </div>
+    </div>
+
+    <div class="my-deck">
+      <DeckPile count={shown.me.deckCount} backId={myBack} label="Your deck" bind:el={myDeckEl} />
     </div>
 
     <!-- Bottom right, just above the hand and beside End Turn: where your eyes
          are at the moment you decide whether a turn is over. -->
     <div class="mana-dock">
-      <ManaTray mana={shown.me.mana} maxMana={shown.me.maxMana} />
+      <ManaTray mana={shown.me.mana} maxMana={shown.me.maxMana} preview={previewCost} warn={manaWarn} />
     </div>
   </section>
 
-  <section class="hand" class:active={isMyTurn(shown)} style:transform={`scale(${handScale.toFixed(3)})`}>
+  <!--
+    The hand, fanned on an arc. A card under the pointer rises clear of the
+    others and its neighbours part; on a touch screen there is no hover, and a
+    tap opens the card as it always has.
+  -->
+  <section
+    class="hand"
+    class:active={isMyTurn(shown)}
+    style:transform={`scale(${handScale.toFixed(3)})`}
+    bind:this={handEl}
+    on:pointerleave={() => (hovered = null)}
+  >
     {#each visibleHand as card, i (card)}
       <div
         class="hand-slot"
         class:lifted={drag?.kind === 'card' && drag.handIndex === i}
-        animate:flipZoomed={{ duration: flipMs }}
+        class:hovered={hovered === i && !drag}
+        class:refused={refusedCard === i}
+        data-index={i}
+        style:--x={`${fan[i]?.x ?? 0}px`}
+        style:--y={`${fan[i]?.y ?? 0}px`}
+        style:--r={`${fan[i]?.r ?? 0}deg`}
+        on:pointerenter={(e) => e.pointerType === 'mouse' && !drag && (hovered = i)}
+        on:focusin={() => (hovered = i)}
+        on:focusout={() => hovered === i && (hovered = null)}
       >
         <CardPreview
           {card}
           playable={myTurn && canPlayFromView(view, i)}
-          drawn={drawnCards.has(card)}
           on:keydown={(e) => onCardKey(e, i)}
           on:pointerdown={(e) => onCardPointerDown(e, i)}
         />
@@ -1389,6 +1519,49 @@
     pointer-events: none;
   }
 
+  /*
+   * A little grain in the wood, so the field reads as a surface rather than a
+   * colour. Fractal noise, multiplied in at low strength.
+   */
+  .grain {
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9 .06' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 .3  0 0 0 0 .2  0 0 0 0 .1  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: .5;
+    mix-blend-mode: multiply;
+    pointer-events: none;
+  }
+
+  /* The carved lip where the playing surface meets the rim. */
+  .frame {
+    position: absolute;
+    inset: 8px;
+    border-radius: 22px;
+    box-shadow: inset 0 0 0 2px rgba(255, 226, 170, .14), inset 0 0 0 4px rgba(40, 22, 8, .35),
+      inset 0 0 50px rgba(30, 16, 4, .35);
+    pointer-events: none;
+  }
+
+  /* Your health at 10 or less: a faint red pulse on your half, beating twice. */
+  .heartbeat {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 55%;
+    background: radial-gradient(80% 90% at 50% 100%, transparent 55%, rgba(200, 30, 20, .32) 100%);
+    pointer-events: none;
+    animation: fs-heartbeat 1.3s ease-in-out infinite;
+  }
+
+  @keyframes fs-heartbeat {
+    0%, 40%, 100% { opacity: .35; }
+    12% { opacity: 1; }
+    26% { opacity: .75; }
+  }
+
+  .table.still .heartbeat { animation: none; opacity: .6; }
+
   /* The carved edge of the table: the warm centre stays, the margins darken. */
   .rim {
     position: absolute;
@@ -1414,7 +1587,8 @@
     bottom: 0;
     height: calc(150px * var(--fit, 1));
     border-top: 1px solid rgba(255, 214, 150, .16);
-    background: linear-gradient(180deg, rgba(26, 15, 6, .62), rgba(12, 7, 3, .9));
+    background: var(--tray, none) center / 100% 100% no-repeat,
+      linear-gradient(180deg, rgba(26, 15, 6, .62), rgba(12, 7, 3, .9));
     box-shadow: 0 -14px 28px rgba(30, 16, 4, .28);
   }
 
@@ -1422,7 +1596,8 @@
     top: 0;
     height: calc(54px * var(--fit, 1));
     border-bottom: 1px solid rgba(255, 214, 150, .12);
-    background: linear-gradient(0deg, rgba(26, 15, 6, .5), rgba(12, 7, 3, .85));
+    background: var(--tray, none) center / 100% 100% no-repeat,
+      linear-gradient(0deg, rgba(26, 15, 6, .5), rgba(12, 7, 3, .85));
     box-shadow: 0 14px 28px rgba(30, 16, 4, .22);
   }
 
@@ -1512,24 +1687,11 @@
     gap: 14px;
   }
 
+  /* Both heroes alike, as in Hearthstone: weapon to the left, power to the right. */
   .hero-block > :global(.hero) { grid-column: 2; }
   .hero-block > .hero-side { grid-column: 3; justify-self: start; }
-  .hero-block.reverse > .hero-side { grid-column: 1; justify-self: end; }
 
-  .hero-side { display: flex; align-items: center; gap: 14px; }
-
-  .hero-meta {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-family: var(--display);
-    font-size: 11px;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--field-ink);
-  }
-  .hero-meta.right { text-align: right; }
-  .hero-meta .name { font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+  .hero-side { display: flex; align-items: center; gap: 14px; padding-left: 8px; }
 
   .mana-dock {
     position: absolute;
@@ -1537,26 +1699,21 @@
     bottom: 0;
   }
 
-  .deck-pile {
-    position: relative;
-    width: 46px;
-    height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    border: 1px solid #7a5c30;
-    background: linear-gradient(180deg, #4a3620, #241810);
-    box-shadow: 4px 4px 0 -1px #2c1f12, 8px 8px 0 -2px #241810, 0 10px 18px rgba(0, 0, 0, .6);
-    overflow: hidden;
+  /* Your deck on the right edge, above your mana — the opponent's mirrors it at the top. */
+  .my-deck {
+    position: absolute;
+    right: 34px;
+    bottom: 60px;
   }
 
-  .deck-count {
+  /* The board toys, one at each end of each board. */
+  .doodad-at {
     position: absolute;
-    font-family: var(--display);
-    font-size: 13px;
-    color: #f0dcae;
+    top: 50%;
+    transform: translateY(-50%);
   }
+  .doodad-at.left { left: var(--doodad-inset); }
+  .doodad-at.right { right: var(--doodad-inset); }
 
   /* One per minion: what `animate:flip` slides and what an attack lunges. */
   .slot {
@@ -1657,22 +1814,23 @@
     pointer-events: none;
   }
 
+  /* An attack's aim, in the colour of danger: red. Green is for what you can play. */
   .aim-line {
     fill: none;
-    stroke: rgba(126, 214, 140, .9);
+    stroke: rgba(255, 96, 72, .92);
     stroke-width: 5;
     stroke-linecap: round;
-    filter: drop-shadow(0 0 8px rgba(126, 214, 140, .8));
+    filter: drop-shadow(0 0 8px rgba(255, 80, 60, .8));
   }
 
   .aim-head {
-    fill: rgba(126, 214, 140, .28);
-    stroke: rgba(150, 255, 170, .95);
+    fill: rgba(255, 96, 72, .25);
+    stroke: rgba(255, 150, 130, .95);
     stroke-width: 3;
   }
 
   /* Locked onto a legal target: fill in. */
-  .aim-head.locked { fill: rgba(150, 255, 170, .75); }
+  .aim-head.locked { fill: rgba(255, 110, 85, .75); }
 
   .cue-aim {
     position: fixed;
@@ -1763,29 +1921,114 @@
     background: linear-gradient(90deg, transparent, var(--field-rule), transparent);
   }
 
-  .clock {
-    font-family: var(--display);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
-  }
-  .clock.urgent { color: var(--blood); }
+  /*
+   * The fuse. A wire laid along the centre line, burning from the far end
+   * towards End Turn: `--burnt` is how much of it has gone. The flame sits on
+   * the burning end and throws sparks; at ten seconds the wire glows hot.
+   */
+  .rule { position: relative; }
 
+  .fuse {
+    position: absolute;
+    left: calc(var(--burnt) * 100%);
+    right: 0;
+    top: 50%;
+    height: 4px;
+    margin-top: -2px;
+    transition: left 1s linear;
+  }
+
+  .wire {
+    position: absolute;
+    inset: 0;
+    border-radius: 2px;
+    background: repeating-linear-gradient(90deg, #6b4f2e 0 6px, #8a6a3e 6px 9px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  }
+
+  .fuse.urgent .wire {
+    background: repeating-linear-gradient(90deg, #a8401e 0 6px, #e0702a 6px 9px);
+    box-shadow: 0 0 8px rgba(255, 110, 40, .8);
+  }
+
+  .flame {
+    position: absolute;
+    left: -7px;
+    top: -7px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff6d0, #ffb24a 40%, rgba(255, 90, 30, .6) 65%, transparent 72%);
+    box-shadow: 0 0 14px 4px rgba(255, 150, 50, .8);
+    animation: fs-flame .18s ease-in-out infinite alternate;
+  }
+
+  /* Sparks thrown off the burning end. */
+  .flame::before,
+  .flame::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 7px;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: #ffe08a;
+    box-shadow: 0 0 4px #ffb24a;
+    animation: fs-fuse-spark .5s linear infinite;
+  }
+  .flame::after { animation-delay: .25s; animation-name: fs-fuse-spark-2; }
+
+  @keyframes fs-flame {
+    from { transform: scale(.85); filter: brightness(1); }
+    to { transform: scale(1.15); filter: brightness(1.4); }
+  }
+
+  @keyframes fs-fuse-spark {
+    from { transform: none; opacity: 1; }
+    to { transform: translate(-10px, -14px); opacity: 0; }
+  }
+
+  @keyframes fs-fuse-spark-2 {
+    from { transform: none; opacity: 1; }
+    to { transform: translate(-6px, 12px); opacity: 0; }
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /*
+   * End Turn, at the right end of the centre line: gold while you still have
+   * plays, green once you have none, grey on the opponent's turn. Pressing it
+   * turns it over.
+   */
   .end-turn {
-    padding: 10px 24px;
+    padding: 13px 30px;
     border: 1px solid var(--rule);
-    border-radius: 5px;
+    border-radius: 6px;
     background: linear-gradient(180deg, #2a2118, #1a1410);
     color: var(--text-faint);
     font-family: var(--display);
     font-weight: 700;
-    font-size: 11.5px;
+    font-size: 13px;
     letter-spacing: .18em;
     text-transform: uppercase;
     cursor: default;
     transition: all .18s ease;
+  }
+
+  .end-turn.pressed { animation: fs-press-flip .45s ease-in-out; }
+
+  @keyframes fs-press-flip {
+    0% { transform: perspective(400px) rotateX(0); }
+    50% { transform: perspective(400px) rotateX(90deg) scale(.96); }
+    100% { transform: perspective(400px) rotateX(0); }
   }
 
   .end-turn:not(:disabled) {
@@ -1819,8 +2062,11 @@
     100% { box-shadow: 0 0 0 0 rgba(255, 226, 140, 0); filter: brightness(1); }
   }
 
+  /* Nothing left to do: the button turns green and pulses. Green means "go". */
   .end-turn.spent:not(:disabled) {
-    border-color: #8fc8ff;
+    border-color: #8dffad;
+    background: linear-gradient(180deg, #3fae5a, #1f6b33);
+    color: #06140a;
     animation: fs-end-turn 1.6s ease-in-out infinite;
   }
 
@@ -1910,18 +2156,48 @@
   .showcase :global(.card) { opacity: 1; }
   .showcase :global(.card:hover) { transform: none; }
 
-  /* Cards keep an 8px gap and never overlap; the row scales instead. */
+  /*
+   * The fan. Each card hangs from the bottom centre of the hand, offset along
+   * an arc and tilted by `--x`, `--y` and `--r` (laid out in the script). The
+   * row only scales down when even a 30% overlap will not fit.
+   */
   .hand {
     position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    gap: 8px;
+    /* Above the hero row's gems and plate, so a card lifted from the fan is never under them. */
+    z-index: 10;
     height: 170px;
     flex: 0 0 170px;
-    padding-top: 2px;
     transform-origin: bottom center;
     transition: transform .2s ease;
+  }
+
+  .hand-slot {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(calc(var(--x) - 50%)) translateY(var(--y)) rotate(var(--r));
+    transform-origin: 50% 100%;
+    transition: transform .24s cubic-bezier(.2, .9, .3, 1);
+  }
+
+  /* Under the pointer: it rises clear of the fan, upright, at half again its size. */
+  .hand-slot.hovered {
+    z-index: 50;
+    transform: translateX(calc(var(--x) - 50%)) translateY(-30px) scale(1.5);
+    transition-duration: .16s;
+  }
+
+  /* The card's own hover lift is the fan's job here. */
+  .hand :global(.card:hover) { transform: none; }
+
+  /* Picked up but unaffordable: it shakes its head and stays put. */
+  .hand-slot.refused :global(.card) { animation: fs-card-no .42s ease-out; }
+
+  @keyframes fs-card-no {
+    0%, 100% { transform: none; }
+    20% { transform: translateX(-8px) rotate(-3deg); }
+    45% { transform: translateX(7px) rotate(3deg); }
+    70% { transform: translateX(-4px); }
   }
 
   .prize {

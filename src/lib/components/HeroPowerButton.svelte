@@ -2,6 +2,7 @@
   import { HERO_POWER_COST } from '../engine/state';
   import { heroPowerFor } from '../data/classes';
   import { uiArtUrl } from '../../utils/art';
+  import ClassEmblem from './ClassEmblem.svelte';
   import type { CardClass } from '../../types/cards';
 
   /**
@@ -34,7 +35,7 @@
   >
     <span class="disc">
       <span class="face front">
-        <span class="glyph" aria-hidden="true">{heroClass[0]}</span>
+        {#if !art}<span class="glyph" aria-hidden="true"><ClassEmblem {heroClass} /></span>{/if}
         <span class="cost">{HERO_POWER_COST}</span>
       </span>
       <span class="face spent" aria-hidden="true"></span>
@@ -112,12 +113,10 @@
 
   .glyph {
     display: block;
-    font-family: var(--display);
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1;
+    width: 34px;
+    height: 34px;
     color: inherit;
-    text-shadow: 0 2px 5px rgba(0, 0, 0, .7);
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .7));
   }
 
   .cost {

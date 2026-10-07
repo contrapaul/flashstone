@@ -1,16 +1,27 @@
 <script lang="ts">
   import { cubicOut } from 'svelte/easing';
+  import ClassEmblem from './ClassEmblem.svelte';
   import { HERO_HEALTH } from '../engine/state';
   import { hashText } from '../../utils/hash';
   import { uiArtUrl } from '../../utils/art';
+  import type { CardClass } from '../../types/cards';
 
+  /**
+   * A hero: a portrait in its class's frame, its health on the frame's corner,
+   * its name on a plate beneath, and its weapon to its left.
+   *
+   * Until a portrait is drawn (`ui/hero-<class>`), the class's emblem stands in
+   * for one — so a Designer reads as a Designer from across the room.
+   */
   export let label: string;
+  /** Shown on the nameplate. */
+  export let name = '';
+  export let heroClass: CardClass = 'Neutral';
   export let health: number;
   /** Armor: a steel plate beside the health gem, hidden at zero. */
   export let armor = 0;
-  /** 'you' | 'foe' — the portrait's tint, and which side the weapon hangs on. */
+  /** 'you' | 'foe' — only shades the nameplate. */
   export let side: 'you' | 'foe' = 'you';
-  export let glyph = side === 'you' ? 'Ψ' : 'Ω';
   /** Legal attack target — red ring and crosshair. */
   export let targetable = false;
   /** Just took damage — it flashes and shakes. */
@@ -82,6 +93,7 @@
   const TOOLS = ['hammer', 'calipers', 'iron'] as const;
   $: tool = shownWeapon ? TOOLS[hashText(shownWeapon.name) % TOOLS.length] : 'hammer';
   $: toolArt = uiArtUrl(`weapon-${tool}`);
+  $: portraitArt = uiArtUrl(`hero-${heroClass.toLowerCase()}`);
 
   function arrive(_node: Element) {
     return {
@@ -92,7 +104,7 @@
   }
 </script>
 
-<div class="hero {side}" class:hit class:armed class:destroyed class:refused>
+<div class="hero {side} {heroClass.toLowerCase()}" class:hit class:armed class:destroyed class:refused>
   <!--
     Enabled when the hero is a legal target OR is armed and can swing. Gating on
     `targetable` alone left an armed hero unclickable, because that prop is
@@ -105,8 +117,8 @@
     on:click
     aria-label={targetable ? `Attack ${label}` : armed ? `Attack with ${weapon?.name ?? 'weapon'}` : label}
   >
-    <span class="portrait {side}">
-      {glyph}
+    <span class="portrait" style:--portrait={portraitArt ? `url("${portraitArt}")` : null}>
+      {#if !portraitArt}<span class="emblem"><ClassEmblem {heroClass} /></span>{/if}
       {#if wear > 0}
         <svg class="wear" viewBox="0 0 82 88" aria-hidden="true">
           <path d="M8 22 L22 30 L26 44 L38 50" />
@@ -122,10 +134,11 @@
     {#if hit}<span class="flash" aria-hidden="true"></span>{/if}
   </button>
 
-  <div class="gems">
-    {#if armor > 0}<span class="armor" class:tick={armorTick}>{armor}</span>{/if}
-    <span class="hp" class:tick={hpTick} title={`${health} of ${HERO_HEALTH}`}>{Math.max(0, health)}</span>
-  </div>
+  {#if name}<span class="nameplate">{name}</span>{/if}
+
+  <!-- On the frame's corner, as in Hearthstone: health, with armor stacked above it. -->
+  {#if armor > 0}<span class="armor" class:tick={armorTick}>{armor}</span>{/if}
+  <span class="hp" class:tick={hpTick} title={`${health} of ${HERO_HEALTH}`}>{Math.max(0, health)}</span>
 
   {#if shownWeapon}
     <div
@@ -158,28 +171,39 @@
 </div>
 
 <style>
+  /*
+   * Each class's frame colour: a light edge, a body, a dark root. The frame is
+   * the class's colour; the gold rim around it is every hero's.
+   */
   .hero {
+    --c1: #f3dc9c;
+    --c2: #9c7a3c;
+    --c3: #4a3416;
     position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
+    width: 112px;
+    height: 120px;
   }
+
+  .hero.designer { --c1: #b8fff0; --c2: #2f9a86; --c3: #0f3d36; }
+  .hero.engineer { --c1: #ffd9a8; --c2: #c27a2c; --c3: #4d2a0c; }
+  .hero.consumer { --c1: #ecd4ff; --c2: #8a4fc4; --c3: #321650; }
+  .hero.manufacturer { --c1: #ffc4b4; --c2: #c2412a; --c3: #4a120a; }
 
   .hero.hit { animation: fs-shake .52s ease-out; }
   .hero.refused { animation: fs-shake .42s ease-out; }
 
   .ring {
     position: relative;
-    width: 90px;
-    height: 96px;
+    width: 112px;
+    height: 120px;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     border: none;
     clip-path: polygon(50% 0, 100% 26%, 100% 74%, 50% 100%, 0 74%, 0 26%);
-    background: linear-gradient(160deg, var(--frame-lit), #7a5c30 55%, var(--gold));
+    background:
+      linear-gradient(160deg, var(--frame-lit), #7a5c30 50%, var(--gold)) padding-box;
     box-shadow: 0 8px 20px rgba(0, 0, 0, .6);
     cursor: default;
   }
@@ -191,26 +215,52 @@
     animation: fs-target 1.6s ease-in-out infinite;
   }
 
+  /* Inside the gold rim, a band of the class's colour, then the portrait. */
   .portrait {
     position: relative;
-    width: 82px;
-    height: 88px;
+    width: 102px;
+    height: 110px;
     display: flex;
     align-items: center;
     justify-content: center;
     clip-path: polygon(50% 0, 100% 26%, 100% 74%, 50% 100%, 0 74%, 0 26%);
+    background:
+      var(--portrait, none) center / cover no-repeat,
+      radial-gradient(70% 60% at 50% 38%, var(--c2), var(--c3) 90%);
+    box-shadow: inset 0 0 0 4px var(--c1), inset 0 0 22px rgba(0, 0, 0, .55);
+    color: var(--c1);
+  }
+
+  .emblem {
+    width: 58px;
+    height: 58px;
+    opacity: .85;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6));
+  }
+
+  /* The name, on a plate across the bottom of the frame. */
+  .nameplate {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: -9px;
+    max-width: 130px;
+    padding: 2px 10px;
+    transform: translateX(-50%);
+    border-radius: 3px;
+    border: 1px solid rgba(255, 226, 160, .55);
+    background: linear-gradient(180deg, #2c2014, #140d07);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .6);
     font-family: var(--display);
-    font-size: 30px;
-  }
-
-  .portrait.you {
-    background: conic-gradient(from 200deg at 50% 110%, #2f4a5a, #1e2f3a 40%, #3a5a6b);
-    color: rgba(220, 240, 255, .42);
-  }
-
-  .portrait.foe {
-    background: conic-gradient(from 200deg at 50% 110%, #5a2f2f, #3a1e1e 40%, #6b3a2a);
-    color: rgba(255, 230, 200, .4);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #f0dcae;
+    pointer-events: none;
   }
 
   /* Cracks in the portrait as it wears down. */
@@ -256,12 +306,6 @@
     100% { transform: scale(.6) translateY(30px) rotate(10deg); filter: grayscale(1) brightness(.4) blur(4px); opacity: 0; }
   }
 
-  .gems {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
   /* Armed and able to swing — the same green language a ready minion uses. */
   .hero.armed .ring {
     box-shadow: 0 0 0 2px rgba(126, 214, 140, .7), 0 0 22px rgba(126, 214, 140, .45);
@@ -274,7 +318,7 @@
    */
   .weapon-icon {
     position: absolute;
-    top: 26px;
+    top: 34px;
     width: 52px;
     height: 52px;
     display: grid;
@@ -285,8 +329,8 @@
     box-shadow: 0 6px 14px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .25);
   }
 
-  .hero.foe .weapon-icon { right: calc(100% + 14px); }
-  .hero.you .weapon-icon { left: calc(100% + 14px); }
+  /* Left of the portrait for both players; the hero power is on the right. */
+  .weapon-icon { right: calc(100% + 16px); }
 
   .weapon-icon.drawn { background: var(--ui) center / cover no-repeat; }
 
@@ -337,8 +381,12 @@
   }
 
   .armor {
-    width: 30px;
-    height: 32px;
+    position: absolute;
+    z-index: 3;
+    right: -8px;
+    bottom: 40px;
+    width: 34px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -351,9 +399,14 @@
     text-shadow: 0 1px 0 rgba(255, 255, 255, .5);
   }
 
+  /* Hearthstone-sized, sitting on the frame's lower right corner. */
   .hp {
-    width: 44px;
-    height: 44px;
+    position: absolute;
+    z-index: 3;
+    right: -14px;
+    bottom: -6px;
+    width: 54px;
+    height: 54px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -363,9 +416,9 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, .6), inset 0 2px 6px rgba(255, 190, 170, .5);
     font-family: var(--display);
     font-weight: 700;
-    font-size: 19px;
+    font-size: 24px;
     color: #fff3ec;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, .6);
+    text-shadow: 0 0 3px #000, 0 2px 4px rgba(0, 0, 0, .6);
   }
 
   /* A number changing: the gem swells and flashes as it ticks. */

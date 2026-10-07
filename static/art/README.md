@@ -89,6 +89,10 @@ the frame**, and leave the outer 8% clear.
 | `splat-heal` | the seal a healing number lands on | 240 × 240 px | **yes** |
 | `splat-armor` | the plate an armor gain lands on | 240 × 240 px | **yes** |
 | `weapon-hammer` · `weapon-calipers` · `weapon-iron` | the three tools a weapon is shown as, beside its hero | 312 × 312 px | **yes** |
+| `hero-designer` · `hero-engineer` · `hero-consumer` · `hero-manufacturer` | a class's hero portrait, inside its class frame — a hexagon, so keep the corners clear | 612 × 660 px | **yes** |
+| `power-designer` · `power-engineer` · `power-consumer` · `power-manufacturer` | the face of a class's hero power disc | 372 × 372 px | **yes** |
+| `tray-you` · `tray-foe` | the dark ledge each hand sits on, the full width of the table | 2560 × 300 px | **yes** |
+| `doodad-lamp` · `doodad-printer` · `doodad-vise` · `doodad-pencils` | the four workbench toys at the ends of the boards | 384 × 384 px | **yes** |
 | `charge` | *not used:* Charge has no lasting mark, as in Hearthstone — it is shown as streaks on arrival | — | — |
 | `spell-mark` | the type line's mark on a Spell card | 144 × 144 px | **yes** |
 | `weapon-mark` | the type line's mark on a Weapon card (Phase 1B) | 144 × 144 px | **yes** |
@@ -104,8 +108,9 @@ the card inspected at 2.5×.
 > face, and since REVISIONS R3 every board element in the table above —
 > `taunt`, `divine-shield`, `stealth`, `frozen`, `windfury`, `minion-frame`,
 > `minion-frame-legendary`, `deathrattle`, `trigger`, `spell-damage`, the three
-> splats and the three weapon tools. Dropping a file in replaces the CSS or SVG
-> version on the next build. The mana tray and the type marks are not yet read.
+> splats and the three weapon tools — and since R4 the hero portraits, the
+> hand trays and the doodads. Dropping a file in replaces the CSS or SVG version
+> on the next build. The mana tray and the type marks are not yet read.
 
 ## 4. Backdrops — `art/scene/`
 

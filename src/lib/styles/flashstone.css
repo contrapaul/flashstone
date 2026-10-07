@@ -238,15 +238,15 @@ a:hover { color: var(--gold-bright); }
   }
 }
 
-/* The nudge to end a turn you can no longer act in. */
+/* The nudge to end a turn you can no longer act in — green, the colour of "go". */
 @keyframes fs-end-turn {
   0%, 100% {
-    box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5),
-      0 0 14px rgba(90, 170, 255, .55), 0 0 26px rgba(90, 170, 255, .28);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(220, 255, 230, .5),
+      0 0 14px rgba(80, 230, 120, .55), 0 0 26px rgba(80, 230, 120, .28);
   }
   50% {
-    box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 240, 200, .5),
-      0 0 22px rgba(130, 200, 255, .9), 0 0 44px rgba(90, 170, 255, .5);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(220, 255, 230, .5),
+      0 0 22px rgba(130, 255, 160, .95), 0 0 44px rgba(80, 230, 120, .55);
   }
 }
 
