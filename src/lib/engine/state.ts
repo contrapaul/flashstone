@@ -28,6 +28,8 @@ export interface MinionInstance {
   doomAt?: number;
   /** Which stage its staged text is on, from 0. */
   stage?: number;
+  /** The aura bonus it carries now, already counted in its stats. Kept to take it off again. */
+  aura?: { attack: number; health: number };
 }
 
 /** An equipped weapon. Replaced, never stacked — equipping destroys the old one. */

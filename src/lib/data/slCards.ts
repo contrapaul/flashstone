@@ -101,6 +101,15 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     description:
       'At the start of your turn, advance a stage: draw a card; give your minions +1/+1; summon a 3/3 Working Prototype; restore 4 Health to your hero.'
   },
+  // The fluid stiffens under a field — and the field is your opponent's turn.
+  'electro-rheostatic': {
+    cost: 3, attack: 2, health: 3, rarity: 'Epic', keywords: ['Taunt'],
+    effects: [{ trigger: 'Passive', action: 'BuffHealth', target: 'Self', value: 3, condition: 'opponents_turn' }]
+  },
+  'magneto-rheostatic': {
+    cost: 5, attack: 4, health: 5, rarity: 'Epic', keywords: ['Taunt'],
+    effects: [{ trigger: 'Passive', action: 'BuffHealth', target: 'Self', value: 3, condition: 'opponents_turn' }]
+  },
   // Built to fail, on a timer.
   'planned-obsolescence': {
     type: 'Spell', cost: 2, rarity: 'Epic', targeting: 'enemy',

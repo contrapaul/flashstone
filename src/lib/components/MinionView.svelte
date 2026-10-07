@@ -58,7 +58,8 @@
     windfury: ui('windfury'),
     deathrattle: ui('deathrattle'),
     trigger: ui('trigger'),
-    spellDamage: ui('spell-damage')
+    spellDamage: ui('spell-damage'),
+    aura: ui('aura')
   };
 
   $: taunt = minion.keywords.includes('Taunt');
@@ -72,7 +73,9 @@
     (e) => e.trigger !== 'Battlecry' && e.trigger !== 'Deathrattle' && e.trigger !== 'Passive'
   );
   $: spellDamage = minion.card.spellDamage ?? 0;
-  $: hasBadges = deathrattle || turnTrigger || spellDamage > 0;
+  /** Ongoing text — an aura — reads as light radiating out. */
+  $: aura = minion.card.effects.some((e) => e.trigger === 'Passive');
+  $: hasBadges = deathrattle || turnTrigger || spellDamage > 0 || aura;
 
   /** Staged text: how many stages, for the ring that shows which is next. */
   $: stages = minion.card.effects.reduce((n, e) => (e.stage === undefined ? n : Math.max(n, e.stage + 1)), 0);
@@ -313,6 +316,13 @@
                   <path d={arc(i, stages)} class:lit={i === (minion.stage ?? 0)} />
                 {/each}
               </svg>
+            {/if}
+          </span>
+        {/if}
+        {#if aura}
+          <span class="badge aura" class:drawn={art.aura} style:--ui={art.aura}>
+            {#if !art.aura}
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 3 V6 M12 18 V21 M3 12 H6 M18 12 H21 M5.6 5.6 L7.8 7.8 M16.2 16.2 L18.4 18.4 M5.6 18.4 L7.8 16.2 M16.2 7.8 L18.4 5.6" /></svg>
             {/if}
           </span>
         {/if}
@@ -806,6 +816,9 @@
   .badge.cog circle { fill: #2a2012; }
 
   .badge.spell { background: radial-gradient(circle at 40% 35%, #b98cff, #4b1d8f); border-color: #e8d4ff; }
+  .badge.aura { background: radial-gradient(circle at 40% 35%, #8a7a3a, #3a2e10); }
+  .badge.aura circle { fill: #ffe7a0; }
+  .badge.aura path { fill: none; stroke: #ffe7a0; stroke-width: 1.8; stroke-linecap: round; }
   .badge.spell b { font-family: var(--display); font-size: 10px; color: #fff; text-shadow: 0 1px 2px #000; }
 
   /* When its text fires, the badge says which: the cog turns, the arrows flare. */

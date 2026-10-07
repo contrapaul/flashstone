@@ -15,7 +15,8 @@
 // v0.6 (REVISIONS R8.4) adds reactions: triggers `OnDamaged`, `OnFriendlyDeath`,
 //   `OnFriendlySpell` and `OnFriendlyPlay`; actions `ReturnToHand` and
 //   `Transform`; target `AllMinions`; actions `Resummon` and `DestroyLater`;
-//   `stage` on Effect, for text that cycles.
+//   `stage` on Effect, for text that cycles; `Passive` auras (with target
+//   `OtherFriendly` and the condition `opponents_turn`).
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -54,9 +55,11 @@ export type Trigger =
   /** After its controller plays another minion. */
   | 'OnFriendlyPlay'
   /**
-   * Resolves to nothing — the engine has no continuous-effect layer to hang it
-   * on. Kept in the union so existing data still parses, but the SL card
-   * generator must never emit it; slCards.test.ts enforces that.
+   * An aura: true for as long as the minion is on the board and not silenced.
+   * Only `BuffAttack` and `BuffHealth` are auras — on `Self`, `OtherFriendly`
+   * or `AllFriendly` — and `condition: 'opponents_turn'` limits one to the
+   * opponent's turn. The engine keeps the bonus as a derived layer, so it comes
+   * and goes with its source.
    */
   | 'Passive';
 export type Action =
@@ -94,6 +97,8 @@ export type Target =
   | 'AllFriendly'
   /** Every minion on both sides. */
   | 'AllMinions'
+  /** Every friendly minion but the one with the text. */
+  | 'OtherFriendly'
   /**
    * The caster's own hero, explicitly.
    *

@@ -268,6 +268,8 @@ function startTurn(state: MatchState, id: PlayerId): void {
   }
   state.log.push(`— ${id} turn ${state.turnNumber} (${p.mana} mana) —`);
   emit(state, { type: 'turn', owner: id, turnNumber: state.turnNumber, mana: p.mana, maxMana: p.maxMana });
+  // Whose turn it is decides some auras ("during your opponent's turn").
+  refreshAuras(state);
   drawCard(state, id);
   triggerBoard(state, id, 'StartOfTurn');
 }
@@ -662,6 +664,50 @@ function damageCharacter(state: MatchState, target: Character, amount: number): 
   else damageMinion(state, target.minion, amount);
 }
 
+// ── Auras ──────────────────────────────────────────────────────
+
+/** What every minion's aura bonus should be now, from the Passive text in play. */
+function auraBonus(state: MatchState, owner: PlayerId, minion: MinionInstance) {
+  const bonus = { attack: 0, health: 0 };
+  for (const source of state.players[owner].board) {
+    for (const effect of effectsFor(source, 'Passive')) {
+      if (effect.condition === 'opponents_turn' && state.current === owner) continue;
+      const covers =
+        effect.target === 'AllFriendly' ||
+        (effect.target === 'OtherFriendly' && source !== minion) ||
+        ((effect.target ?? 'Self') === 'Self' && source === minion);
+      if (!covers) continue;
+      if (effect.action === 'BuffAttack') bonus.attack += effect.value ?? 1;
+      if (effect.action === 'BuffHealth') bonus.health += effect.value ?? 1;
+    }
+  }
+  return bonus;
+}
+
+/**
+ * Brings every minion's aura bonus up to date — a derived layer over its stats,
+ * not a buff: it is taken off again when its source leaves, is silenced, or its
+ * condition lapses. Losing Health this way lowers the most it can have, and
+ * never kills: what it has is only cut to the new most.
+ */
+function refreshAuras(state: MatchState): void {
+  for (const owner of ['player', 'ai'] as PlayerId[]) {
+    for (const minion of state.players[owner].board) {
+      const want = auraBonus(state, owner, minion);
+      const had = minion.aura ?? { attack: 0, health: 0 };
+      const dA = want.attack - had.attack;
+      const dH = want.health - had.health;
+      if (dA === 0 && dH === 0) continue;
+      minion.attack = Math.max(0, minion.attack + dA);
+      minion.maxHealth += dH;
+      minion.health = dH > 0 ? minion.health + dH : Math.min(minion.health, minion.maxHealth);
+      minion.aura = want;
+      minion.buffed = true;
+      emitBuff(state, minion);
+    }
+  }
+}
+
 /** Enough for any real chain of reactions; a loop between two minions stops here. */
 const MAX_REACTIONS = 100;
 
@@ -699,6 +745,7 @@ function checkDeaths(state: MatchState): void {
     }
   }
   state.reactions = [];
+  refreshAuras(state);
   checkWinner(state);
 }
 
@@ -1014,6 +1061,7 @@ function transform(state: MatchState, minion: MinionInstance, into: Card): void 
   minion.summonedThisTurn = true;
   delete minion.doomAt;
   delete minion.stage;
+  delete minion.aura;
   emit(state, { type: 'transform', instanceId: minion.instanceId, minion: snapshotMinion(minion) });
 }
 

@@ -508,9 +508,20 @@ function phrase(effect: Effect): string {
  * and so does a card whose only trait is a keyword. The term's definition is
  * never part of this; it lives on `card.definition` and is shown when inspecting.
  */
+/** An aura reads as a fact about the board, not as something that happens. */
+function auraPhrase(effect: Effect): string {
+  const value = effect.value ?? 1;
+  const stat = effect.action === 'BuffAttack' ? `+${value} Attack` : `+${value} Health`;
+  const during = effect.condition === 'opponents_turn' ? " during your opponent's turn" : '';
+  if (effect.target === 'OtherFriendly') return `Your other minions have ${stat}${during}.`;
+  if (effect.target === 'AllFriendly') return `Your minions have ${stat}${during}.`;
+  return `Has ${stat}${during}.`;
+}
+
 export function describeEffects(effects: Effect[], type: CardType): string {
   return effects
     .map((effect, i) => {
+      if (effect.trigger === 'Passive') return auraPhrase(effect);
       const body = `${phrase(effect)}.`;
       // A spell is its effect, so it needs no trigger label; a minion does —
       // once per run, so three Battlecry effects read as one Battlecry.

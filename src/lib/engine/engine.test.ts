@@ -1060,3 +1060,41 @@ describe('staged text', () => {
     expect([state.players.player.armor, minion.stage]).toEqual([12, 1]);
   });
 });
+
+describe('auras', () => {
+  const aura = (effect: Partial<Card['effects'][number]>): Card['effects'] => [
+    { trigger: 'Passive', action: 'BuffAttack', target: 'OtherFriendly', value: 1, ...effect } as Card['effects'][number]
+  ];
+
+  it('gives the other minions the bonus while the source is there, and takes it back', () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, attack: 2 })));
+    const other = state.players.player.board[0];
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, attack: 1, health: 1, effects: aura({}) })));
+    const source = state.players.player.board[1];
+    expect([other.attack, source.attack]).toEqual([3, 1]);
+    // A minion played after the aura gets it too.
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, attack: 5 })));
+    expect(state.players.player.board[2].attack).toBe(6);
+    silence(source);
+    endTurn(state);
+    expect(other.attack).toBe(2);
+  });
+
+  it("raises Health on the opponent's turn only, and never kills when it lapses", () => {
+    const state = bareMatch();
+    state.players.player.deck = Array.from({ length: 5 }, () => minionCard());
+    state.players.ai.deck = Array.from({ length: 5 }, () => minionCard());
+    playCard(state, 'player', give(state, 'player', minionCard({
+      cost: 0, attack: 2, health: 3, effects: aura({ action: 'BuffHealth', target: 'Self', value: 3, condition: 'opponents_turn' })
+    })));
+    const wall = state.players.player.board[0];
+    expect([wall.health, wall.maxHealth]).toEqual([3, 3]);
+    endTurn(state);
+    expect([wall.health, wall.maxHealth]).toEqual([6, 6]);
+    wall.health = 2; // hurt badly on their turn
+    endTurn(state);
+    expect([wall.health, wall.maxHealth]).toEqual([2, 3]);
+    expect(state.players.player.board).toContain(wall);
+  });
+});

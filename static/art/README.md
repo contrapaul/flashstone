@@ -85,6 +85,7 @@ the frame**, and leave the outer 8% clear.
 | `deathrattle` | the Deathrattle badge — recycling arrows, "the end of its life cycle" | 144 × 144 px | **yes** |
 | `trigger` | the badge for start- and end-of-turn text: a cog, which spins when it fires | 144 × 144 px | **yes** |
 | `spell-damage` | the Spell Damage badge (the "+1" is drawn over it) | 144 × 144 px | **yes** |
+| `aura` | the badge for ongoing text — an aura, like "your other minions have +1 Attack" | 144 × 144 px | **yes** |
 | `splat-damage` | the starburst a damage number lands on | 240 × 240 px | **yes** |
 | `splat-heal` | the seal a healing number lands on | 240 × 240 px | **yes** |
 | `splat-armor` | the plate an armor gain lands on | 240 × 240 px | **yes** |

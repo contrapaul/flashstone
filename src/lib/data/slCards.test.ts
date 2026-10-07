@@ -131,10 +131,11 @@ describe('every card', () => {
     }
   });
 
-  it('never uses the Passive trigger, which resolves to nothing', () => {
+  it('uses Passive only for the auras the engine applies', () => {
     for (const card of ALL_CARDS) {
-      for (const effect of card.effects) {
-        expect(effect.trigger, card.id).not.toBe('Passive');
+      for (const effect of card.effects.filter((e) => e.trigger === 'Passive')) {
+        expect(['BuffAttack', 'BuffHealth'], card.id).toContain(effect.action);
+        expect(['Self', 'OtherFriendly', 'AllFriendly', undefined], card.id).toContain(effect.target);
       }
     }
   });

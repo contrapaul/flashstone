@@ -45,6 +45,7 @@ const EffectSchema = z.object({
       'AllEnemies',
       'AllFriendly',
       'AllMinions',
+      'OtherFriendly',
       'SelfHero',
       'Chosen'
     ])
