@@ -841,14 +841,50 @@ R1–R5.
 
 **Depends on:** nothing. Port it whole.
 
-- [ ] **R7.1 — `AudioService`** from Tome's `app/audio.ts`: Web Audio, unlocked by
+> ## Built 2026-10-07 — 412 tests, 0 check errors, production build passes. Not deployed.
+>
+> **The engine is Tome's**, in `src/lib/audio.ts`:
+> - it unlocks on the first click or key, and goes silent in a hidden tab;
+> - volume, music and sound gains come from three new sliders in Settings;
+> - each sound plays slightly off pitch, and alternate takes are picked at
+>   random;
+> - music crossfades between tracks.
+>
+> On top of Tome's, it adds a looping sound (the fuse), per-card lines, the
+> `tense` layer (started in step with the match track under it), and stings
+> that fade the music out.
+> **Where sounds play:** each cue's choreography in `director.ts` plays its
+> own sound at the moment it lands, so a hit is heard as it is seen. The table
+> adds hover, pickup, no-mana, End Turn, the fuse, the tension layer, match
+> music (tracks take turns, match by match) and the result's sting. The layout
+> adds title and menu music, button clicks and hover ticks. The pack opening,
+> quest claims and the gold counter make theirs.
+> **Checked:**
+> - with `static/audio/` empty, the title, the menus and a practice match run
+>   with no errors. `__fs.audio.heard` showed each sound asked for in order
+>   (pickup, play, land, End Turn, then the AI's Coin, spell, hit, freeze and
+>   death);
+> - temporary generated test tones proved the real path: both takes of a
+>   sound alternate (21 and 19 of 40 plays), a music sidecar's loop points
+>   apply, a card line resolves, a missing name stays silent without a fetch,
+>   the slider moves its gain, and a production build includes the files.
+>
+> The test tones are removed.
+> **Changed from the plan:** music loop points are fetched with their track.
+> Vite cannot import from `static/`, so the plan's build-time read would have
+> broken the page the moment a sidecar existed. As with art, the build also
+> emits hashed copies of the files: the deploy is bigger, and players never
+> fetch them.
+> **R7.6 waits on Paul's OK** to download the Kenney packs.
+
+- [x] **R7.1 — `AudioService`** from Tome's `app/audio.ts`: Web Audio, unlocked by
       the first input; master, music and sfx gains (sliders in
       `SettingsControls`); silent when the tab is hidden; random pitch spread;
       multiple takes (`hit-light-2.wav`). The manifest is built from
       `static/audio/` with `import.meta.glob`, the same way `utils/art.ts` indexes
       art: no manifest to edit, a missing file is silence.
       → **verify:** with `static/audio/` empty the game runs with no errors.
-- [ ] **R7.2 — Sound names** (`static/audio/sfx/`):
+- [x] **R7.2 — Sound names** (`static/audio/sfx/`):
       `card-draw`, `card-hover`, `card-pickup`, `card-play`, `minion-land` and
       `minion-land-heavy`, `spell-cast`, `attack-swing`, `hit-light`, `hit-heavy`,
       `hero-hurt`, `death`, `shield-pop`, `taunt-up`, `freeze`, `thaw`, `silence`,
@@ -857,14 +893,14 @@ R1–R5.
       `turn-end`, `fuse` (loop), `emote`, `victory`, `defeat`, `pack-open`,
       `card-flip`, `reveal-rare`, `reveal-epic`, `reveal-legendary`, `gold`,
       `quest-complete`, `ui-click`, `ui-hover`.
-- [ ] **R7.3 — Per-card lines** *(optional)*:
+- [x] **R7.3 — Per-card lines** *(optional)*:
       `static/audio/cards/<card-id>-play|attack|death.wav`. Legendaries first.
       **A classroom idea:** students record these, as a sound-design brief that
       fits D&T well.
-- [ ] **R7.4 — Music** (`static/audio/music/`): `title`, `menu`, `match-1…3`
+- [x] **R7.4 — Music** (`static/audio/music/`): `title`, `menu`, `match-1…3`
       (rotated), and a `tense` layer that crossfades in when either hero is at ≤10.
       Stings: `victory`, `defeat`. Loop points in a JSON sidecar, as in Tome.
-- [ ] **R7.5 — `static/audio/README.md`**, adapted from Tome's
+- [x] **R7.5 — `static/audio/README.md`**, adapted from Tome's
       `CONTRIBUTING-AUDIO.md`.
 - [ ] **R7.6 — Placeholder pack** *(needs Paul's OK to download)*: Kenney's CC0
       interface and RPG audio packs cover most of R7.2 until custom sound exists.

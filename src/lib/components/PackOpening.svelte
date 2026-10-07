@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { audio } from '$lib/audio';
   import CardPreview from './CardPreview.svelte';
   import CardBack from './CardBack.svelte';
   import { cardById } from '$lib/data/cards';
@@ -23,14 +24,28 @@
   $: cards = pack.map((entry) => ({ ...entry, card: cardById(entry.cardId) }));
   $: allFlipped = flipped.size >= pack.length;
 
+  onMount(() => audio().play('pack-open'));
+
   function flip(index: number) {
     if (flipped.has(index)) return;
     // A new Set, not a mutation: Svelte 4 tracks assignment, not method calls.
     flipped = new Set(flipped).add(index);
+    revealed([cards[index]?.card]);
   }
 
   function revealAll() {
+    const turning = cards.filter((_, i) => !flipped.has(i)).map((entry) => entry.card);
     flipped = new Set(pack.map((_, i) => i));
+    revealed(turning);
+  }
+
+  /** The flip, and — for anything better than Uncommon — a sound of its rarity, the best one turned. */
+  function revealed(turned: (Card | undefined)[]) {
+    if (turned.length === 0) return;
+    audio().play('card-flip');
+    const rank = { Rare: 1, Epic: 2, Legendary: 3 } as Record<string, number>;
+    const best = Math.max(0, ...turned.map((card) => rank[card?.rarity ?? ''] ?? 0));
+    if (best > 0) audio().play(best === 3 ? 'reveal-legendary' : best === 2 ? 'reveal-epic' : 'reveal-rare');
   }
 
   function onKey(event: KeyboardEvent, index: number) {

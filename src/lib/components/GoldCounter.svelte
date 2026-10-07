@@ -2,6 +2,7 @@
   import { tweened } from 'svelte/motion';
   import { cubicOut } from 'svelte/easing';
   import { settings } from '../settings';
+  import { audio } from '../audio';
 
   /**
    * A gold total with its coin, which counts rather than jumps: a rise ticks up
@@ -24,6 +25,7 @@
     if (to === from) return;
     const calm = $settings.motion === 'reduced';
     const duration = calm ? 0 : Math.min(1400, 400 + Math.abs(to - from) * 10);
+    if (to > from) setTimeout(() => audio().play('gold'), delay);
     if (to > from && !calm) {
       setTimeout(() => (rising = true), delay);
       setTimeout(() => (rising = false), delay + duration);

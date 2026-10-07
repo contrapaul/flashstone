@@ -28,12 +28,21 @@ export interface Settings {
   motion: Motion;
   /** How long the opponent's turn takes. Measured gives a new player time to see what hit them. */
   opponentPace: OpponentPace;
+  /** Loudness, 0–1: everything, then music and sounds under it. */
+  volume: Volume;
+}
+
+export interface Volume {
+  master: number;
+  music: number;
+  sfx: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   definitionsInGame: true,
   motion: 'full',
-  opponentPace: 'measured'
+  opponentPace: 'measured',
+  volume: { master: 0.8, music: 0.7, sfx: 0.9 }
 };
 
 const KEY = 'flashstone.settings';
@@ -48,7 +57,10 @@ function load(): Settings {
     const raw = localStorage.getItem(KEY);
     // Merged over the defaults so a setting added later has a value on an old
     // stored object, rather than arriving as undefined.
-    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    if (!raw) return defaults;
+    const stored = JSON.parse(raw);
+    // Volume is nested, so it is merged a level down too.
+    return { ...defaults, ...stored, volume: { ...defaults.volume, ...stored.volume } };
   } catch {
     return defaults;
   }

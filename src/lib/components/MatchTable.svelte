@@ -1,3 +1,8 @@
+<script lang="ts" context="module">
+  /** Which match track is next: they take turns, match by match. */
+  let trackTurn = 0;
+</script>
+
 <script lang="ts">
   import { createEventDispatcher, onDestroy, tick } from 'svelte';
   import { fade } from 'svelte/transition';
@@ -17,6 +22,7 @@
   import Logo from './Logo.svelte';
   import GoldCounter from './GoldCounter.svelte';
   import type { QuestMove } from '../quests/quests';
+  import { audio, MATCH_TRACKS } from '../audio';
   import CardInspector from './CardInspector.svelte';
   import HeroPowerButton from './HeroPowerButton.svelte';
   import { heroPowerFor } from '../data/classes';
@@ -292,6 +298,7 @@
   let refusedCard: number | null = null;
 
   function cannotAfford(index: number) {
+    audio().play('no-mana');
     manaWarn = true;
     refusedCard = index;
     void sleep(600).then(() => {
@@ -428,6 +435,10 @@
    * decks slide in and the heroes drop onto their plinths, raising dust.
    */
   async function faceOff() {
+    stung = false;
+    // The first opening keeps the track the table started with; "Play again" moves on.
+    if (!firstOpening) audio().music(nextTrack());
+    firstOpening = false;
     versus = true;
     await sleep(d(1600));
     versus = false;
@@ -445,8 +456,39 @@
     assembling = false;
   }
 
+  // ── Sound ───────────────────────────────────────────────
+  // The cues make their own sounds (director.ts); these are the table's.
+
+  const nextTrack = () => (MATCH_TRACKS.length ? MATCH_TRACKS[trackTurn++ % MATCH_TRACKS.length] : null);
+  // A match has its own music from the start — a reconnect included, which has no face-off.
+  audio().music(nextTrack());
+  let firstOpening = true;
+
+  $: if (hovered !== null && !drag) audio().play('card-hover', { volume: 0.45, spread: 0.08 });
+
+  /** The tense layer comes in when either hero is in danger. */
+  $: audio().tension(shown.turnNumber > 0 && !view.winner && (shown.me.health <= 10 || shown.foe.health <= 10));
+
+  /** The fuse burns with its own sound, for as long as it is lit. */
+  let stopFuse: (() => void) | null = null;
+  $: if (fuse !== null && !stopFuse) stopFuse = audio().loop('fuse', { volume: 0.7 });
+  else if (fuse === null && stopFuse) {
+    stopFuse();
+    stopFuse = null;
+  }
+  onDestroy(() => stopFuse?.());
+
+  /** The result's sting, once, as the plate comes up. A draw just goes quiet. */
+  let stung = false;
+  $: if (overTitle && !draining && resultKind && !stung) {
+    stung = true;
+    if (resultKind === 'draw') audio().music(null);
+    else audio().sting(resultKind);
+  }
+
   // ── The result ──────────────────────────────────────────
   /** Victory, defeat or a draw get the logo's treatment; anything else is a plain title. */
+  let resultKind: 'victory' | 'defeat' | 'draw' | null;
   $: resultKind = !view.winner ? null : view.winner === 'draw' ? 'draw' : view.winner === view.you ? 'victory' : 'defeat';
 
   let prizeEl: HTMLElement | undefined;
@@ -476,6 +518,8 @@
   /** A quest bar fills from where it was to where the match left it. */
   function fillTo(node: HTMLElement, q: QuestMove) {
     node.style.width = `${(q.from / q.target) * 100}%`;
+    // Finished by this match: a fanfare as the bar fills.
+    if (q.to >= q.target && q.from < q.target) void sleep(1300).then(() => audio().play('quest-complete'));
     requestAnimationFrame(() => requestAnimationFrame(() => (node.style.width = `${(q.to / q.target) * 100}%`)));
   }
 
@@ -846,6 +890,7 @@
         }
         if (!card || !canPlayFromView(view, press.handIndex) || !myTurn) return;
         drag = { kind: 'card', handIndex: press.handIndex, card, slot: view.me.board.length };
+        audio().play('card-pickup');
       } else {
         const attacking = press.instanceId;
         const index = shown.me.board.findIndex((m) => m.instanceId === attacking);
@@ -1047,6 +1092,7 @@
   function onEndTurn() {
     if (!myTurn) return;
     selectedId = null;
+    audio().play('turn-end');
     pressedEnd = true;
     void sleep(450).then(() => (pressedEnd = false));
     dispatch('endTurn');

@@ -12,6 +12,8 @@
   import MenuBackdrop from '$lib/components/MenuBackdrop.svelte';
   import { account } from '$lib/account';
   import { settings } from '$lib/settings';
+  import { audio, initAudio } from '$lib/audio';
+  import { browser } from '$app/environment';
   import { goto, onNavigate } from '$app/navigation';
 
   // /import is deliberately absent: the import mechanic is shelved in favour of
@@ -36,6 +38,30 @@
    * room under `/online/` count.
    */
   $: inMatch = isMatch($page.url.pathname);
+
+  // ── Sound ──
+  // Started before anything asks for it; silent until the first click or key.
+  if (browser) initAudio();
+  /** The title has its own music; every other page shares one. A match picks its own. */
+  $: if (!inMatch) audio().music($page.url.pathname === '/' ? 'title' : 'menu');
+
+  /*
+   * Every button and link clicks — except on the playing surface, whose cards,
+   * minions, heroes and End Turn make sounds of their own, and a pack's cards,
+   * which flip. The menu plates and nav links also tick under the pointer.
+   */
+  function onClickSound(event: MouseEvent) {
+    const target = (event.target as Element | null)?.closest('button, a[href], [role="button"]');
+    if (target && !target.closest('.hand, .board, .hero-row, .centre, .flipper')) audio().play('ui-click', { volume: 0.7 });
+  }
+
+  let hoverSounded: Element | null = null;
+  function onHoverSound(event: PointerEvent) {
+    if (event.pointerType !== 'mouse') return;
+    const target = (event.target as Element | null)?.closest('nav a, main .menu a');
+    if (target && target !== hoverSounded) audio().play('ui-hover', { volume: 0.4 });
+    hoverSounded = target ?? null;
+  }
 
   /** `/play` stays lit for its tabs and for the match under it. */
   const isActive = (href: string) =>
@@ -98,6 +124,8 @@
     }
   });
 </script>
+
+<svelte:window on:click|capture={onClickSound} on:pointerover={onHoverSound} />
 
 {#if !inMatch}
   <nav>

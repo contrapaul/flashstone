@@ -19,6 +19,18 @@
     { value: 'reduced', label: 'Reduced' }
   ] as const;
 
+  /** The three levels, each 0–100 on its slider. */
+  const LEVELS = [
+    { key: 'master', label: 'Volume' },
+    { key: 'music', label: 'Music' },
+    { key: 'sfx', label: 'Sounds' }
+  ] as const;
+
+  function setLevel(key: (typeof LEVELS)[number]['key'], event: Event) {
+    const value = Number((event.currentTarget as HTMLInputElement).value) / 100;
+    settings.choose('volume', { ...$settings.volume, [key]: value });
+  }
+
   const PACES = [
     { value: 'measured', label: 'Measured' },
     { value: 'fast', label: 'Quick' }
@@ -70,6 +82,29 @@
         class:on={$settings.opponentPace === option.value}
         on:click={() => settings.choose('opponentPace', option.value)}
       >{option.label}</button>
+    {/each}
+  </span>
+</div>
+
+<div class="row choice">
+  <span>
+    <span class="label">Sound</span>
+    <span class="note">Music and sounds start on your first click. A sound with no file yet is simply silent.</span>
+  </span>
+  <span class="levels">
+    {#each LEVELS as level}
+      <label class="level">
+        <span>{level.label}</span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value={Math.round($settings.volume[level.key] * 100)}
+          on:input={(e) => setLevel(level.key, e)}
+        />
+        <b>{Math.round($settings.volume[level.key] * 100)}</b>
+      </label>
     {/each}
   </span>
 </div>
@@ -135,6 +170,23 @@
   }
 
   .segments button:last-child { border-right: none; }
+
+  .levels { display: flex; flex-direction: column; gap: 6px; }
+
+  .level {
+    display: grid;
+    grid-template-columns: 62px 1fr 28px;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--display);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .level input { width: 100%; accent-color: var(--gold); }
+  .level b { font-weight: 600; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
   .segments button:hover { color: var(--gold-bright); }
   .segments button.on { background: linear-gradient(180deg, #b98a34, #7a5620); color: #1a1207; }
 </style>

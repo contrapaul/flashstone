@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import type { IntroRow, QuestRow } from '$lib/quests/client';
   import { fetchQuests, claimQuest, nextRefreshIn } from '$lib/quests/client';
+  import { audio } from '$lib/audio';
 
   /**
    * Two tracks, one panel each: the one-time intro quests that hand a new
@@ -46,6 +47,7 @@
     if (result.quests) quests = result.quests;
     if (result.intro) intro = result.intro;
     if (result.ok) {
+      audio().play('quest-complete');
       dispatch('claimed', result.awarded);
     } else {
       error = result.reason ?? 'Could not claim that.';

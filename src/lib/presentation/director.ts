@@ -5,6 +5,7 @@ import { EVENT_BEAT, type CueRef, type GameEvent } from '../engine/events';
 import type { PlayerView } from '../net/protocol';
 import type { Fx } from './fx';
 import { d, drawnScale, sleep, spatial, wait } from './motion';
+import { audio } from '../audio';
 
 /**
  * Playback: what each cue looks like.
@@ -17,6 +18,9 @@ import { d, drawnScale, sleep, spatial, wait } from './motion';
  * Durations all go through `d()`, so the motion setting and the opponent's
  * pace apply everywhere at once. Nothing here touches the component: it works
  * through `Stage`, which the table implements.
+ *
+ * Each sound plays at the moment it describes — a landing as it lands, a hit
+ * as it hits — so sound and picture are one event, not two.
  */
 
 export type Side = 'me' | 'foe';
@@ -169,7 +173,10 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'play': {
       // Your own card is already where you dropped it; only the opponent's
       // needs to be shown being played.
-      if (stage.side(cue.owner) === 'me') return stage.advance(cue);
+      if (stage.side(cue.owner) === 'me') {
+        played(cue.card);
+        return stage.advance(cue);
+      }
       const back = stage.foeBack(cue.handIndex);
       // They pick it out of their hand first: the back rises from the fan.
       for (const b of stage.foeBacks()) settle(liftOf(b));
@@ -184,6 +191,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       // now standing in for another card, so every lift settles.
       for (const b of stage.foeBacks()) settle(liftOf(b));
       stage.setShowcase({ mode: 'reveal', card: cue.card, from });
+      played(cue.card);
       await wait(spatial() ? 1350 : 1000);
       stage.setShowcase(null);
       return;
@@ -199,6 +207,10 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       if (heavy) pulse(() => stage.mark('heavy', id, true), () => stage.mark('heavy', id, false), 760);
       pulse(() => stage.mark('summoning', id, true), () => stage.mark('summoning', id, false), heavy ? 760 : 620);
       void wait(heavy ? 400 : 300).then(() => {
+        // The same three weights, heard: a tap, a thud, and a slam pitched down.
+        if (cost <= 3) audio().play('minion-land');
+        else audio().play('minion-land-heavy', heavy ? { rate: 0.85 } : {});
+        if (cue.minion.keywords.includes('Taunt')) audio().play('taunt-up');
         const el = stage.unit(id);
         if (!el) return;
         const at = centreOf(el);
@@ -230,6 +242,9 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       const mover = stage.unit(cue.instanceId);
       const at = elementOf(stage, cue.target);
       if (mover && at) blow = { from: centreOf(mover), to: centreOf(at), attacker: { kind: 'minion', instanceId: cue.instanceId } };
+      audio().play('attack-swing');
+      const attacker = findShown(stage.shown(), cue.instanceId);
+      if (attacker) audio().line(attacker.card.id, 'attack');
       await lunge(mover, at);
       stage.advance(cue);
       return;
@@ -249,6 +264,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
           .to(weapon, { rotation: 35, duration: d(130) / 1000, ease: 'power3.in' })
           .to(weapon, { rotation: 0, duration: d(260) / 1000, ease: 'back.out(2)', clearProps: 'transform' });
       }
+      audio().play('attack-swing');
       await lunge(hero, at);
       stage.advance(cue);
       return;
@@ -259,7 +275,12 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       const at = el ? centreOf(el) : undefined;
       if (at) lastSeen.set(cue.instanceId, at);
       stage.mark('dying', cue.instanceId, true);
-      void wait(220).then(() => at && stage.fx()?.shards(at.x, at.y));
+      const dying = findShown(stage.shown(), cue.instanceId);
+      if (dying) audio().line(dying.card.id, 'death');
+      void wait(220).then(() => {
+        audio().play('death');
+        if (at) stage.fx()?.shards(at.x, at.y);
+      });
       // The shatter plays on the minion still on screen; only then does it go.
       // Deaths in a row shatter together rather than one after another.
       const gone = wait(600).then(() => {
@@ -279,6 +300,9 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
         const strength = Math.min(1, (intensity - 0.4) * 1.6);
         pulse(() => stage.setQuake(strength), () => stage.setQuake(0), 420);
       }
+      // Heavier hits are a different sound, not just a louder one.
+      if (cue.target.kind === 'hero') audio().play('hero-hurt', { volume: 0.6 + 0.4 * intensity });
+      else audio().play(intensity >= 0.7 ? 'hit-heavy' : 'hit-light');
       if (cue.target.kind === 'hero') {
         const side = stage.side(cue.target.owner);
         pulse(() => stage.setHeroHit(side), () => stage.setHeroHit(null), 500);
@@ -308,6 +332,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     }
 
     case 'heal': {
+      audio().play('heal');
       stage.advance(cue);
       const el = elementOf(stage, cue.target);
       if (el) {
@@ -322,6 +347,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       // The bubble bursts on its own (MinionView); this throws its gold out.
       const el = stage.unit(cue.instanceId);
       stage.advance(cue);
+      audio().play('shield-pop');
       if (el) {
         const at = centreOf(el);
         stage.fx()?.shards(at.x, at.y, { colors: ['#fff6d0', '#ffd96a', '#f0b840'], count: 18, speed: 380, size: 6 });
@@ -339,7 +365,10 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
         const da = cue.attack - before.attack;
         const dh = cue.health - before.health;
         // Growing: chevrons rise. A swap, or a loss, is shown by the numbers alone.
-        if (da > 0 || dh > 0) stage.fx()?.chevrons(at.x, at.y + 20);
+        if (da > 0 || dh > 0) {
+          stage.fx()?.chevrons(at.x, at.y + 20);
+          audio().play('buff');
+        }
         if (da !== 0 || dh !== 0) stage.float(at, `${sign(da)}/${sign(dh)}`, da < 0 || dh < 0 ? '#e6d4ff' : 'var(--good)');
       }
       return;
@@ -348,6 +377,11 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'freeze':
     case 'silence':
     case 'keyword': {
+      if (cue.type === 'keyword') {
+        const before = findShown(stage.shown(), cue.instanceId);
+        const taunts = cue.keywords.includes('Taunt') && !before?.keywords.includes('Taunt');
+        audio().play(taunts ? 'taunt-up' : 'buff');
+      } else audio().play(cue.type);
       stage.advance(cue);
       const el = stage.unit(cue.instanceId);
       if (el) {
@@ -375,6 +409,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       const gained = cue.armor - stage.shown()[side].armor;
       stage.advance(cue);
       const el = stage.hero(side);
+      if (gained > 0) audio().play('armor');
       if (el && gained > 0) {
         const at = centreOf(el);
         stage.fx()?.ring(at.x, at.y, { color: 'rgba(200, 215, 230, .9)', size: 80 });
@@ -386,6 +421,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'heroPower': {
       const side = stage.side(cue.owner);
       stage.advance(cue);
+      audio().play('hero-power');
       // The disc turns over (HeroPowerButton) in a burst of its class's colour.
       const button = stage.hero(side)?.querySelector<HTMLElement>('.power');
       if (button) {
@@ -400,6 +436,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     case 'equip':
     case 'weaponBreak': {
       stage.advance(cue);
+      audio().play(cue.type === 'equip' ? 'weapon-equip' : 'weapon-break');
       // The weapon arrives and breaks in HeroPortrait; this is the flash and the fragments.
       await tick();
       const weapon = stage.hero(stage.side(cue.owner))?.querySelector<HTMLElement>('.weapon-icon');
@@ -411,6 +448,8 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
 
     case 'draw': {
       stage.advance(cue);
+      // Theirs is heard, more quietly: a card reaching their hand is worth knowing.
+      audio().play('card-draw', { volume: stage.side(cue.owner) === 'me' ? 1 : 0.55 });
       if (stage.side(cue.owner) === 'me') {
         // Yours leaves your deck, turns face up in flight, and lands in the fan.
         const card = stage.nextDrawn();
@@ -465,6 +504,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       const mine = stage.side(cue.owner) === 'me';
       const at = { x: window.innerWidth / 2, y: mine ? window.innerHeight - 300 : 220 };
       stage.setShowcase({ mode: 'burn', card: cue.card, at });
+      audio().play('burn');
       const embers = setInterval(() => stage.fx()?.sparks(at.x, at.y + 60, { colors: ['#ffb24a', '#ff6a2a', '#ffe08a'], count: 6, speed: 160, angle: -Math.PI / 2, spread: 0.9, gravity: -200, life: 0.7 }), 90);
       await wait(1150);
       clearInterval(embers);
@@ -482,6 +522,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       // Held on its owner's side of the centre line, clear of the screen's edge.
       const at = { x: window.innerWidth * 0.68, y: window.innerHeight * (side === 'foe' ? 0.36 : 0.62) };
       stage.setShowcase({ mode: 'fatigue', amount: cue.amount, from, at, strike });
+      audio().play('fatigue');
       await wait(950);
       stage.setShowcase(null);
       await wait(spatial() ? 260 : 120);
@@ -489,8 +530,13 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     }
 
     case 'turn': {
-      stage.advance(cue);
       const mine = stage.side(cue.owner) === 'me';
+      const before = stage.shown()[stage.side(cue.owner)];
+      stage.advance(cue);
+      if (mine) audio().play('turn-start');
+      // The crystals refill — and a new one grows — on either side; anything frozen thaws.
+      audio().play(cue.maxMana > before.maxMana ? 'mana-new' : 'mana-fill', { volume: mine ? 1 : 0.5 });
+      if (before.board.some((m) => m.frozen)) audio().play('thaw');
       pulse(() => stage.setBanner(mine ? 'Your turn' : "Opponent's turn"), () => stage.setBanner(null), 900);
       if (mine) pulse(() => stage.setHandover(true), () => stage.setHandover(false), 1300);
       // Whatever they held up while thinking goes back in the fan.
@@ -505,8 +551,15 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
 
     case 'mana':
       stage.advance(cue);
+      audio().play('mana-fill');
       return;
   }
+}
+
+/** A card leaving a hand: a spell is cast, anything else is put down — and it may say something. */
+function played(card: Card): void {
+  audio().play(card.type === 'Spell' ? 'spell-cast' : 'card-play');
+  audio().line(card.id, 'play');
 }
 
 /**
