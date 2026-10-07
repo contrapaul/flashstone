@@ -875,7 +875,12 @@ R1–R5.
 > broken the page the moment a sidecar existed. As with art, the build also
 > emits hashed copies of the files: the deploy is bigger, and players never
 > fetch them.
-> **R7.6 waits on Paul's OK** to download the Kenney packs.
+> **R7.6, done the same day with Paul's OK:** both Kenney packs (CC0) were
+> converted to 48 kHz mono WAV with macOS's `afconvert`, so they play on older
+> iPads too, not only where Safari reads Ogg. 50 files cover 41 of the 43
+> names (2.0 MB); `fuse` and `emote` stay silent. They were picked by name and
+> by measuring each file, not by ear: the README lists which Kenney sound is
+> which, for swapping. All 50 decode in a practice match with no errors.
 
 - [x] **R7.1 — `AudioService`** from Tome's `app/audio.ts`: Web Audio, unlocked by
       the first input; master, music and sfx gains (sliders in
@@ -902,7 +907,7 @@ R1–R5.
       Stings: `victory`, `defeat`. Loop points in a JSON sidecar, as in Tome.
 - [x] **R7.5 — `static/audio/README.md`**, adapted from Tome's
       `CONTRIBUTING-AUDIO.md`.
-- [ ] **R7.6 — Placeholder pack** *(needs Paul's OK to download)*: Kenney's CC0
+- [x] **R7.6 — Placeholder pack** *(needs Paul's OK to download)*: Kenney's CC0
       interface and RPG audio packs cover most of R7.2 until custom sound exists.
 
 ---

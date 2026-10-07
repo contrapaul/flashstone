@@ -116,7 +116,31 @@ as `<name>.json`, in seconds:
 
 Only add sound you have the right to use: your own recordings, students' work
 with their permission, or CC0 / CC-BY packs (credit CC-BY authors in this file).
-Kenney's interface and RPG packs are CC0 and cover most of the list above.
+
+### The placeholders in `sfx/` now
+
+Stand-ins until real sound exists, from Kenney's **Interface Sounds** and **RPG
+Audio** packs (kenney.nl, CC0 — `KENNEY-LICENSE.txt`), converted to 48 kHz mono
+WAV and picked by name and by measuring each file (length, attack, brightness),
+not by ear. Replace any of them by saving over the file. Which Kenney sound is
+which:
+
+`card-draw` bookFlip3 (+ bookFlip2) · `card-hover` tick_004 · `card-pickup` cloth2 ·
+`card-play` bookPlace1–3 · `spell-cast` maximize_004 · `minion-land` dropLeather ·
+`minion-land-heavy` doorClose_3 (+ doorClose_2) · `attack-swing` knifeSlice2 (+ knifeSlice) ·
+`hit-light` footstep01, 08, 06 · `hit-heavy` chop · `hero-hurt` bookClose ·
+`death` glass_004 · `shield-pop` glass_003 · `taunt-up` metalLatch · `freeze` glass_001 ·
+`thaw` minimize_003 · `silence` switch_004 · `buff` maximize_002 · `heal` confirmation_003 ·
+`armor` metalClick · `weapon-equip` drawKnife3 · `weapon-break` metalPot1 ·
+`hero-power` bong_001 · `mana-fill` maximize_008 · `mana-new` maximize_006 ·
+`no-mana` error_004 · `burn` scratch_005 · `fatigue` error_006 · `turn-start` confirmation_004 ·
+`turn-end` switch_003 · `victory` maximize_001 · `defeat` error_005 · `pack-open` bookOpen ·
+`card-flip` bookFlip3 · `reveal-rare` confirmation_001 · `reveal-epic` question_003 ·
+`reveal-legendary` maximize_005 · `gold` handleCoins2 (+ handleCoins) ·
+`quest-complete` confirmation_002 · `ui-click` click_002 (+ toggle_004) · `ui-hover` tick_002.
+
+Still silent: `fuse` (neither pack has a loop that suits) and `emote` (unused).
+There is no music yet.
 
 ## Checking your work
 
