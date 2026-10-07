@@ -5,7 +5,7 @@ import type { Rarity } from '../../types/cards';
 import { TEMPLATES } from './templates';
 import { SL_TERMS } from './slTerms';
 import { ALL_CARDS, allCardIds, cardById } from './cards';
-import { SL_CARDS } from './slCards';
+import { HAND_TUNED, SL_CARDS } from './slCards';
 import { CUSTOM_CARDS } from './customCards';
 
 const RARITIES = Object.keys(RARITY_WEIGHTS) as Rarity[];
@@ -68,7 +68,7 @@ describe('every card', () => {
   // Generated cards only. Hand-authored class cards are tuned by hand and are
   // deliberately not constrained to the template table.
   it('sits on a real template statline', () => {
-    const minions = SL_CARDS.filter((c) => c.type === 'Minion');
+    const minions = SL_CARDS.filter((c) => c.type === 'Minion' && !HAND_TUNED.has(c.id));
     for (const card of minions) {
       const match = TEMPLATES.some(
         (t) =>

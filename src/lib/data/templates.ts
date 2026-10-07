@@ -489,10 +489,11 @@ function phrase(effect: Effect): string {
  */
 export function describeEffects(effects: Effect[], type: CardType): string {
   return effects
-    .map((effect) => {
+    .map((effect, i) => {
       const body = `${phrase(effect)}.`;
-      // A spell is its effect, so it needs no trigger label; a minion does.
-      if (type !== 'Minion') return body;
+      // A spell is its effect, so it needs no trigger label; a minion does —
+      // once per run, so three Battlecry effects read as one Battlecry.
+      if (type !== 'Minion' || effects[i - 1]?.trigger === effect.trigger) return body;
       switch (effect.trigger) {
         case 'Battlecry':
           return `Battlecry: ${body}`;
@@ -504,6 +505,14 @@ export function describeEffects(effects: Effect[], type: CardType): string {
           return `At the end of your turn, ${body[0].toLowerCase()}${body.slice(1)}`;
         case 'OnAttack':
           return `After this attacks, ${body[0].toLowerCase()}${body.slice(1)}`;
+        case 'OnDamaged':
+          return `Whenever this survives damage, ${body[0].toLowerCase()}${body.slice(1)}`;
+        case 'OnFriendlyDeath':
+          return `Whenever another friendly minion dies, ${body[0].toLowerCase()}${body.slice(1)}`;
+        case 'OnFriendlySpell':
+          return `After you cast a spell, ${body[0].toLowerCase()}${body.slice(1)}`;
+        case 'OnFriendlyPlay':
+          return `After you play a minion, ${body[0].toLowerCase()}${body.slice(1)}`;
         default:
           return body;
       }

@@ -12,6 +12,7 @@ import {
   canAttack,
   canHeroAttack,
   canUseHeroPower,
+  findMinion,
   spellPowerOf,
   legalTargets,
   opponentOf,
@@ -85,6 +86,7 @@ export function createMatch(
     openEntry: null,
     stamp: null,
     lastHit: {},
+    reactions: [],
     seed,
     nextInstanceId: 1,
     events: []
@@ -153,10 +155,7 @@ function note(state: MatchState, index: number | null, target: Omit<HistoryTarge
     return;
   }
   const ref = target.ref;
-  const minion =
-    ref.kind === 'minion'
-      ? [...state.players.player.board, ...state.players.ai.board].find((m) => m.instanceId === ref.instanceId)
-      : undefined;
+  const minion = ref.kind === 'minion' ? findMinion(state, ref.instanceId)?.minion : undefined;
   const shown = card ?? minion?.card;
   entry.targets.push({
     ...target,
@@ -199,11 +198,39 @@ function refOf(target: Character): CueRef {
     : { kind: 'minion', instanceId: target.minion.instanceId };
 }
 
+/**
+ * A minion's text for one trigger — none at all once it is silenced. Every
+ * trigger is read through this, so silence stops a Deathrattle or a turn
+ * trigger exactly as it stops a keyword.
+ */
+function effectsFor(minion: MinionInstance, trigger: Trigger): Effect[] {
+  return minion.silenced ? [] : minion.card.effects.filter((e) => e.trigger === trigger);
+}
+
 /** Lights a minion's text before it fires, when it has any for this trigger. */
 function emitTrigger(state: MatchState, minion: MinionInstance, trigger: Trigger): void {
-  if (minion.card.effects.some((e) => e.trigger === trigger)) {
+  if (effectsFor(minion, trigger).length > 0) {
     emit(state, { type: 'trigger', instanceId: minion.instanceId, trigger });
   }
+}
+
+/** Queues a reaction for every minion on a side with text for this trigger (but `except` one). */
+function react(state: MatchState, owner: PlayerId, trigger: Trigger, except?: MinionInstance): void {
+  for (const minion of state.players[owner].board) {
+    if (minion !== except && effectsFor(minion, trigger).length > 0) {
+      state.reactions.push({ owner, instanceId: minion.instanceId, trigger });
+    }
+  }
+}
+
+/** Fires the oldest queued reaction, if its minion is still there to make it. */
+function fireReaction(state: MatchState): void {
+  const next = state.reactions.shift();
+  if (!next) return;
+  const minion = state.players[next.owner].board.find((m) => m.instanceId === next.instanceId);
+  if (!minion || minion.health <= 0) return;
+  emitTrigger(state, minion, next.trigger);
+  for (const effect of effectsFor(minion, next.trigger)) resolveEffect(state, next.owner, minion, effect);
 }
 
 /** Each match re-derives its RNG from the seed plus turn count so replays match. */
@@ -244,12 +271,10 @@ function triggerBoard(state: MatchState, id: PlayerId, trigger: Trigger): void {
   // Snapshot: effects can kill minions mid-loop.
   for (const minion of [...state.players[id].board]) {
     if (!state.players[id].board.includes(minion)) continue;
-    const fires = minion.card.effects.some((e) => e.trigger === trigger);
-    const opened = fires && openEntry(state, { actor: id, kind: 'trigger', cardId: minion.card.id, name: minion.card.name, trigger });
+    const effects = effectsFor(minion, trigger);
+    const opened = effects.length > 0 && openEntry(state, { actor: id, kind: 'trigger', cardId: minion.card.id, name: minion.card.name, trigger });
     emitTrigger(state, minion, trigger);
-    for (const effect of minion.card.effects) {
-      if (effect.trigger === trigger) resolveEffect(state, id, minion, effect);
-    }
+    for (const effect of effects) resolveEffect(state, id, minion, effect);
     closeEntry(state, opened);
   }
   checkDeaths(state);
@@ -342,6 +367,8 @@ export function playCard(
       resolveEffect(state, id, summoned, effect, chosen, card.type === 'Spell');
     }
   }
+  if (card.type === 'Spell') react(state, id, 'OnFriendlySpell');
+  if (summoned) react(state, id, 'OnFriendlyPlay', summoned);
 
   checkDeaths(state);
   closeEntry(state, opened);
@@ -548,9 +575,7 @@ export function attack(
         : { kind: 'minion', instanceId: chosen.minion.instanceId }
   });
   emitTrigger(state, attacker, 'OnAttack');
-  for (const effect of attacker.card.effects) {
-    if (effect.trigger === 'OnAttack') resolveEffect(state, id, attacker, effect);
-  }
+  for (const effect of effectsFor(attacker, 'OnAttack')) resolveEffect(state, id, attacker, effect);
 
   if (chosen.kind === 'hero') {
     state.log.push(`${attacker.card.name} hits ${defenderId} for ${attacker.attack}.`);
@@ -584,6 +609,11 @@ function damageMinion(state: MatchState, minion: MinionInstance, amount: number)
     amount,
     health: minion.health
   });
+  // Whether it survived is decided when the reaction fires, after the action settles.
+  const owner = findMinion(state, minion.instanceId)?.owner;
+  if (owner && effectsFor(minion, 'OnDamaged').length > 0) {
+    state.reactions.push({ owner, instanceId: minion.instanceId, trigger: 'OnDamaged' });
+  }
 }
 
 function damageHero(state: MatchState, id: PlayerId, amount: number): void {
@@ -602,9 +632,14 @@ function damageCharacter(state: MatchState, target: Character, amount: number): 
   else damageMinion(state, target.minion, amount);
 }
 
+/** Enough for any real chain of reactions; a loop between two minions stops here. */
+const MAX_REACTIONS = 100;
+
 function checkDeaths(state: MatchState): void {
-  // Deathrattles can kill further minions, so settle the board repeatedly.
+  // Deathrattles and reactions can kill further minions, so settle the board
+  // repeatedly: deaths first, then one reaction, then deaths again.
   let settled = false;
+  let reactions = 0;
   while (!settled) {
     settled = true;
     for (const owner of ['player', 'ai'] as PlayerId[]) {
@@ -622,12 +657,17 @@ function checkDeaths(state: MatchState): void {
         // The flare comes first, while the minion is still there to flare.
         emitTrigger(state, minion, 'Deathrattle');
         emit(state, { type: 'death', owner, instanceId: minion.instanceId });
-        for (const effect of minion.card.effects) {
-          if (effect.trigger === 'Deathrattle') resolveEffect(state, owner, minion, effect);
-        }
+        for (const effect of effectsFor(minion, 'Deathrattle')) resolveEffect(state, owner, minion, effect);
+        react(state, owner, 'OnFriendlyDeath');
       }
     }
+    if (settled && state.reactions.length > 0 && !state.winner) {
+      settled = false;
+      if (++reactions > MAX_REACTIONS) state.reactions = [];
+      else fireReaction(state);
+    }
   }
+  state.reactions = [];
   checkWinner(state);
 }
 

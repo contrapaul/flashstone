@@ -116,8 +116,9 @@ describe('applyCue', () => {
  * names the field, the seed and the step.
  */
 describe('replaying matches through applyCue', () => {
-  function randomDeck(rng: Rng): Card[] {
-    return Array.from({ length: 30 }, () => pick(rng, ALL_CARDS)!);
+  /** Short decks for some matches, so fatigue is certain rather than left to the draw effects in play. */
+  function randomDeck(rng: Rng, size = 30): Card[] {
+    return Array.from({ length: size }, () => pick(rng, ALL_CARDS)!);
   }
 
   /** One intent per call; returns false when the player has nothing left to do. */
@@ -182,7 +183,8 @@ describe('replaying matches through applyCue', () => {
       // The Coin is the only source of mid-turn mana. The AI always spends
       // what it unlocks, which would hide a missing cue; the test player plays
       // it whenever it is drawn, so its result is what the step is checked on.
-      const state = createMatch([...randomDeck(rng), COIN_CARD], randomDeck(rng), seed, {
+      const size = seed % 10 === 0 ? 12 : 30;
+      const state = createMatch([...randomDeck(rng, size), COIN_CARD], randomDeck(rng, size), seed, {
         player: PLAYABLE_CLASSES[seed % 4],
         ai: PLAYABLE_CLASSES[(seed + 1) % 4]
       });

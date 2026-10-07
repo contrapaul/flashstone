@@ -3,7 +3,18 @@ import { z } from 'zod';
 const KeywordSchema = z.enum(['Taunt', 'Charge', 'DivineShield', 'Windfury', 'Stealth']);
 
 const EffectSchema = z.object({
-  trigger: z.enum(['Battlecry', 'Deathrattle', 'StartOfTurn', 'EndOfTurn', 'OnAttack', 'Passive']),
+  trigger: z.enum([
+    'Battlecry',
+    'Deathrattle',
+    'StartOfTurn',
+    'EndOfTurn',
+    'OnAttack',
+    'OnDamaged',
+    'OnFriendlyDeath',
+    'OnFriendlySpell',
+    'OnFriendlyPlay',
+    'Passive'
+  ]),
   action: z.enum([
     'DealDamage',
     'DrawCard',

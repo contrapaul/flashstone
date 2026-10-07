@@ -69,7 +69,7 @@
   /** Its text, as badges. Silence strips text, so a silenced minion wears none. */
   $: deathrattle = minion.card.effects.some((e) => e.trigger === 'Deathrattle');
   $: turnTrigger = minion.card.effects.some(
-    (e) => e.trigger === 'StartOfTurn' || e.trigger === 'EndOfTurn' || e.trigger === 'OnAttack'
+    (e) => e.trigger !== 'Battlecry' && e.trigger !== 'Deathrattle' && e.trigger !== 'Passive'
   );
   $: spellDamage = minion.card.spellDamage ?? 0;
   $: hasBadges = deathrattle || turnTrigger || spellDamage > 0;

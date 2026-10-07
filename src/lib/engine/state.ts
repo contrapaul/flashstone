@@ -119,6 +119,13 @@ export interface MatchState {
   stamp: number | null;
   /** Which entry last damaged or destroyed each minion, to credit its death. Engine bookkeeping. */
   lastHit: Record<string, number>;
+  /**
+   * Reactions waiting to fire — a minion's text answering something that just
+   * happened (it was hurt, a friend died, its owner cast a spell). Queued as it
+   * happens and fired once the action has settled, as Hearthstone resolves them,
+   * so an attack's two hits both land before either side reacts.
+   */
+  reactions: { owner: PlayerId; instanceId: string; trigger: Trigger }[];
   seed: number;
   nextInstanceId: number;
   /** Ordered animation cues drained by the UI. See events.ts. */

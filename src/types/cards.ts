@@ -12,6 +12,8 @@
 //   'Weapon' with `durability`, and Action 'SwapStats'.
 // v0.5 adds classes: `CardClass`, a `class` field, `GainArmor`, the `AllFriendly`
 //   and `SelfHero` targets, and per-card `spellDamage`.
+// v0.6 (REVISIONS R8.4) adds reactions: triggers `OnDamaged`, `OnFriendlyDeath`,
+//   `OnFriendlySpell` and `OnFriendlyPlay`.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -41,6 +43,14 @@ export type Trigger =
   | 'StartOfTurn'
   | 'EndOfTurn'
   | 'OnAttack'
+  /** Whenever this takes damage and survives it. */
+  | 'OnDamaged'
+  /** Whenever another friendly minion dies. */
+  | 'OnFriendlyDeath'
+  /** After its controller casts a spell. */
+  | 'OnFriendlySpell'
+  /** After its controller plays another minion. */
+  | 'OnFriendlyPlay'
   /**
    * Resolves to nothing — the engine has no continuous-effect layer to hang it
    * on. Kept in the union so existing data still parses, but the SL card

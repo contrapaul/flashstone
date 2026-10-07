@@ -35,7 +35,45 @@ const SPELL_SHARE = 0.15;
  *   ergonomics: { cost: 3, attack: 3, health: 4, rarity: 'Rare', keywords: ['Taunt'] }
  * };
  */
-const OVERRIDES: Record<string, Partial<Card>> = {};
+const OVERRIDES: Record<string, Partial<Card>> = {
+  /*
+   * The curation pass (REVISIONS R8.5). From here on, every card is designed to
+   * what its rarity means (R8.3):
+   *
+   *   Common     stats, plus at most one keyword. Vanilla is fine here, and only here.
+   *   Uncommon   one simple effect.
+   *   Rare       a targeted or two-part effect, or a keyword plus an effect.
+   *   Epic       an engine piece: a trigger, a condition, an aura.
+   *   Legendary  a unique, named rule-bend worth building a deck around.
+   *
+   * Every Epic and Legendary's effect *is* its term — playing it should teach it.
+   */
+
+  // Profit, people, planet: one card, all three.
+  'triple-bottom-line-tbl': {
+    type: 'Minion', cost: 5, attack: 4, health: 5, rarity: 'Legendary', keywords: [],
+    effects: [
+      { trigger: 'Battlecry', action: 'DealDamage', target: 'Hero', value: 3 },
+      { trigger: 'Battlecry', action: 'Heal', target: 'SelfHero', value: 3 },
+      { trigger: 'Battlecry', action: 'GainArmor', value: 3 }
+    ]
+  },
+  // Pressure becomes current.
+  piezoelectricity: {
+    type: 'Minion', cost: 3, attack: 2, health: 4, rarity: 'Epic', keywords: [],
+    effects: [{ trigger: 'OnDamaged', action: 'DealDamage', target: 'RandomEnemy', value: 1 }]
+  },
+  // It improves under criticism.
+  'constructive-discontent': {
+    cost: 4, attack: 2, health: 6, rarity: 'Rare',
+    effects: [{ trigger: 'OnDamaged', action: 'BuffAttack', target: 'Self', value: 2 }]
+  },
+  // It breaks down.
+  'biodegradable-material': {
+    cost: 3, attack: 5, health: 5, rarity: 'Rare',
+    effects: [{ trigger: 'EndOfTurn', action: 'DealDamage', target: 'Self', value: 1 }]
+  }
+};
 
 /**
  * A salted hash, so the Minion/Spell roll cannot correlate with the statline.
@@ -116,3 +154,6 @@ function applyOverride(card: Card, override: Partial<Card> | undefined): Card {
 }
 
 export const SL_CARDS: Card[] = SL_TERMS.map(buildCard);
+
+/** Cards tuned by hand above, which need not sit on a template statline. */
+export const HAND_TUNED = new Set(Object.keys(OVERRIDES));

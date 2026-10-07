@@ -825,3 +825,86 @@ describe('history', () => {
     expect(stamps).toEqual(state.history.map((e) => e.n));
   });
 });
+
+describe('reactions', () => {
+  /** A board with one friendly minion carrying `effects`, and full mana. */
+  function withMinion(effects: Card['effects'], over: Partial<Card> = {}) {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, attack: 1, health: 5, effects, ...over })));
+    return { state, minion: state.players.player.board[0] };
+  }
+
+  function enemy(state: MatchState, over: Partial<Card> = {}) {
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 1, health: 3, ...over })));
+    state.current = 'player';
+    return state.players.ai.board.at(-1)!;
+  }
+
+  it('fires OnDamaged when the minion survives the hit, after the action settles', () => {
+    const { state, minion } = withMinion([{ trigger: 'OnDamaged', action: 'BuffAttack', target: 'Self', value: 2 }], { keywords: ['Charge'] });
+    const foe = enemy(state, { attack: 1, health: 9 });
+    attack(state, 'player', minion.instanceId, { kind: 'minion', instanceId: foe.instanceId });
+    expect(minion.health).toBe(4);
+    expect(minion.attack).toBe(3);
+    // Its hit landed at the old attack: the reaction comes after the exchange.
+    expect(foe.health).toBe(8);
+  });
+
+  it('does not fire OnDamaged for a minion that died of the hit', () => {
+    const { state, minion } = withMinion([{ trigger: 'OnDamaged', action: 'DrawCard', value: 1 }], { health: 1, keywords: ['Charge'] });
+    state.players.player.deck = [minionCard()];
+    const foe = enemy(state, { attack: 5, health: 9 });
+    attack(state, 'player', minion.instanceId, { kind: 'minion', instanceId: foe.instanceId });
+    expect(state.players.player.hand).toHaveLength(0);
+  });
+
+  it('fires OnFriendlyDeath when another friendly minion dies, not when an enemy does', () => {
+    const { state } = withMinion([{ trigger: 'OnFriendlyDeath', action: 'GainArmor', value: 2 }]);
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0, attack: 1, health: 1, keywords: ['Charge'] })));
+    const doomed = state.players.player.board[1];
+    const foe = enemy(state, { attack: 3, health: 9 });
+    attack(state, 'player', doomed.instanceId, { kind: 'minion', instanceId: foe.instanceId });
+    expect(state.players.player.armor).toBe(2);
+  });
+
+  it('fires OnFriendlySpell after a spell, and OnFriendlyPlay for another minion only', () => {
+    const { state } = withMinion([
+      { trigger: 'OnFriendlySpell', action: 'GainArmor', value: 1 },
+      { trigger: 'OnFriendlyPlay', action: 'GainArmor', value: 10 }
+    ]);
+    // Playing the reactor itself did not trigger its own OnFriendlyPlay.
+    expect(state.players.player.armor).toBe(0);
+    const spell: Card = { ...minionCard({ cost: 0 }), type: 'Spell', attack: undefined, health: undefined, effects: [{ trigger: 'Battlecry', action: 'DrawCard', value: 0 }] };
+    playCard(state, 'player', give(state, 'player', spell));
+    expect(state.players.player.armor).toBe(1);
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0 })));
+    expect(state.players.player.armor).toBe(11);
+  });
+
+  it('settles a loop between two minions that hurt each other', () => {
+    const ping: Card['effects'] = [{ trigger: 'OnDamaged', action: 'DealDamage', target: 'RandomEnemy', value: 1 }];
+    const { state, minion } = withMinion(ping, { health: 4, keywords: ['Charge'] });
+    const foe = enemy(state, { attack: 1, health: 4, effects: ping });
+    state.players.ai.health = 1000;
+    state.players.player.health = 1000;
+    attack(state, 'player', minion.instanceId, { kind: 'minion', instanceId: foe.instanceId });
+    expect(state.reactions).toEqual([]);
+    expect(state.winner).toBeNull();
+  });
+
+  it("stops a silenced minion's Deathrattle and turn triggers", () => {
+    const { state, minion } = withMinion([
+      { trigger: 'EndOfTurn', action: 'GainArmor', value: 3 },
+      { trigger: 'Deathrattle', action: 'GainArmor', value: 5 }
+    ]);
+    silence(minion);
+    endTurn(state);
+    expect(state.players.player.armor).toBe(0);
+    minion.health = 0;
+    state.current = 'player';
+    endTurn(state);
+    expect(state.players.player.armor).toBe(0);
+  });
+});
