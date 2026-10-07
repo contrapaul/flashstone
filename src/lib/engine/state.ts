@@ -24,6 +24,8 @@ export interface MinionInstance {
   silenced: boolean;
   /** Buffed since it was summoned — drives the green bloom on the stat gems. */
   buffed: boolean;
+  /** Destroyed at the end of this turn number — Planned Obsolescence. Silence lifts it. */
+  doomAt?: number;
 }
 
 /** An equipped weapon. Replaced, never stacked — equipping destroys the old one. */
@@ -68,7 +70,8 @@ export type HistoryResult =
   | 'summoned'
   | 'armor'
   | 'returned'
-  | 'transformed';
+  | 'transformed'
+  | 'doomed';
 
 export interface HistoryTarget {
   ref: CueRef;
@@ -154,6 +157,8 @@ export interface MinionSnapshot {
   frozen: boolean;
   silenced: boolean;
   buffed: boolean;
+  /** Marked to be destroyed at the end of a coming turn: it wears a ticking clock. */
+  doomed?: boolean;
 }
 
 export interface WeaponSnapshot {
@@ -175,7 +180,8 @@ export function snapshotMinion(minion: MinionInstance): MinionSnapshot {
     attacksThisTurn: minion.attacksThisTurn,
     frozen: minion.frozen,
     silenced: minion.silenced,
-    buffed: minion.buffed
+    buffed: minion.buffed,
+    doomed: minion.doomAt !== undefined
   };
 }
 
@@ -272,7 +278,8 @@ export const MINION_ONLY: ReadonlySet<Action> = new Set([
   'BuffHealth',
   'GainKeyword',
   'ReturnToHand',
-  'Transform'
+  'Transform',
+  'DestroyLater'
 ]);
 
 /** Whether a card's aimed effect can only be pointed at minions. */
@@ -319,4 +326,5 @@ export function silence(minion: MinionInstance): void {
   minion.silenced = true;
   minion.keywords = [];
   minion.divineShield = false;
+  delete minion.doomAt;
 }

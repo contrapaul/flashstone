@@ -266,7 +266,23 @@ export function endTurn(state: MatchState): void {
   const id = state.current;
   triggerBoard(state, id, 'EndOfTurn');
   if (state.winner) return;
+  expireDoomed(state);
+  if (state.winner) return;
   startTurn(state, opponentOf(id));
+}
+
+/** Minions whose time is up at the end of this turn. The card that marked them gets the kill. */
+function expireDoomed(state: MatchState): void {
+  let any = false;
+  for (const owner of ['player', 'ai'] as PlayerId[]) {
+    for (const minion of state.players[owner].board) {
+      if (minion.doomAt === state.turnNumber) {
+        minion.health = 0;
+        any = true;
+      }
+    }
+  }
+  if (any) checkDeaths(state);
 }
 
 function triggerBoard(state: MatchState, id: PlayerId, trigger: Trigger): void {
@@ -919,6 +935,16 @@ function resolveEffect(
         if (target.kind === 'minion') returnToHand(state, target.owner, target.minion);
         break;
 
+      case 'DestroyLater':
+        if (target.kind === 'minion') {
+          // Cast on your turn, so the opponent's next turn is the one after this.
+          target.minion.doomAt = state.turnNumber + 1;
+          if (state.openEntry !== null) state.lastHit[target.minion.instanceId] = state.openEntry;
+          note(state, state.openEntry, { ref: { kind: 'minion', instanceId: target.minion.instanceId }, result: 'doomed' });
+          emit(state, { type: 'doom', instanceId: target.minion.instanceId });
+        }
+        break;
+
       case 'Transform':
         if (target.kind === 'minion') transform(state, target.minion, (effect.condition && tokenById(effect.condition)) || STUDY_NOTE);
         break;
@@ -974,6 +1000,7 @@ function transform(state: MatchState, minion: MinionInstance, into: Card): void 
   minion.silenced = false;
   minion.buffed = false;
   minion.summonedThisTurn = true;
+  delete minion.doomAt;
   emit(state, { type: 'transform', instanceId: minion.instanceId, minion: snapshotMinion(minion) });
 }
 

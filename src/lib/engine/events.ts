@@ -82,6 +82,8 @@ type Cue =
    * Public: it was on the board. `handCount` is the hand after it.
    */
   | { type: 'bounce'; owner: PlayerId; instanceId: string; handCount: number; lost: boolean }
+  /** A minion is marked to be destroyed at the end of a coming turn. */
+  | { type: 'doom'; instanceId: string }
   /** A minion becomes something else where it stands. */
   | { type: 'transform'; instanceId: string; minion: MinionSnapshot }
   /** Drawn into a full hand and destroyed. Public, as in Hearthstone. */
@@ -147,6 +149,7 @@ export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   effect: 0,
   bounce: 420,
   transform: 560,
+  doom: 640,
   burn: 900,
   fatigue: 700
 };

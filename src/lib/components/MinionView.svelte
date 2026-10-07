@@ -1,6 +1,6 @@
 <script lang="ts">
   import { backOut, cubicOut } from 'svelte/easing';
-  import type { MinionInstance } from '../engine/state';
+  import type { MinionSnapshot } from '../engine/state';
   import { artFor, artUrlFor, sigil, uiArtUrl } from '../../utils/art';
   import LegendaryCrest from './LegendaryCrest.svelte';
 
@@ -18,7 +18,7 @@
    * `static/art/ui/` when a file exists (`static/art/README.md` §3).
    */
 
-  export let minion: MinionInstance;
+  export let minion: MinionSnapshot;
   /** Can swing this turn — green pulse. */
   export let ready = false;
   /** Currently picked as the attacker. */
@@ -264,6 +264,13 @@
         in:form
         aria-hidden="true"
       ></span>
+    {/if}
+
+    {#if minion.doomed}
+      <!-- Planned Obsolescence: an hourglass, running out. -->
+      <span class="doom" aria-label="Destroyed at the end of the next turn">
+        <svg viewBox="0 0 24 24"><path d="M7 3 H17 M7 21 H17 M8 3 C8 9 16 9 16 12 C16 15 8 15 8 21 M16 3 C16 9 8 9 8 12" /><path class="sand" d="M9.5 19 H14.5 L12 15.5 Z" /></svg>
+      </span>
     {/if}
 
     {#if asleep}
@@ -717,6 +724,31 @@
     0% { opacity: 0; transform: translate(0, 4px) scale(.7); }
     25% { opacity: 1; }
     100% { opacity: 0; transform: translate(6px, -10px) scale(1.1); }
+  }
+
+  /* Doomed: an hourglass at the shoulder, turning over and over. */
+  .doom {
+    position: absolute;
+    z-index: 4;
+    top: 6px;
+    right: 2px;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1.5px solid #e6d4ff;
+    background: radial-gradient(circle at 40% 35%, #7a5ad0, #2a1650);
+    box-shadow: 0 0 10px rgba(154, 124, 255, .8), 0 2px 5px rgba(0, 0, 0, .6);
+    pointer-events: none;
+  }
+  .doom svg { width: 18px; height: 18px; animation: fs-hourglass 2.4s ease-in-out infinite; }
+  .doom path { fill: none; stroke: #f2eaff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .doom .sand { fill: #ffd36a; stroke: none; }
+
+  @keyframes fs-hourglass {
+    0%, 70% { transform: none; }
+    85%, 100% { transform: rotate(180deg); }
   }
 
   /* Its text, as badges along the bottom of the portrait, between the gems. */

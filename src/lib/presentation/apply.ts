@@ -88,8 +88,11 @@ export function applyCue(shown: PlayerView, cue: GameEvent): PlayerView {
 
     case 'silence':
       return withSpellDamage(
-        mapMinion(shown, cue.instanceId, (m) => ({ ...m, silenced: true, keywords: [], divineShield: false }))
+        mapMinion(shown, cue.instanceId, (m) => ({ ...m, silenced: true, keywords: [], divineShield: false, doomed: false }))
       );
+
+    case 'doom':
+      return mapMinion(shown, cue.instanceId, (m) => ({ ...m, doomed: true }));
 
     case 'buff':
       return mapMinion(shown, cue.instanceId, (m) => ({
@@ -160,7 +163,8 @@ export function presented(view: PlayerView) {
     attacksThisTurn: m.attacksThisTurn,
     frozen: m.frozen,
     silenced: m.silenced,
-    buffed: m.buffed
+    buffed: m.buffed,
+    doomed: !!m.doomed
   });
   const side = (s: PlayerView['me'] | PlayerView['foe']) => ({
     health: s.health,

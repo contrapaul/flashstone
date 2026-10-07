@@ -996,3 +996,40 @@ describe('the graveyard', () => {
     expect(state.players.player.board.map((m) => [m.card.name, m.health])).toEqual([['Second', 1], ['First', 1]]);
   });
 });
+
+describe('planned obsolescence', () => {
+  function doomEnemy() {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, name: 'Gadget', attack: 3, health: 3 })));
+    state.current = 'player';
+    const target = state.players.ai.board[0];
+    const doom: Card = {
+      ...minionCard({ cost: 0 }), id: 'doom', name: 'Doom', type: 'Spell', attack: undefined, health: undefined, targeting: 'enemy',
+      effects: [{ trigger: 'Battlecry', action: 'DestroyLater', target: 'Chosen' }]
+    };
+    state.history = [];
+    playCard(state, 'player', give(state, 'player', doom), undefined, { kind: 'minion', owner: 'ai', minion: target });
+    return { state, target };
+  }
+
+  it("destroys the minion at the end of the opponent's next turn, and credits the card", () => {
+    const { state, target } = doomEnemy();
+    endTurn(state); // the player's turn ends: the opponent's turn begins, and the minion lives through it
+    expect(state.players.ai.board).toContain(target);
+    endTurn(state); // ...until it ends
+    expect(state.players.ai.board).not.toContain(target);
+    expect(state.history[0].targets).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'Gadget', result: 'doomed' }), expect.objectContaining({ name: 'Gadget', result: 'killed' })])
+    );
+  });
+
+  it('is lifted by silence', () => {
+    const { state, target } = doomEnemy();
+    silence(target);
+    endTurn(state);
+    endTurn(state);
+    expect(state.players.ai.board).toContain(target);
+  });
+});

@@ -88,6 +88,11 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     type: 'Spell', cost: 4, rarity: 'Epic', targeting: 'any',
     effects: [{ trigger: 'Battlecry', action: 'Transform', target: 'Chosen' }]
   },
+  // Built to fail, on a timer.
+  'planned-obsolescence': {
+    type: 'Spell', cost: 2, rarity: 'Epic', targeting: 'enemy',
+    effects: [{ trigger: 'Battlecry', action: 'DestroyLater', target: 'Chosen' }]
+  },
   // It breaks down.
   'biodegradable-material': {
     cost: 3, attack: 5, health: 5, rarity: 'Rare',

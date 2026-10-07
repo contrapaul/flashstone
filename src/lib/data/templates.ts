@@ -474,6 +474,10 @@ function phrase(effect: Effect): string {
       return `Swap ${target}'s Attack and Health`;
     case 'GainArmor':
       return `Gain ${value} Armor`;
+    case 'DestroyLater':
+      return effect.target === 'Chosen'
+        ? "Choose an enemy minion. Destroy it at the end of your opponent's next turn"
+        : `Destroy ${target} at the end of your opponent's next turn`;
     case 'Resummon':
       return value === 1
         ? 'Resummon your most recent friendly minion that died this game'

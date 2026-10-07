@@ -116,6 +116,7 @@ const EFFECT_COLOR: Record<Action, string> = {
   GainArmor: '#cfd8e0',
   ReturnToHand: '#bfe3ff',
   Resummon: '#ffe7b0',
+  DestroyLater: '#9a7cff',
   Transform: '#e6d4ff'
 };
 
@@ -556,6 +557,18 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       stage.advance(cue);
       audio().play('mana-fill');
       return;
+
+    case 'doom': {
+      // A clock settles on it: its time is now counted.
+      audio().play('fatigue', { volume: 0.7 });
+      stage.advance(cue);
+      const el = stage.unit(cue.instanceId);
+      if (el) {
+        const at = centreOf(el);
+        stage.fx()?.ring(at.x, at.y, { color: 'rgba(154, 124, 255, .9)', size: 110 });
+      }
+      return;
+    }
 
     case 'bounce': {
       // Lifted off the board and back towards its owner's hand.

@@ -206,6 +206,7 @@
                   {:else if r.result === 'armor'}<b class="kw steel">Armor</b>
                   {:else if r.result === 'returned'}<b class="kw">Returned</b>
                   {:else if r.result === 'transformed'}<b class="kw">Transformed</b>
+                  {:else if r.result === 'doomed'}<b class="kw doom">Doomed</b>
                   {/if}
                 {/each}
                 {#if s.killed}<svg class="mark recycle" viewBox="0 0 24 24" aria-hidden="true"><use href="#fs-chronicle-recycle" /></svg>{/if}
@@ -317,6 +318,7 @@
                 {:else if r.result === 'armor'}<svg viewBox="0 0 24 24"><path d="M12 3 L19 6 V12 C19 16 16 19 12 21 C8 19 5 16 5 12 V6 Z" /></svg>
                 {:else if r.result === 'returned'}<svg viewBox="0 0 24 24"><path d="M9 7 L4 12 L9 17 M4 12 H15 A5 5 0 0 0 15 2" /></svg>
                 {:else if r.result === 'transformed'}<svg viewBox="0 0 24 24"><path d="M4 8 H16 L12 4 M20 16 H8 L12 20" /></svg>
+                {:else if r.result === 'doomed'}<svg viewBox="0 0 24 24"><path d="M7 3 H17 M7 21 H17 M8 3 C8 9 16 9 16 12 C16 15 8 15 8 21 M16 3 C16 9 8 9 8 12" /></svg>
                 {/if}
               </span>
             {/each}
@@ -684,5 +686,6 @@
   .result.frozen { background: #1d6fa8; border-color: #cdeeff; }
   .result.silenced { background: #4a4a52; }
   .result.armor { background: #5a6b78; border-color: #e6eef4; }
-  .result.returned, .result.transformed { background: #4a3f7a; border-color: #e6d4ff; }
+  .result.returned, .result.transformed, .result.doomed { background: #4a3f7a; border-color: #e6d4ff; }
+  .kw.doom { color: #c9b4ff; }
 </style>

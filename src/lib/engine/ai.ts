@@ -159,7 +159,7 @@ function chooseSpellTarget(state: MatchState, card: Card): Character | undefined
     return biggest ?? ownHero ?? legal[0];
   }
 
-  if (action === 'Destroy' || action === 'Silence' || action === 'Transform' || action === 'ReturnToHand') {
+  if (['Destroy', 'DestroyLater', 'Silence', 'Transform', 'ReturnToHand'].includes(action)) {
     const biggest = [...enemyMinions].sort((a, b) => b.minion.attack - a.minion.attack)[0];
     return biggest ?? (side === 'enemy' ? undefined : enemyHero);
   }

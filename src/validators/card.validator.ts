@@ -31,7 +31,8 @@ const EffectSchema = z.object({
     'GainArmor',
     'ReturnToHand',
     'Transform',
-    'Resummon'
+    'Resummon',
+    'DestroyLater'
   ]),
   target: z
     .enum([
