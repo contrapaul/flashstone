@@ -20,7 +20,7 @@ import { d, drawnScale, sleep, spatial, wait } from './motion';
  */
 
 export type Side = 'me' | 'foe';
-export type Mark = 'summoning' | 'heavy' | 'struck' | 'dying' | 'triggered';
+export type Mark = 'summoning' | 'heavy' | 'struck' | 'dying' | 'triggered' | 'swapping' | 'refused';
 export interface Point {
   x: number;
   y: number;
@@ -46,10 +46,15 @@ export interface Stage {
   setDrawn(card: Card, on: boolean): void;
   mark(kind: Mark, instanceId: string, on: boolean): void;
   setHeroHit(side: Side | null): void;
-  setQuake(on: boolean): void;
+  /** A hero brought to 0: its portrait breaks apart. */
+  setHeroDown(side: Side | null): void;
+  /** Shakes the table, 0–1; 0 stops it. */
+  setQuake(intensity: number): void;
   setBanner(text: string | null): void;
   float(at: Point, text: string, color: string): void;
-  setShowcase(card: Card | null, from?: Point): void;
+  /** A number pinned to what it happened to: damage, healing, armor. */
+  splat(at: Point, kind: 'damage' | 'heal' | 'armor', amount: number, intensity: number): void;
+  setShowcase(show: Showcase | null): void;
   /** The red line from a caster to what it aimed at. */
   setAimLine(line: { from: Point; to: Point; color: string } | null): void;
   /** The highlight that flickers across a random effect's candidates. */
@@ -59,8 +64,34 @@ export interface Stage {
   fx(): Fx | null;
 }
 
+/**
+ * A card held up for the table to see:
+ *  - `reveal` — the opponent's play, flying up out of their hand;
+ *  - `burn` — a card drawn into a full hand, burning away above it;
+ *  - `fatigue` — the empty card an empty deck deals, which then strikes its hero.
+ */
+export type Showcase =
+  | { mode: 'reveal'; card: Card; from: Point }
+  | { mode: 'burn'; card: Card; at: Point }
+  | { mode: 'fatigue'; amount: number; from: Point; at: Point; strike: Point };
+
 /** Where minions were when they died, so a Deathrattle can still fly from there. */
 const lastSeen = new Map<string, Point>();
+
+/**
+ * Where the last blow came from, so a hit knocks its target *away* from it.
+ * An attack sets both ends — the attacker is knocked back by the defender too.
+ */
+let blow: { from: Point; to?: Point; attacker?: CueRef } | null = null;
+
+/** Each class's colour, for its hero power's burst. */
+const CLASS_COLOR: Record<string, string[]> = {
+  Designer: ['#7fffd4', '#d4fff2'],
+  Engineer: ['#ffb057', '#ffe2b8'],
+  Consumer: ['#c78bff', '#f0dcff'],
+  Manufacturer: ['#ff6a4a', '#ffd0c4'],
+  Neutral: ['#ffe08a', '#fff6d8']
+};
 
 /** The colour an effect travels in. */
 const EFFECT_COLOR: Record<Action, string> = {
@@ -100,7 +131,13 @@ function pulse(on: () => void, off: () => void, ms: number): void {
 }
 
 function elementOf(stage: Stage, ref: CueRef): HTMLElement | undefined {
-  return ref.kind === 'minion' ? stage.unit(ref.instanceId) : stage.hero(stage.side(ref.owner));
+  return ref.kind === 'minion' ? stage.unit(ref.instanceId) : portraitOf(stage, stage.side(ref.owner));
+}
+
+/** A hero's portrait itself — not the block it sits in with its gems and power. */
+function portraitOf(stage: Stage, side: Side): HTMLElement | undefined {
+  const block = stage.hero(side);
+  return block?.querySelector<HTMLElement>('.hero .ring') ?? block;
 }
 
 /** Where a thing is on screen — or, for a minion that has just died, where it was. */
@@ -144,7 +181,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       // The fan is drawn by position, not by card: whichever back was raised is
       // now standing in for another card, so every lift settles.
       for (const b of stage.foeBacks()) settle(liftOf(b));
-      stage.setShowcase(cue.card, from);
+      stage.setShowcase({ mode: 'reveal', card: cue.card, from });
       await wait(spatial() ? 1350 : 1000);
       stage.setShowcase(null);
       return;
@@ -171,19 +208,46 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
         }
         stage.fx()?.ring(ground.x, ground.y, { color: 'rgba(230, 200, 150, .75)', size: heavy ? 170 : 110 });
         stage.fx()?.shards(ground.x, ground.y, { colors: dust, count: heavy ? 22 : 10, speed: heavy ? 320 : 200, size: 5, angle: -Math.PI / 2, spread: 1.3 });
-        if (heavy && spatial()) pulse(() => stage.setQuake(true), () => stage.setQuake(false), 500);
+        if (heavy && spatial()) pulse(() => stage.setQuake(1), () => stage.setQuake(0), 500);
       });
+      // Charge: it arrives already moving — streaks off both flanks, no lasting mark.
+      if (cue.minion.keywords.includes('Charge')) {
+        void wait(200).then(() => {
+          const el = stage.unit(id);
+          if (!el) return;
+          const at = centreOf(el);
+          for (const angle of [Math.PI, 0]) {
+            stage.fx()?.sparks(at.x, at.y, { angle, spread: 0.25, count: 10, speed: 700, gravity: 0, colors: ['#fff6d8', '#9dff7a'] });
+          }
+        });
+      }
       return;
     }
 
-    case 'attack':
-      await lunge(stage.unit(cue.instanceId), elementOf(stage, cue.target));
+    case 'attack': {
+      const mover = stage.unit(cue.instanceId);
+      const at = elementOf(stage, cue.target);
+      if (mover && at) blow = { from: centreOf(mover), to: centreOf(at), attacker: { kind: 'minion', instanceId: cue.instanceId } };
+      await lunge(mover, at);
       stage.advance(cue);
       return;
+    }
 
     case 'heroAttack': {
-      const hero = stage.hero(stage.side(cue.owner))?.querySelector<HTMLElement>('.hero') ?? undefined;
-      await lunge(hero, elementOf(stage, cue.target));
+      const side = stage.side(cue.owner);
+      const hero = stage.hero(side)?.querySelector<HTMLElement>('.hero') ?? undefined;
+      const at = elementOf(stage, cue.target);
+      if (hero && at) blow = { from: centreOf(hero), to: centreOf(at), attacker: { kind: 'hero', owner: cue.owner } };
+      // The weapon swings as the hero goes in: back, then through.
+      const weapon = hero?.querySelector<HTMLElement>('.weapon-icon');
+      if (weapon && spatial()) {
+        gsap
+          .timeline()
+          .to(weapon, { rotation: -50, duration: d(140) / 1000, ease: 'power2.out' })
+          .to(weapon, { rotation: 35, duration: d(130) / 1000, ease: 'power3.in' })
+          .to(weapon, { rotation: 0, duration: d(260) / 1000, ease: 'back.out(2)', clearProps: 'transform' });
+      }
+      await lunge(hero, at);
       stage.advance(cue);
       return;
     }
@@ -208,18 +272,35 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       stage.advance(cue);
       const el = elementOf(stage, cue.target);
       const intensity = hitIntensity(cue.amount);
+      // One number drives the whole impact: knockback, shake, sparks and splat.
+      if (spatial() && intensity >= 0.5) {
+        const strength = Math.min(1, (intensity - 0.4) * 1.6);
+        pulse(() => stage.setQuake(strength), () => stage.setQuake(0), 420);
+      }
       if (cue.target.kind === 'hero') {
         const side = stage.side(cue.target.owner);
         pulse(() => stage.setHeroHit(side), () => stage.setHeroHit(null), 500);
-        if (spatial() && cue.amount >= 4) pulse(() => stage.setQuake(true), () => stage.setQuake(false), 500);
+        if (cue.health <= 0) {
+          // The killing blow. The result waits for playback, so this is seen first.
+          stage.setHeroDown(side);
+          const at = el ? centreOf(el) : undefined;
+          if (at) {
+            void wait(300).then(() => {
+              stage.fx()?.shards(at.x, at.y, { count: 40, speed: 520, size: 12, colors: ['#e0be76', '#9c7a3c', '#f3dc9c', '#3a2a15'] });
+              stage.fx()?.ring(at.x, at.y, { size: 220, color: 'rgba(255, 220, 160, .9)', life: 0.7 });
+            });
+          }
+          if (spatial()) pulse(() => stage.setQuake(1), () => stage.setQuake(0), 700);
+        }
       } else {
         const id = cue.target.instanceId;
-        pulse(() => stage.mark('struck', id, true), () => stage.mark('struck', id, false), 500);
+        pulse(() => stage.mark('struck', id, true), () => stage.mark('struck', id, false), 420);
+        knockBack(stage, cue.target, intensity);
       }
       if (el) {
         const at = centreOf(el);
         stage.fx()?.sparks(at.x, at.y, { count: Math.round(8 + 22 * intensity), speed: 380 + 320 * intensity });
-        stage.float(at, `-${cue.amount}`, 'var(--blood)');
+        stage.splat(at, 'damage', cue.amount, intensity);
       }
       return;
     }
@@ -230,7 +311,7 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       if (el) {
         const at = centreOf(el);
         stage.fx()?.motes(at.x, at.y, { colors: ['#d8ffd8', '#8ef0a0'] });
-        stage.float(at, `+${cue.amount}`, 'var(--good)');
+        stage.splat(at, 'heal', cue.amount, hitIntensity(cue.amount));
       }
       return;
     }
@@ -241,7 +322,8 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       stage.advance(cue);
       if (el) {
         const at = centreOf(el);
-        stage.fx()?.sparks(at.x, at.y, { colors: ['#fff6d0', '#ffd96a'], count: 22, speed: 420, gravity: 300 });
+        stage.fx()?.shards(at.x, at.y, { colors: ['#fff6d0', '#ffd96a', '#f0b840'], count: 18, speed: 380, size: 6 });
+        stage.fx()?.sparks(at.x, at.y, { colors: ['#fff6d0', '#ffd96a'], count: 14, speed: 420, gravity: 300 });
       }
       return;
     }
@@ -254,8 +336,9 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
         const at = centreOf(el);
         const da = cue.attack - before.attack;
         const dh = cue.health - before.health;
-        stage.fx()?.motes(at.x, at.y + 30, { colors: ['#b8ffc4', '#5fe07a'], count: 10, gravity: -220 });
-        stage.float(at, `${sign(da)}/${sign(dh)}`, 'var(--good)');
+        // Growing: chevrons rise. A swap, or a loss, is shown by the numbers alone.
+        if (da > 0 || dh > 0) stage.fx()?.chevrons(at.x, at.y + 20);
+        if (da !== 0 || dh !== 0) stage.float(at, `${sign(da)}/${sign(dh)}`, da < 0 || dh < 0 ? '#e6d4ff' : 'var(--good)');
       }
       return;
     }
@@ -274,9 +357,16 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       return;
     }
 
-    case 'trigger':
+    case 'trigger': {
       pulse(() => stage.mark('triggered', cue.instanceId, true), () => stage.mark('triggered', cue.instanceId, false), 520);
+      // A Deathrattle: something rises out of it as it goes.
+      const el = cue.trigger === 'Deathrattle' ? stage.unit(cue.instanceId) : undefined;
+      if (el) {
+        const at = centreOf(el);
+        stage.fx()?.motes(at.x, at.y, { colors: ['#e8ffe0', '#b8f5a0'], count: 10, speed: 60, gravity: -260, life: 1.2, size: 6 });
+      }
       return;
+    }
 
     case 'armor': {
       const side = stage.side(cue.owner);
@@ -286,21 +376,34 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       if (el && gained > 0) {
         const at = centreOf(el);
         stage.fx()?.ring(at.x, at.y, { color: 'rgba(200, 215, 230, .9)', size: 80 });
-        stage.float(at, `+${gained}`, '#cfd8e0');
+        stage.splat(at, 'armor', gained, hitIntensity(gained));
+      }
+      return;
+    }
+
+    case 'heroPower': {
+      const side = stage.side(cue.owner);
+      stage.advance(cue);
+      // The disc turns over (HeroPowerButton) in a burst of its class's colour.
+      const button = stage.hero(side)?.querySelector<HTMLElement>('.power');
+      if (button) {
+        const at = centreOf(button);
+        const colors = CLASS_COLOR[stage.shown()[side].heroClass] ?? CLASS_COLOR.Neutral;
+        stage.fx()?.ring(at.x, at.y, { color: colors[0], size: 90 });
+        stage.fx()?.sparks(at.x, at.y, { colors, count: 18, speed: 300, gravity: 0 });
       }
       return;
     }
 
     case 'equip':
-    case 'weaponBreak':
-    case 'heroPower': {
+    case 'weaponBreak': {
       stage.advance(cue);
-      const el = stage.hero(stage.side(cue.owner));
-      if (el) {
-        const at = centreOf(el);
-        if (cue.type === 'weaponBreak') stage.fx()?.shards(at.x, at.y, { colors: ['#cfd8e0', '#8a9aa8', '#5a6874'] });
-        else stage.fx()?.ring(at.x, at.y, { color: cue.type === 'equip' ? 'rgba(220, 230, 240, .9)' : 'rgba(255, 220, 140, .9)' });
-      }
+      // The weapon arrives and breaks in HeroPortrait; this is the flash and the fragments.
+      await tick();
+      const weapon = stage.hero(stage.side(cue.owner))?.querySelector<HTMLElement>('.weapon-icon');
+      const at = weapon ? centreOf(weapon) : undefined;
+      if (at && cue.type === 'equip') stage.fx()?.ring(at.x, at.y, { color: 'rgba(220, 230, 240, .9)', size: 70 });
+      if (at && cue.type === 'weaponBreak') stage.fx()?.shards(at.x, at.y, { colors: ['#cfd8e0', '#8a9aa8', '#5a6874'] });
       return;
     }
 
@@ -332,17 +435,32 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
     }
 
     case 'burn': {
-      // Shown and destroyed: a card lost to a full hand is public, and should be seen.
+      // Shown and destroyed above the hand it could not join: a card lost to a
+      // full hand is public, and should be seen going.
       stage.advance(cue);
-      stage.setShowcase(cue.card, { x: window.innerWidth - 80, y: window.innerHeight / 2 });
-      await wait(900);
+      const mine = stage.side(cue.owner) === 'me';
+      const at = { x: window.innerWidth / 2, y: mine ? window.innerHeight - 300 : 220 };
+      stage.setShowcase({ mode: 'burn', card: cue.card, at });
+      const embers = setInterval(() => stage.fx()?.sparks(at.x, at.y + 60, { colors: ['#ffb24a', '#ff6a2a', '#ffe08a'], count: 6, speed: 160, angle: -Math.PI / 2, spread: 0.9, gravity: -200, life: 0.7 }), 90);
+      await wait(1150);
+      clearInterval(embers);
       stage.setShowcase(null);
       return;
     }
 
     case 'fatigue': {
-      const el = stage.hero(stage.side(cue.owner));
-      if (el) stage.float(centreOf(el), 'Fatigue', '#c9b4ff');
+      // An empty card slides out of the empty deck, shows what it will cost, and strikes.
+      const side = stage.side(cue.owner);
+      const deck = side === 'foe' ? stage.foeDeck() : undefined;
+      const from = deck ? centreOf(deck) : { x: window.innerWidth - 140, y: window.innerHeight - 240 };
+      const portrait = portraitOf(stage, side);
+      const strike = portrait ? centreOf(portrait) : from;
+      // Held on its owner's side of the centre line, clear of the screen's edge.
+      const at = { x: window.innerWidth * 0.68, y: window.innerHeight * (side === 'foe' ? 0.36 : 0.62) };
+      stage.setShowcase({ mode: 'fatigue', amount: cue.amount, from, at, strike });
+      await wait(950);
+      stage.setShowcase(null);
+      await wait(spatial() ? 260 : 120);
       return;
     }
 
@@ -381,6 +499,7 @@ async function fly(cue: Extract<GameEvent, { type: 'effect' }>, stage: Stage): P
   const first = cue.targets[0];
   if (!from || !first) return;
   const color = EFFECT_COLOR[cue.action];
+  blow = { from };
 
   if (cue.aim === 'random' && cue.candidates) {
     await roulette(stage, cue.candidates, first);
@@ -406,6 +525,38 @@ async function fly(cue: Extract<GameEvent, { type: 'effect' }>, stage: Stage): P
   await Promise.all(flights);
   stage.setAimLine(null);
   stage.setRoulette(null);
+
+  // A swap is seen as the numbers crossing over, before the new values land.
+  if (cue.action === 'SwapStats') {
+    const ids = cue.targets.flatMap((t) => (t.kind === 'minion' ? [t.instanceId] : []));
+    for (const id of ids) stage.mark('swapping', id, true);
+    await wait(450);
+    for (const id of ids) stage.mark('swapping', id, false);
+  }
+}
+
+/**
+ * A hit pushes its target away from where the blow came from, by more for a
+ * bigger hit, and it springs back. The attacker in a trade is pushed back by
+ * the defender in turn.
+ */
+function knockBack(stage: Stage, target: CueRef, intensity: number): void {
+  if (!spatial() || target.kind !== 'minion') return;
+  const slot = stage.unit(target.instanceId);
+  const unit = slot?.querySelector<HTMLElement>('.unit') ?? slot;
+  if (!unit) return;
+  const at = centreOf(unit);
+  const isAttacker = blow?.attacker?.kind === 'minion' && blow.attacker.instanceId === target.instanceId;
+  const origin = isAttacker ? blow?.to : blow?.from;
+  if (!origin) return;
+  const dx = at.x - origin.x;
+  const dy = at.y - origin.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const push = (6 + 18 * intensity) / drawnScale(unit);
+  gsap
+    .timeline()
+    .to(unit, { x: (dx / length) * push, y: (dy / length) * push, duration: d(70) / 1000, ease: 'power2.out' })
+    .to(unit, { x: 0, y: 0, duration: d(320) / 1000, ease: 'elastic.out(1, 0.45)', clearProps: 'transform' });
 }
 
 /** Hops the highlight across the candidates, slowing down, to land on `chosen`. */

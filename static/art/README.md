@@ -75,12 +75,21 @@ the frame**, and leave the outer 8% clear.
 | `health-gem` | the health drop, bottom-right of a card | 138 × 138 px | **yes** |
 | `mana-crystal` | one crystal in the mana tray | 132 × 132 px | **yes** |
 | `mana-crystal-spent` | a spent crystal in the tray | 132 × 132 px | **yes** |
-| `taunt` | the Taunt shield behind a minion | 480 × 480 px | **yes** |
-| `divine-shield` | the Divine Shield halo around a minion | 480 × 480 px | **yes** |
-| `charge` | the Charge mark on a minion | 144 × 144 px | **yes** |
-| `windfury` | the Windfury mark | 144 × 144 px | **yes** |
-| `stealth` | the Stealth mark | 144 × 144 px | **yes** |
-| `deathrattle` | the Deathrattle mark | 144 × 144 px | **yes** |
+| `taunt` | the Taunt shield standing behind a minion — wider than its portrait, pointed below | 480 × 600 px | **yes** |
+| `divine-shield` | the golden bubble round a minion's portrait | 480 × 600 px | **yes** |
+| `stealth` | smoke laid over a stealthed minion's portrait (it drifts; draw it seamless) | 480 × 600 px | **yes** |
+| `frozen` | the block of ice over a frozen minion's portrait | 480 × 600 px | **yes** |
+| `windfury` | the wind lying flat at a Windfury minion's feet | 768 × 204 px | **yes** |
+| `minion-frame` | the gold ring round every minion's oval portrait — leave the oval clear | 480 × 600 px | **yes** |
+| `minion-frame-legendary` | the ornate ring for a Legendary minion; falls back to `minion-frame` | 480 × 600 px | **yes** |
+| `deathrattle` | the Deathrattle badge — recycling arrows, "the end of its life cycle" | 144 × 144 px | **yes** |
+| `trigger` | the badge for start- and end-of-turn text: a cog, which spins when it fires | 144 × 144 px | **yes** |
+| `spell-damage` | the Spell Damage badge (the "+1" is drawn over it) | 144 × 144 px | **yes** |
+| `splat-damage` | the starburst a damage number lands on | 240 × 240 px | **yes** |
+| `splat-heal` | the seal a healing number lands on | 240 × 240 px | **yes** |
+| `splat-armor` | the plate an armor gain lands on | 240 × 240 px | **yes** |
+| `weapon-hammer` · `weapon-calipers` · `weapon-iron` | the three tools a weapon is shown as, beside its hero | 312 × 312 px | **yes** |
+| `charge` | *not used:* Charge has no lasting mark, as in Hearthstone — it is shown as streaks on arrival | — | — |
 | `spell-mark` | the type line's mark on a Spell card | 144 × 144 px | **yes** |
 | `weapon-mark` | the type line's mark on a Weapon card (Phase 1B) | 144 × 144 px | **yes** |
 
@@ -91,10 +100,12 @@ the card inspected at 2.5×.
 > removed: **rarity is the card's border colour now**, which can be read across a
 > board rather than only up close. Nothing needs drawing for it.
 
-> **Currently wired:** `cost-crystal`, `attack-gem` and `health-gem`, on the card
-> face. The rest are specified and indexed but not yet read by a component — the board and tray elements get wired when the table is
-> rebuilt (`docs/plan/PHASE-2-TABLE-UX.md` §6). Drawing them now is safe; they
-> will light up without needing to be redrawn.
+> **Currently wired:** `cost-crystal`, `attack-gem` and `health-gem` on the card
+> face, and since REVISIONS R3 every board element in the table above —
+> `taunt`, `divine-shield`, `stealth`, `frozen`, `windfury`, `minion-frame`,
+> `minion-frame-legendary`, `deathrattle`, `trigger`, `spell-damage`, the three
+> splats and the three weapon tools. Dropping a file in replaces the CSS or SVG
+> version on the next build. The mana tray and the type marks are not yet read.
 
 ## 4. Backdrops — `art/scene/`
 

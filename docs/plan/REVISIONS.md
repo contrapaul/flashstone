@@ -479,24 +479,56 @@ and why their minion died, without reading anything.
 
 **Goal:** every keyword is a shape or a material, and every hit has weight.
 **Depends on:** R1. **Art:** every item here has a CSS/SVG fallback and an
-`art/ui/` slot (§16 lists them).
+`art/ui/` slot (`static/art/README.md` §3 lists them).
+
+> ## Built 2026-10-07 — 403 tests, 0 check errors. Not deployed.
+>
+> **The minion is a portrait now** (`MinionView.svelte`, rewritten): an oval in a
+> gold ring with its two gems, no name and no chips. Every keyword is a shape —
+> the Taunt shield, the Divine Shield bubble, Stealth smoke, a Frozen ice block,
+> Windfury rings — and its text is a badge: recycling arrows (Deathrattle), a
+> cog (turn triggers), a violet "+1" (Spell Damage). Numbers go green above the
+> card's value and red when damaged. Each shape and badge reads its drawn art
+> from `art/ui/` when a file exists; the README's §3 now lists every one.
+>
+> **Hits** land as splats (`Splat.svelte`: red starburst, green seal, steel
+> plate) sized by `hitIntensity`, which also drives the spark count, the
+> knockback away from the attacker and a shake scaled from 0 to 1. Deaths crack
+> before they shatter. A hero brought to 0 breaks apart before the result shows.
+> Heroes wear cracks at 10 and 5. Weapons are tools beside the hero that swing,
+> tick and break; the hero power turns over when used, in its class's colour.
+> Burned cards dissolve above their hand; fatigue is an empty card that strikes.
+> An illegal attack shakes its target's head, and flashes the Taunt shields red
+> when Taunt is why.
+>
+> **Verified** through a temporary sandbox page driving the real table and
+> director with hand-built cues (removed before committing), at 1440×900 and
+> 1024×768 — every row of both tables above — and in a practice match: a spell
+> kill with a Deathrattle firing as the minion broke, with no drift warnings.
+> **Not verified:** a Charge minion's arrival streaks, and the Taunt tell in a
+> real match (it needs the opponent to hold a Taunt while you have an attacker).
+>
+> **Found along the way:** the engine never removes Stealth when a minion
+> attacks. Hearthstone does. The smoke "puffs away" whenever Stealth is lost
+> (today only by Silence); whether attacking should break Stealth is a rules
+> question for Paul, not changed here.
 
 ### Combat
 
-- [ ] **R3.1 — Lunge and hit-stop** (D7, finished): the attacker rises in z, dashes,
+- [x] **R3.1 — Lunge and hit-stop** (D7, finished): the attacker rises in z, dashes,
       freezes for ~60ms at contact, recoils with overshoot. Hero attacks lunge the
       portrait and swing the weapon icon.
-- [ ] **R3.2 — Impact intensity.** `hitIntensity(damage)` from 0 to 1 drives target
+- [x] **R3.2 — Impact intensity.** `hitIntensity(damage)` from 0 to 1 drives target
       knockback, screen shake (from 0.5 up), spark count, splat size and
       `hit-light`/`hit-heavy`.
-- [ ] **R3.3 — Damage splats.** The floating "-3" becomes a red starburst badge
+- [x] **R3.3 — Damage splats.** The floating "-3" becomes a red starburst badge
       pinned to the target. Heals show a green "+2" badge; armor gains a steel plate
       badge. Health gems tick and flash. **Damaged health shows in red**, as in
       Hearthstone, which replaces the "Enraged" chip.
-- [ ] **R3.4 — Death.** The minion cracks (a mask overlay), desaturates, and bursts
+- [x] **R3.4 — Death.** The minion cracks (a mask overlay), desaturates, and bursts
       into canvas shards with gravity. If it has a Deathrattle, its badge flares and
       a wisp rises before the effect. Then the board closes up (Flip).
-- [ ] **R3.5 — Heroes.** Hit flash; crack overlays at ≤10 and ≤5 health; at 0, the
+- [x] **R3.5 — Heroes.** Hit flash; crack overlays at ≤10 and ≤5 health; at 0, the
       portrait cracks and explodes (R6.6).
 
 ### Persistent keywords — no more chips
@@ -516,20 +548,20 @@ and why their minion died, without reading anything.
 | **Buffed** | Stat gems turn green. | Upward chevrons rise and the gem pulses. |
 | **Asleep** | `z z z` (D11). | It wakes at the start of your turn. |
 
-- [ ] **R3.6 — The minion becomes a portrait.** An oval portrait with attack and
+- [x] **R3.6 — The minion becomes a portrait.** An oval portrait with attack and
       health gems; the name and chips go (both live in the inspector and the history).
       Legendary minions get an ornate oval with a crest and drifting motes (R8.1).
       → **verify:** with the text removed, a board of seven can be read entirely by
       shape. Clicking a minion still opens the inspector.
-- [ ] **R3.7 — Weapons, armor, hero power.** Equip: the weapon card flies to a slot
+- [x] **R3.7 — Weapons, armor, hero power.** Equip: the weapon card flies to a slot
       left of the hero and becomes an icon with attack and durability gems (a tool:
       hammer, calipers, soldering iron). Durability ticks per swing; at 0 the icon
       shatters. Armor is a steel plate beside the health gem. Using the hero power
       **flips the button over** (Hearthstone's tell) with a class-coloured burst.
-- [ ] **R3.8 — Burn and fatigue.** A card drawn into a full hand appears above your
+- [x] **R3.8 — Burn and fatigue.** A card drawn into a full hand appears above your
       hand and burns away (fire-dissolve mask). Fatigue: an empty card slides from
       the deck showing the damage number, then strikes the hero.
-- [ ] **R3.9 — Spell visuals by action.** Each `effect` cue gets a choreography:
+- [x] **R3.9 — Spell visuals by action.** Each `effect` cue gets a choreography:
 
       | Action | Visual |
       |---|---|

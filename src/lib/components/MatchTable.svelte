@@ -8,6 +8,7 @@
   import CardBack from './CardBack.svelte';
   import TurnBanner from './TurnBanner.svelte';
   import FloatingNumber from './FloatingNumber.svelte';
+  import Splat from './Splat.svelte';
   import Chronicle from './Chronicle.svelte';
   import CardInspector from './CardInspector.svelte';
   import HeroPowerButton from './HeroPowerButton.svelte';
@@ -29,7 +30,7 @@
   import GameMenu from './GameMenu.svelte';
   import { goto } from '$app/navigation';
   import { applyCue, presentedDiff } from '../presentation/apply';
-  import { centreOf, direct, hold, type Mark, type Stage } from '../presentation/director';
+  import { centreOf, direct, hold, type Mark, type Showcase, type Stage } from '../presentation/director';
   import type { Fx } from '../presentation/fx';
   import FxLayer from './FxLayer.svelte';
   import {
@@ -97,9 +98,16 @@
     heavy: new Set(),
     struck: new Set(),
     dying: new Set(),
-    triggered: new Set()
+    triggered: new Set(),
+    swapping: new Set(),
+    refused: new Set()
   };
-  let quaking = false;
+  /** How hard the table is shaking, 0–1. */
+  let quake = 0;
+  /** A hero brought to 0, breaking apart before the result is shown. */
+  let heroDown: 'me' | 'foe' | null = null;
+  /** Numbers pinned to what they happened to. */
+  let splats: { id: number; kind: 'damage' | 'heal' | 'armor'; amount: number; x: number; y: number; intensity: number }[] = [];
   let drawnCards = new Set<Card>();
   let hitHero: 'me' | 'foe' | null = null;
   let banner: string | null = null;
@@ -128,8 +136,8 @@
    */
   let shown: PlayerView = view;
 
-  /** A card held up large so it can be read — the opponent's play, or a burn. */
-  let showcase: { card: Card; key: number; from: { x: number; y: number } } | null = null;
+  /** A card held up large so it can be read — the opponent's play, a burn, fatigue. */
+  let showcase: (Showcase & { key: number }) | null = null;
   let showcaseKey = 0;
 
   /** "Your Turn" as it turns over to you, then what it does. */
@@ -321,6 +329,7 @@
     const freshMatch = from.turnNumber === 0 || to.turnNumber < from.turnNumber;
     if (!freshMatch) return { ...from, you: to.you, turnEndsIn: to.turnEndsIn };
     logShown = 0;
+    heroDown = null;
     const draws = (owner: string) => queue.filter((e) => e.type === 'draw' && e.owner === owner).length;
     const foeId = to.you === 'player' ? 'ai' : 'player';
     return {
@@ -365,11 +374,17 @@
       marks = { ...marks, [kind]: next };
     },
     setHeroHit: (side) => (hitHero = side),
-    setQuake: (on) => (quaking = on),
+    setHeroDown: (side) => (heroDown = side),
+    setQuake: (intensity) => (quake = intensity),
     setBanner: (text) => (banner = text),
     float: floatAt,
-    setShowcase: (card, from) => {
-      showcase = card ? { card, key: ++showcaseKey, from: from ?? { x: window.innerWidth / 2, y: 0 } } : null;
+    splat: (at, kind, amount, intensity) => {
+      const id = floatSeq++;
+      splats = [...splats, { id, kind, amount, x: at.x, y: at.y, intensity }];
+      void sleep(1000).then(() => (splats = splats.filter((s) => s.id !== id)));
+    },
+    setShowcase: (show) => {
+      showcase = show ? { ...show, key: ++showcaseKey } : null;
     },
     setAimLine: (line) => (cueAim = line),
     setRoulette: (rect) => (rouletteRect = rect),
@@ -440,8 +455,26 @@
     });
   }
 
-  /** And leaves: a minion shrinks towards the board, a spell flares out. */
-  function vanish(_node: Element, { spell }: { spell: boolean }) {
+  /**
+   * And leaves: a minion shrinks towards the board, a spell flares out, a
+   * burnt card is already gone, and fatigue flies into the hero it strikes.
+   */
+  function vanish(node: Element, { show }: { show: Showcase }) {
+    if (show.mode === 'burn') return { duration: d(80), css: (t: number) => `opacity: ${t}` };
+    if (show.mode === 'fatigue') {
+      const here = centreOf(node as HTMLElement);
+      const dx = show.strike.x - here.x;
+      const dy = show.strike.y - here.y;
+      return {
+        duration: spatial() ? d(260) : d(120),
+        easing: (t: number) => t * t,
+        css: (t: number) =>
+          spatial()
+            ? `transform: translate(${(1 - t) * dx}px, ${(1 - t) * dy}px) scale(${0.45 + 0.55 * t}); opacity: ${Math.min(1, t * 5)}`
+            : `opacity: ${t}`
+      };
+    }
+    const spell = show.card.type === 'Spell';
     return {
       duration: spatial() ? d(280) : d(120),
       css: (t: number) =>
@@ -449,6 +482,45 @@
           ? `opacity: ${t}; transform: scale(${1 + (1 - t) * 0.3}); filter: brightness(${1 + (1 - t) * 1.6})`
           : `opacity: ${t}; transform: scale(${0.55 + 0.45 * t}) translateY(${(1 - t) * 60}px)`
     };
+  }
+
+  /**
+   * An attack that is not allowed — onto a minion behind a Taunt, or into
+   * Stealth — is refused without a sentence: the target shakes its head, and
+   * if Taunt is the reason, every enemy Taunt shield flashes red.
+   */
+  let tauntWarn = false;
+  let heroRefused = false;
+
+  function refuse(target: { kind: 'minion'; instanceId: string } | { kind: 'hero' }) {
+    if (target.kind === 'minion') {
+      const id = target.instanceId;
+      stage.mark('refused', id, true);
+      void sleep(420).then(() => stage.mark('refused', id, false));
+    } else {
+      heroRefused = true;
+      void sleep(420).then(() => (heroRefused = false));
+    }
+    if (shown.foe.board.some((m) => m.keywords.includes('Taunt'))) {
+      tauntWarn = true;
+      void sleep(700).then(() => (tauntWarn = false));
+    }
+  }
+
+  /** An enemy under the pointer that an attack may *not* hit, if there is one. */
+  function refusedAt(x: number, y: number): { kind: 'minion'; instanceId: string } | { kind: 'hero' } | null {
+    const inside = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    const els = foeBoardEl ? [...foeBoardEl.querySelectorAll('.minion')] : [];
+    const index = els.findIndex(inside);
+    if (index >= 0) {
+      const id = shown.foe.board[index]?.instanceId;
+      return id && !targetableIds.has(id) ? { kind: 'minion', instanceId: id } : null;
+    }
+    const hero = foeHeroEl?.querySelector('.ring');
+    return hero && inside(hero) && !heroTargetable ? { kind: 'hero' } : null;
   }
 
   function floatAt(at: { x: number; y: number } | undefined, text: string, color: string) {
@@ -679,7 +751,11 @@
       }
       dispatch('playCard', { handIndex: finished.handIndex, slot: finished.slot });
     } else {
-      if (!finished.target) return;
+      if (!finished.target) {
+        const refused = refusedAt(event.clientX, event.clientY);
+        if (refused) refuse(refused);
+        return;
+      }
       dispatch('attack', { instanceId: finished.instanceId, target: finished.target });
     }
     selectedId = null;
@@ -734,6 +810,8 @@
           target: { kind: 'minion', instanceId: minion.instanceId }
         });
         selectedId = null;
+      } else {
+        refuse({ kind: 'minion', instanceId: minion.instanceId });
       }
       return;
     }
@@ -741,6 +819,8 @@
       if (targetableIds.has(minion.instanceId)) {
         dispatch('heroAttack', { target: { kind: 'minion', instanceId: minion.instanceId } });
         heroSelected = false;
+      } else {
+        refuse({ kind: 'minion', instanceId: minion.instanceId });
       }
       return;
     }
@@ -765,6 +845,10 @@
     if (activeAttacker && heroTargetable) {
       dispatch('attack', { instanceId: activeAttacker, target: { kind: 'hero' } });
       selectedId = null;
+      return;
+    }
+    if ((activeAttacker || heroSelected) && !heroTargetable) {
+      refuse({ kind: 'hero' });
       return;
     }
     if (view.me.canHeroAttack && heroSelected) {
@@ -856,8 +940,10 @@
 
 <main
   class="table"
-  class:quaking
+  class:quaking={quake > 0}
   class:still
+  class:taunt-warn={tauntWarn}
+  style:--quake={quake.toFixed(2)}
   style:--fit={fit.toFixed(3)}
   style:--pace={pace.toFixed(2)}
   style:--scene={tableArt ? `url("${tableArt}")` : 'none'}
@@ -904,6 +990,8 @@
         weapon={shown.foe.weapon}
         targetable={heroTargetable || ((aiming !== null || aimingPower) && canAimFoeHero)}
         hit={hitHero === 'foe'}
+        destroyed={heroDown === 'foe'}
+        refused={heroRefused}
         on:click={onEnemyHero}
       />
 
@@ -941,6 +1029,8 @@
           dying={marks.dying.has(minion.instanceId)}
           triggered={marks.triggered.has(minion.instanceId)}
           heavy={marks.heavy.has(minion.instanceId)}
+          swapping={marks.swapping.has(minion.instanceId)}
+          refused={marks.refused.has(minion.instanceId)}
           on:click={() => onEnemyMinion(minion)}
         />
       </div>
@@ -997,6 +1087,8 @@
           dying={marks.dying.has(minion.instanceId)}
           triggered={marks.triggered.has(minion.instanceId)}
           heavy={marks.heavy.has(minion.instanceId)}
+          swapping={marks.swapping.has(minion.instanceId)}
+          refused={marks.refused.has(minion.instanceId)}
           on:click={() => onMyMinion(minion)}
           on:pointerdown={(e) => onMinionPointerDown(e, minion)}
         />
@@ -1033,6 +1125,7 @@
         armed={myTurn && view.me.canHeroAttack}
         targetable={(aiming !== null || aimingPower) && canAimMyHero}
         hit={hitHero === 'me'}
+        destroyed={heroDown === 'me'}
         on:click={onMyHero}
       />
     </div>
@@ -1070,12 +1163,40 @@
 
   {#if showcase}
     {#key showcase.key}
-      <!-- The opponent's card, held up where it can be read before it acts. -->
-      <div class="showcase" aria-live="polite" aria-label={`${opponentName} plays ${showcase.card.name}`}>
-        <div class="lift" use:reveal={showcase.from} out:vanish={{ spell: showcase.card.type === 'Spell' }}>
-          <div class="enlarge"><CardPreview card={showcase.card} playable={false} /></div>
+      {#if showcase.mode === 'reveal'}
+        <!-- The opponent's card, held up where it can be read before it acts. -->
+        <div class="showcase" aria-live="polite" aria-label={`${opponentName} plays ${showcase.card.name}`}>
+          <div class="lift" use:reveal={showcase.from} out:vanish={{ show: showcase }}>
+            <div class="enlarge"><CardPreview card={showcase.card} playable={false} /></div>
+          </div>
         </div>
-      </div>
+      {:else if showcase.mode === 'burn'}
+        <!-- Drawn into a full hand: shown, then burnt away from the bottom up. -->
+        <div
+          class="showcase burn"
+          style:left={`${showcase.at.x}px`}
+          style:top={`${showcase.at.y}px`}
+          aria-live="polite"
+          aria-label={`${showcase.card.name} is burned`}
+        >
+          <div class="lift" use:reveal={showcase.at} out:vanish={{ show: showcase }}>
+            <div class="enlarge"><CardPreview card={showcase.card} playable={false} /></div>
+          </div>
+        </div>
+      {:else}
+        <!-- An empty deck deals an empty card, showing what it will cost. -->
+        <div
+          class="showcase fatigue"
+          style:left={`${showcase.at.x}px`}
+          style:top={`${showcase.at.y}px`}
+          aria-live="polite"
+          aria-label={`Fatigue: ${showcase.amount} damage`}
+        >
+          <div class="lift" use:reveal={showcase.from} out:vanish={{ show: showcase }}>
+            <div class="enlarge"><div class="fatigue-card"><b>{showcase.amount}</b></div></div>
+          </div>
+        </div>
+      {/if}
     {/key}
   {/if}
 
@@ -1117,6 +1238,10 @@
   {/if}
 
   <FxLayer bind:fx />
+
+  {#each splats as splat (splat.id)}
+    <Splat kind={splat.kind} amount={splat.amount} x={splat.x} y={splat.y} intensity={splat.intensity} />
+  {/each}
 
   {#each floats as float (float.id)}
     <FloatingNumber text={float.text} color={float.color} x={float.x} y={float.y} />
@@ -1602,7 +1727,7 @@
   .table { user-select: none; }
 
   /* A heavy hit, or a heavy landing, shakes the table, not just the portrait. */
-  .table.quaking { animation: fs-quake .5s ease-out; }
+  .table.quaking { animation: fs-quake .42s ease-out; }
 
   /*
    * Reduced motion, chosen in settings: everything still changes and fades,
@@ -1728,6 +1853,59 @@
   }
 
   .showcase .lift { filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .75)); }
+
+  /*
+   * A burn: once it has been seen, the card goes from the bottom up, its edge
+   * glowing. A mask three cards tall slides up past it, carrying the line
+   * between shown and gone.
+   */
+  .showcase.burn .lift {
+    filter: drop-shadow(0 0 12px rgba(255, 120, 40, .95)) drop-shadow(0 26px 40px rgba(0, 0, 0, .75));
+    -webkit-mask-image: linear-gradient(to top, transparent 46%, #000 54%);
+    mask-image: linear-gradient(to top, transparent 46%, #000 54%);
+    -webkit-mask-size: 100% 300%;
+    mask-size: 100% 300%;
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    animation: fs-burn calc(.65s * var(--pace, 1)) ease-in calc(.45s * var(--pace, 1)) forwards;
+  }
+
+  @keyframes fs-burn {
+    to { -webkit-mask-position: 0 100%; mask-position: 0 100%; }
+  }
+
+  /* Fatigue: no picture, no name — an empty card, and the damage it will do. */
+  .fatigue-card {
+    width: 134px;
+    height: 168px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    border: 2px solid #4a3a5e;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(170, 120, 255, .25), transparent 60%),
+      linear-gradient(180deg, #2a2236, #120e18);
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, .8);
+  }
+
+  .fatigue-card b {
+    font-family: var(--display);
+    font-size: 56px;
+    font-weight: 700;
+    color: #e6d4ff;
+    text-shadow: 0 0 18px rgba(170, 120, 255, .9), 0 3px 6px #000;
+  }
+
+  /* Attacking past a Taunt: the opponent's shields flash red — the rule, shown. */
+  .table.taunt-warn :global(.board:not(.mine) .taunt-frame) {
+    animation: fs-taunt-warn .7s ease-out;
+  }
+
+  @keyframes fs-taunt-warn {
+    0%, 100% { filter: none; }
+    20%, 60% { filter: sepia(1) saturate(7) hue-rotate(-35deg) brightness(1.15); }
+    40%, 80% { filter: none; }
+  }
   .showcase .enlarge { transform: scale(1.6); }
   .showcase :global(.card) { opacity: 1; }
   .showcase :global(.card:hover) { transform: none; }

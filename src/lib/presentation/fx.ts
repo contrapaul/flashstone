@@ -10,7 +10,7 @@
  * reports — so a choreography can aim at an element without converting.
  */
 
-type Shape = 'spark' | 'shard' | 'mote' | 'ring';
+type Shape = 'spark' | 'shard' | 'mote' | 'ring' | 'chevron';
 
 interface Particle {
   shape: Shape;
@@ -109,6 +109,11 @@ export class Fx {
   /** Soft drifting lights: healing, a blessing, a summon settling. */
   motes(x: number, y: number, o: BurstOptions = {}): void {
     this.emit('mote', x, y, { count: 12, colors: ['#fff3c4', '#ffe08a'], speed: 90, gravity: -140, life: 1.1, size: 5, ...o });
+  }
+
+  /** Upward chevrons rising off something that just grew stronger. */
+  chevrons(x: number, y: number, o: BurstOptions = {}): void {
+    this.emit('chevron', x, y, { count: 6, colors: ['#9dff7a', '#e8ffb0'], speed: 120, angle: -Math.PI / 2, spread: 0.5, gravity: -120, life: 0.8, size: 8, ...o });
   }
 
   /** A single expanding ring: a landing, a shockwave. */
@@ -256,6 +261,19 @@ function draw(ctx: CanvasRenderingContext2D, p: Particle): void {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * 2.2, 0, TAU);
       ctx.fill();
+      break;
+    }
+    case 'chevron': {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.size, p.y + p.size * 0.6);
+      ctx.lineTo(p.x, p.y - p.size * 0.4);
+      ctx.lineTo(p.x + p.size, p.y + p.size * 0.6);
+      ctx.stroke();
       break;
     }
     case 'ring': {
