@@ -25,12 +25,21 @@ Exact filenames — `flashstone.css` references these paths verbatim.
 | `eb-garamond-600.woff2` | EB Garamond | 600 SemiBold | normal |
 | `eb-garamond-400-italic.woff2` | EB Garamond | 400 Regular | *italic* |
 
-Seven files. `.woff2` only — every browser Flashstone targets supports it, and a
+Seven files, plus the logo's face, `germania-one-400.woff2` (Germania One,
+400 Regular — its only weight).
+
+Germania One was picked for the logo (REVISIONS R6.1) over Cinzel Decorative and
+Metamorphous: the heaviest of the three and the only one still legible at the
+nav's 32px. Installed 2026-10-07 from `@fontsource/germania-one`, licence in
+`OFL-germania-one.txt`.
+
+All eight are `.woff2` only — every browser Flashstone targets supports it, and a
 second format would double the bytes for nothing.
 
 ## Where they're used
 
-- **Cinzel** (`--display`) — the wordmark, nav, card names, turn banners, buttons.
+- **Germania One** (`--logo-face`) — the logo, VICTORY and DEFEAT. Nothing else.
+- **Cinzel** (`--display`) — nav, card names, turn banners, buttons.
   Display sizes only, which is why it needs 500/600/700 and no italic.
 - **EB Garamond** (`--body`) — card body text, answers, the Chronicle, rules copy.
   The italic is used for flavour text.

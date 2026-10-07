@@ -7,8 +7,12 @@
   import { starterCollection } from '$lib/data/starter';
   import { loadCollection, loadDeck } from '$lib/decks/storage';
   import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+  import Logo from '$lib/components/Logo.svelte';
+  import GoldCounter from '$lib/components/GoldCounter.svelte';
+  import MenuBackdrop from '$lib/components/MenuBackdrop.svelte';
   import { account } from '$lib/account';
-  import { goto } from '$app/navigation';
+  import { settings } from '$lib/settings';
+  import { goto, onNavigate } from '$app/navigation';
 
   // /import is deliberately absent: the import mechanic is shelved in favour of
   // the built-in SL card set. The route and its parsers remain on disk.
@@ -31,13 +35,38 @@
    * `/play` itself is the New Game screen, not a match; only `/play/ai` and a
    * room under `/online/` count.
    */
-  $: inMatch = $page.url.pathname === '/play/ai' || /^\/online\/.+/.test($page.url.pathname);
+  $: inMatch = isMatch($page.url.pathname);
 
   /** `/play` stays lit for its tabs and for the match under it. */
   const isActive = (href: string) =>
     href === '/play'
       ? $page.url.pathname === '/play' || $page.url.pathname.startsWith('/play/')
       : $page.url.pathname === href;
+
+  const isMatch = (path: string) => path === '/play/ai' || /^\/online\/.+/.test(path);
+
+  /*
+   * Menu pages crossfade, the new one easing up out of a slight zoom — through
+   * the browser's view transitions, which snapshot the old page so it can fade
+   * while the new one is already live. (Svelte transitions cannot: both copies
+   * would render the new page.) A match is entered and left without one: the
+   * table has its own entrance. Browsers without view transitions just switch.
+   */
+  onNavigate((navigation) => {
+    const from = navigation.from?.url.pathname ?? '';
+    const to = navigation.to?.url.pathname ?? '';
+    if (!document.startViewTransition || from === to || isMatch(from) || isMatch(to)) return;
+    document.documentElement.dataset.calm = $settings.motion === 'reduced' ? 'true' : 'false';
+    return new Promise((resolve) => {
+      const transition = document.startViewTransition(async () => {
+        resolve();
+        await navigation.complete;
+      });
+      // A skipped transition (a hidden tab, a second click) still navigates;
+      // only its animation is lost, which is not worth an error in the console.
+      transition.ready.catch(() => {});
+    });
+  });
 
   let deckLabel = '';
   /** Set when today's login bonus was just paid, so the nav can say so once. */
@@ -72,7 +101,7 @@
 
 {#if !inMatch}
   <nav>
-    <a class="brand" href="/">Flashstone</a>
+    <a class="brand" href="/"><Logo height={32} /></a>
     <div class="links">
       {#each links as link}
         <a href={link.href} class:active={isActive(link.href)}>{link.label}</a>
@@ -89,7 +118,7 @@
     {#if !$account.loading}
       <a class="account" class:signed-in={$account.user} href="/account">
         {#if $account.user}
-          <span class="gold">{$account.gold}g</span>
+          <GoldCounter value={$account.gold} />
           <span class="who">{$account.user.username}</span>
         {:else}
           <span class="who">Sign in</span>
@@ -107,6 +136,7 @@
   without this would leave a 55px strip of nothing under the table.
 -->
 <div class="shell" class:in-match={inMatch}>
+  {#if !inMatch}<MenuBackdrop dust={$page.url.pathname === '/'} />{/if}
   <slot />
 </div>
 
@@ -114,32 +144,55 @@
   .shell { --chrome: 55px; }
   .shell.in-match { --chrome: 0px; }
 
+  /*
+   * A carved header strip in the title's materials: dark wood with a lit top
+   * edge and a gold trim along the bottom, the grain running across it.
+   */
   nav {
     position: relative;
     z-index: 40;
+    /* Held still while the page under it crossfades. */
+    view-transition-name: nav;
     display: flex;
     align-items: center;
     gap: 28px;
     height: 54px;
     padding: 0 24px;
-    border-bottom: 1px solid #4a3722;
-    background: linear-gradient(180deg, #20160d, var(--ink-2));
-    box-shadow: 0 2px 18px rgba(0, 0, 0, .6);
+    background:
+      repeating-linear-gradient(90deg, rgba(255, 230, 190, .025) 0 1px, transparent 1px 7px),
+      linear-gradient(180deg, #3a2814 0%, #24180c 18%, #1a1108 70%, #120b05 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 224, 170, .22),
+      inset 0 -2px 0 rgba(0, 0, 0, .55),
+      0 3px 0 -1px #8a6430,
+      0 4px 0 -1px #2a1a0a,
+      0 8px 22px rgba(0, 0, 0, .65);
+  }
+
+  /* The gold trim, lit in the middle and fading to the ends. */
+  nav::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #c9973e 18%, #ffe6a0 50%, #c9973e 82%, transparent);
+    pointer-events: none;
   }
 
   .brand {
-    font-family: var(--display);
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: .22em;
-    text-transform: uppercase;
-    color: #e8c56a;
-    text-shadow: 0 0 18px rgba(232, 197, 106, .35);
+    flex: none;
+    display: flex;
+    align-items: center;
+    filter: drop-shadow(0 0 10px rgba(232, 197, 106, .18));
+    transition: filter .15s ease;
   }
-  .brand:hover { color: #f4d98a; }
+  .brand:hover { filter: drop-shadow(0 0 14px rgba(255, 214, 120, .45)) brightness(1.08); }
 
-  .links { display: flex; gap: 4px; }
+  .links { display: flex; gap: 6px; }
 
+  /* Each link a small carved tab; the current one pressed in and lit. */
   .links a {
     padding: 6px 13px;
     border: 1px solid transparent;
@@ -149,14 +202,18 @@
     letter-spacing: .16em;
     text-transform: uppercase;
     color: var(--text-dim);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, .8);
+    transition: color .12s ease, background .12s ease;
   }
 
-  .links a:hover { color: var(--text); }
+  .links a:hover { color: var(--text); background: rgba(255, 224, 170, .05); }
 
   .links a.active {
     border-color: #8a6c3c;
-    background: linear-gradient(180deg, #4a3620, #2a1d10);
+    background: linear-gradient(180deg, #160e06, #2e2010);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, .7), 0 1px 0 rgba(255, 224, 170, .15);
     color: var(--gold-bright);
+    text-shadow: 0 0 10px rgba(240, 214, 138, .45);
   }
 
   .bonus {
@@ -188,7 +245,6 @@
   }
   .account:hover { border-color: var(--frame-lit); color: var(--text); }
   .account.signed-in { border-color: #8a6c3c; }
-  .account .gold { color: var(--gold-bright); }
 
   .deck {
     margin-left: auto;
@@ -196,5 +252,13 @@
     font-size: 12px;
     letter-spacing: .04em;
     color: #8a7657;
+  }
+
+  /* iPad portrait: the strip keeps its links and loses the deck line, which
+     wrapped to four lines and pushed Settings off the edge. */
+  @media (max-width: 900px) {
+    nav { gap: 16px; padding: 0 16px; }
+    .deck { visibility: hidden; min-width: 0; flex: 1; }
+    .account.signed-in .who { display: none; }
   }
 </style>

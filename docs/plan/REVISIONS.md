@@ -755,7 +755,57 @@ projector.
 **Depends on:** D1 (fonts). Independent of the engine, so it can run alongside
 R1–R5.
 
-- [ ] **R6.1 — The logo.** `Logo.svelte`, inline SVG so it's crisp at any size and
+> ## Built 2026-10-07 — 412 tests, 0 check errors, production build passes. Not deployed.
+>
+> **The face is Germania One.** All three candidates were rendered in the full
+> treatment, side by side:
+> - Cinzel Decorative's swashes cluttered FLASH at nav size;
+> - Metamorphous's uncial E made STONE read as "STONC" when small;
+> - Germania One is the heaviest of the three, the nearest to Hearthstone's
+>   chunky letters, and still legible at 32px.
+>
+> It is self-hosted with its licence (`static/fonts/`), and used for the logo
+> and nothing else.
+> **What changed:**
+> - `Logo.svelte` (the mark, and the same treatment for VICTORY, DEFEAT, DRAW
+>   and VS with the emblem as a keystone);
+> - the carved nav, with the logo, a gold counter that counts up and a coin;
+> - the title screen on `MenuBackdrop` (`scene/menu` now wired, dust motes on
+>   the FX canvas);
+> - carved menu plates, with Play the large one;
+> - page crossfades;
+> - the face-off splash, then the board assembling: decks slide in, heroes drop
+>   onto new plinths and raise dust;
+> - the result plate, with coins flying to the counter and the quest bars the
+>   match moved.
+>
+> **Two changes from the letter of the plan:**
+> - **Page crossfades use the browser's view transitions** (`onNavigate`), not
+>   Svelte transitions. A keyed Svelte transition rendered the *new* page in
+>   both copies, and mounted it twice. View transitions fade a snapshot of the
+>   old page instead; a browser without them simply switches pages. They are
+>   also skipped in a hidden tab, so they could not be watched in the
+>   (hidden) test pane. The calls were confirmed instead.
+> - **Quest bars** need the match's progress reports to land first, so
+>   `reportProgress` now returns its promise. Gameplay still never awaits it.
+>
+> **Also fixed:** the nav ran off the right edge at iPad portrait. Below 900px
+> the deck line and the username give way.
+> **Seen:** the title, the nav at 768 and 1280, the splash at 768×1024 and
+> 1280×800, the assembly, and the plate as VICTORY (coins, the counter, one
+> bar finishing green) and as DEFEAT (steel, the gem dark). The light sweep
+> was checked frozen mid-pass.
+> **Seen through a real practice match** (the AI's health set to 0 from the
+> console, a hook since removed): the VICTORY plate, then "Play again" back
+> to the face-off.
+> **Fixed on the way:** a match that ended on turn 1 restarted on turn 1,
+> which the fresh-match test (turn count went back) missed. The new match
+> then started from the old board. Becoming unfinished again now counts too.
+> **Not yet seen:** the plate signed in, with real gold and quests (those were
+> staged in a sandbox, since removed). Music on the title waits for R7; the
+> mulligan after the deal waits for R9.1.
+
+- [x] **R6.1 — The logo.** `Logo.svelte`, inline SVG so it's crisp at any size and
       animatable; `art/ui/logo.webp` overrides it when Paul draws one.
       - **Wordmark:** FLASHSTONE in a heavy flared display face on a gentle upward
         arch. The Hearthstone treatment: a 3-stop gold bevel gradient, a thin inner
@@ -769,19 +819,19 @@ R1–R5.
         pick one: *Cinzel Decorative* 900 (same family as the UI), *Germania One*,
         *Metamorphous*.
       → **verify:** legible at 32px in the nav and striking at 160px on the title.
-- [ ] **R6.2 — Title screen.** A full-bleed backdrop (`scene/menu`; until then a deep
+- [x] **R6.2 — Title screen.** A full-bleed backdrop (`scene/menu`; until then a deep
       layered gradient with dust motes drifting on the FX canvas). The logo drops in
       with a bounce and a flash. Menu buttons become carved plates with a hover
       glow and a pressed state; **Play** is the large one. Music starts on the first
       input (R7).
-- [ ] **R6.3 — Versus splash.** Entering a match: your hero frame against theirs,
+- [x] **R6.3 — Versus splash.** Entering a match: your hero frame against theirs,
       with names and classes, for about 1.5s; then the board assembles (decks slide
       in, heroes drop onto plinths) and the opening hand deals (R4.4), followed by
       the mulligan (R9.1).
-- [ ] **R6.4 — Page transitions.** Menu pages crossfade with a slight zoom; the gold
+- [x] **R6.4 — Page transitions.** Menu pages crossfade with a slight zoom; the gold
       counter in the nav counts up with a coin icon.
-- [ ] **R6.5 — The nav** as a carved header strip that matches the title.
-- [ ] **R6.6 — Victory and defeat.** The loser's portrait cracks and explodes into
+- [x] **R6.5 — The nav** as a carved header strip that matches the title.
+- [x] **R6.6 — Victory and defeat.** The loser's portrait cracks and explodes into
       shards. A **VICTORY** or **DEFEAT** plate in the logo treatment. Gold earned
       counts up with coins flying to the counter, and quest bars tick if any moved.
 

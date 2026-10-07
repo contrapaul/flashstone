@@ -9,7 +9,8 @@
   import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
   import type { MatchStatus } from '$lib/net/source';
   import { lobbyCall } from '$lib/net/client';
-  import { reportProgress } from '$lib/quests/client';
+  import { fetchQuests, questsMovedSince, reportProgress, type QuestTracks } from '$lib/quests/client';
+  import type { QuestMove } from '$lib/quests/quests';
 
   /**
    * An online match.
@@ -26,6 +27,10 @@
   let error: string | null = null;
   let joining = true;
   let counted = false;
+  /** Quest progress as the match began, so the result can show what it moved. */
+  let questsBefore: Promise<QuestTracks> | null = null;
+  let questMoves: QuestMove[] = [];
+  let paidSeen = false;
 
   $: gameId = $page.params.gameId ?? '';
 
@@ -55,6 +60,7 @@
     }
 
     joining = false;
+    questsBefore = fetchQuests();
     source = new RemoteSource(gameId, {
       onView(next, cues) {
         view = next;
@@ -98,8 +104,16 @@
    */
   $: if (view.winner && !counted) {
     counted = true;
-    reportProgress('matches', 1);
-    if (view.winner === view.you) reportProgress('wins', 1);
+    const reports = [reportProgress('matches', 1)];
+    if (view.winner === view.you) reports.push(reportProgress('wins', 1));
+    void questsMovedSince(questsBefore, reports).then((moves) => (questMoves = moves));
+  }
+
+  /** The win was paid server-side; the account is re-read so the counter can count it in. */
+  $: goldWon = view.winner === view.you ? (status.goldAwarded ?? 0) : 0;
+  $: if (goldWon > 0 && !paidSeen) {
+    paidSeen = true;
+    void account.refresh();
   }
 
   $: opponentName = status.opponent?.username ?? 'Opponent';
@@ -116,12 +130,7 @@
       ? 'Opponent left'
       : null;
 
-  $: overNote =
-    view.winner === view.you && (status.goldAwarded ?? 0) > 0
-      ? `+${status.goldAwarded} gold`
-      : status.kind === 'opponentLeft'
-        ? 'They may reconnect — or you can head back.'
-        : null;
+  $: overNote = status.kind === 'opponentLeft' ? 'They may reconnect — or you can head back.' : null;
 </script>
 
 <svelte:head><title>Online match — Flashstone</title></svelte:head>
@@ -151,6 +160,8 @@
     {opponentName}
     {overTitle}
     {overNote}
+    {goldWon}
+    {questMoves}
     overAction="Back to lobby"
     on:playCard={onPlayCard}
     on:attack={onAttack}

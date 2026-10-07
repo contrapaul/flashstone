@@ -6,6 +6,8 @@
  * midnight. Rewards are DECISIONS.md §4.
  */
 
+import type { QuestTracks } from './client';
+
 export type QuestId = 'win2' | 'play30' | 'cast10' | 'build' | 'review5';
 
 /** What the client counts and reports. One counter per quest metric. */
@@ -136,4 +138,24 @@ export function isComplete(def: QuestDef, progress: number): boolean {
 /** Never reports past the target, so a progress bar cannot overfill. */
 export function displayProgress(def: QuestDef, progress: number): number {
   return Math.min(progress, def.target);
+}
+
+/** A quest bar a match moved: from where it was to where it is now. */
+export interface QuestMove {
+  id: string;
+  label: string;
+  from: number;
+  to: number;
+  target: number;
+}
+
+/** The quests whose progress went up between two snapshots, daily and intro alike. */
+export function questMoves(before: QuestTracks, after: QuestTracks): QuestMove[] {
+  const rows = (t: QuestTracks) => [...t.quests, ...t.intro];
+  const was = new Map(rows(before).map((r) => [r.id, r.progress]));
+  return rows(after).flatMap((r) => {
+    const from = Math.min(was.get(r.id) ?? 0, r.target);
+    const to = Math.min(r.progress, r.target);
+    return to > from ? [{ id: r.id, label: r.label, from, to, target: r.target }] : [];
+  });
 }

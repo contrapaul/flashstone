@@ -12,7 +12,8 @@
   import { LocalSource } from '$lib/net/source';
   import { emptyView } from '$lib/net/view';
   import type { ChosenRef, PlayerView, TargetRef } from '$lib/net/protocol';
-  import { reportProgress } from '$lib/quests/client';
+  import { fetchQuests, questsMovedSince, reportProgress, type QuestTracks } from '$lib/quests/client';
+  import type { QuestMove } from '$lib/quests/quests';
   import { account } from '$lib/account';
   import type { Card } from '../../../types/cards';
 
@@ -37,6 +38,9 @@
   let matchId = '';
   let rewarded = false;
   let goldWon = 0;
+  /** Quest progress as the match began, so the result can show what it moved. */
+  let questsBefore: Promise<QuestTracks> | null = null;
+  let questMoves: QuestMove[] = [];
 
   onMount(() => {
     start();
@@ -58,6 +62,8 @@
     matchId = crypto.randomUUID();
     rewarded = false;
     goldWon = 0;
+    questMoves = [];
+    questsBefore = $account.user ? fetchQuests() : null;
     aiThinking = false;
     source?.destroy();
     aiClass = PLAYABLE_CLASSES[Math.floor(Math.random() * PLAYABLE_CLASSES.length)];
@@ -151,13 +157,19 @@
   async function onMatchOver() {
     if (rewarded) return;
     rewarded = true;
+    const match = matchId;
 
     // Reported win or lose: the intro track pays for finishing a first match
     // either way (DECISIONS.md §13), and losing it is the moment a new player
     // most needs something to have come of the game.
-    reportProgress('matches', 1);
-    if (view.winner !== 'player') return;
-    reportProgress('wins', 1);
+    const won = view.winner === 'player';
+    const reports = [reportProgress('matches', 1)];
+    if (won) reports.push(reportProgress('wins', 1));
+    void questsMovedSince(questsBefore, reports).then((moves) => {
+      // "Play again" in the meantime: these belong to the match before.
+      if (match === matchId) questMoves = moves;
+    });
+    if (!won) return;
 
     try {
       const res = await fetch('/api/rewards/win', {
@@ -181,7 +193,6 @@
         ? 'Defeat'
         : 'Draw'
     : null;
-  $: overNote = goldWon > 0 ? `+${goldWon} gold` : null;
 </script>
 
 <svelte:head><title>Practice — Flashstone</title></svelte:head>
@@ -192,7 +203,8 @@
   interactive={!aiThinking}
   opponentName={aiClass}
   {overTitle}
-  {overNote}
+  {goldWon}
+  {questMoves}
   overAction="Play again"
   on:playCard={onPlayCard}
   on:attack={onAttack}

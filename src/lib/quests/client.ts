@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import type { QuestMetric } from './quests';
+import { questMoves, type QuestMetric, type QuestMove } from './quests';
 
 /**
  * Reporting quest progress from the browser.
@@ -52,16 +52,36 @@ export async function fetchQuests(): Promise<QuestTracks> {
   }
 }
 
-/** Fire-and-forget. Never awaited by gameplay. */
-export function reportProgress(metric: QuestMetric, amount = 1): void {
-  if (!browser || amount <= 0) return;
-  void fetch('/api/quests/progress', {
+/**
+ * Fire-and-forget. Never awaited by gameplay — only by the result screen,
+ * which waits for a match's reports to land before showing what they moved.
+ */
+export function reportProgress(metric: QuestMetric, amount = 1): Promise<void> {
+  if (!browser || amount <= 0) return Promise.resolve();
+  return fetch('/api/quests/progress', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ metric, amount })
-  }).catch(() => {
-    // Signed out, offline, or rate-limited. Not the player's problem mid-match.
-  });
+  }).then(
+    () => {},
+    () => {
+      // Signed out, offline, or rate-limited. Not the player's problem mid-match.
+    }
+  );
+}
+
+/**
+ * What a match moved: waits for its reports, then compares against the
+ * snapshot taken when it began. Nothing without a snapshot — a signed-out
+ * player has no quests.
+ */
+export async function questsMovedSince(
+  before: Promise<QuestTracks> | null,
+  reports: Promise<void>[]
+): Promise<QuestMove[]> {
+  if (!before) return [];
+  await Promise.all(reports);
+  return questMoves(await before, await fetchQuests());
 }
 
 export interface ClaimResult {

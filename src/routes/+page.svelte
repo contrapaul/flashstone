@@ -7,9 +7,11 @@
   import type { Owned } from '$lib/collection/owned';
   import { loadCollection, loadDeck } from '$lib/decks/storage';
   import QuestPanel from '$lib/components/QuestPanel.svelte';
+  import Logo from '$lib/components/Logo.svelte';
   import QuestSpotlight from '$lib/components/QuestSpotlight.svelte';
   import { markQuestsSeen, questsUnseen } from '$lib/quests/seen';
   import { account } from '$lib/account';
+  import { settings } from '$lib/settings';
 
   let owned: Owned = {};
   let deck: Deck | null = null;
@@ -53,7 +55,7 @@
 
   // Online and the rules are tabs of the New Game screen now, not menu entries.
   const menu = [
-    { href: '/play', title: 'New Game' },
+    { href: '/play', title: 'Play' },
     { href: '/decks', title: 'Collection' },
     { href: '/review', title: 'Review' },
     { href: '/shop', title: 'Shop' }
@@ -65,14 +67,14 @@
 <main class:blurred={spotlight}>
   <div class="column">
     <section class="hero">
-      <h1>Flashstone</h1>
+      <h1 class:calm={$settings.motion === 'reduced'}><Logo height={170} intro /></h1>
       <p class="tagline">Design &amp; Technology, as a card game.</p>
       <p class="status" class:playable={deckPlayable}>{status}</p>
     </section>
 
     <nav class="menu">
       {#each menu as item}
-        <a href={item.href} class:primary={item.title === 'New Game'}>
+        <a href={item.href} class:primary={item.title === 'Play'}>
           <span class="title">{item.title}</span>
         </a>
       {/each}
@@ -129,16 +131,21 @@
 
   .hero { text-align: center; margin-bottom: 44px; }
 
+  /* The logo drops in and bounces once, as its emblem flashes. */
   h1 {
-    font-family: var(--display);
-    font-size: 58px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+    display: flex;
+    justify-content: center;
     margin: 0;
-    color: var(--gold-bright);
-    text-shadow: 0 0 34px rgba(232, 197, 106, 0.32);
+    animation: fs-title-drop .8s cubic-bezier(.3, 1.45, .5, 1) both;
   }
+
+  @keyframes fs-title-drop {
+    0% { transform: translateY(-90px); opacity: 0; }
+    40% { opacity: 1; }
+    100% { transform: none; }
+  }
+
+  h1.calm { animation: none; }
 
   .tagline {
     font-family: var(--body);
@@ -219,36 +226,65 @@
     .rail { position: static; max-width: 560px; margin: 0 auto; width: 100%; }
   }
 
-  @media (max-width: 620px) {
-    h1 { font-size: 40px; }
-  }
 
+  /*
+   * Carved plates: dark wood, bevelled — lit along the top edge, shadowed along
+   * the bottom — with the title cut into it. Under the pointer the rim glows
+   * gold; pressed, the plate sinks.
+   */
   a {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px 24px;
-    border: 1px solid var(--frame);
-    border-radius: 4px;
-    background: linear-gradient(180deg, var(--panel), var(--ink-2));
+    padding: 18px 24px;
+    border: 1px solid #5a4024;
+    border-radius: 7px;
+    background:
+      repeating-linear-gradient(90deg, rgba(255, 230, 190, .03) 0 1px, transparent 1px 8px),
+      linear-gradient(180deg, #3a2814, #24170b 55%, #1a1007);
     color: inherit;
-    box-shadow: inset 0 1px 0 rgba(240, 214, 138, 0.06);
-    transition: border-color 0.14s, transform 0.14s, box-shadow 0.14s;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 228, 176, .25),
+      inset 0 -3px 0 rgba(0, 0, 0, .45),
+      0 2px 0 #120b05,
+      0 8px 18px rgba(0, 0, 0, .5);
+    transition: border-color .14s, transform .14s, box-shadow .14s, filter .14s;
   }
 
   a:hover {
     border-color: var(--frame-lit);
     transform: translateY(-2px);
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(240, 214, 138, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 228, 176, .35),
+      inset 0 -3px 0 rgba(0, 0, 0, .45),
+      0 2px 0 #120b05,
+      0 0 0 1px rgba(240, 200, 110, .35),
+      0 0 26px rgba(240, 190, 90, .35),
+      0 12px 24px rgba(0, 0, 0, .55);
+  }
+
+  a:active {
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 3px 8px rgba(0, 0, 0, .7),
+      inset 0 -1px 0 rgba(255, 228, 176, .12),
+      0 0 18px rgba(240, 190, 90, .25);
+    filter: brightness(.94);
   }
 
   a:hover .title { color: var(--gold-bright); }
 
+  /* Play is the big one: a taller plate in gilt and walnut. */
   a.primary {
-    background: linear-gradient(180deg, #4a3620, #2a1d10);
-    border-color: #8a6c3c;
+    padding: 28px 24px;
+    border-color: #a8803c;
+    background:
+      radial-gradient(80% 120% at 50% 0%, rgba(255, 210, 120, .22), transparent 60%),
+      repeating-linear-gradient(90deg, rgba(255, 230, 190, .03) 0 1px, transparent 1px 8px),
+      linear-gradient(180deg, #5a3c18, #33210d 55%, #22150a);
   }
-  a.primary .title { color: var(--gold-bright); }
+  a.primary .title { font-size: 32px; color: var(--gold-bright); }
 
   /* The rail's own link is a button, not a menu tile. */
   .rail a { padding: 8px 18px; box-shadow: none; }
@@ -264,10 +300,13 @@
     text-transform: uppercase;
     text-align: center;
     color: var(--gold);
+    /* Cut into the plate: dark above, a catch of light below. */
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, .85), 0 1px 0 rgba(255, 224, 170, .18);
     transition: color 0.14s;
   }
 
   @media (max-width: 620px) {
     .title { font-size: 18px; }
+    a.primary .title { font-size: 26px; }
   }
 </style>

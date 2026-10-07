@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, tick } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { gsap } from 'gsap';
   import CardPreview from './CardPreview.svelte';
   import MinionView from './MinionView.svelte';
@@ -13,6 +14,9 @@
   import FloatingNumber from './FloatingNumber.svelte';
   import Splat from './Splat.svelte';
   import Chronicle from './Chronicle.svelte';
+  import Logo from './Logo.svelte';
+  import GoldCounter from './GoldCounter.svelte';
+  import type { QuestMove } from '../quests/quests';
   import CardInspector from './CardInspector.svelte';
   import HeroPowerButton from './HeroPowerButton.svelte';
   import { heroPowerFor } from '../data/classes';
@@ -87,6 +91,10 @@
   export let overTitle: string | null = null;
   export let overNote: string | null = null;
   export let overAction: string | null = null;
+  /** Gold this match paid, once the server has said so. */
+  export let goldWon = 0;
+  /** Quest bars this match moved, once its reports have landed. */
+  export let questMoves: QuestMove[] = [];
 
   const dispatch = createEventDispatcher<{
     playCard: { handIndex: number; slot?: number; target?: ChosenRef };
@@ -113,6 +121,9 @@
   let quake = 0;
   /** A hero brought to 0, breaking apart before the result is shown. */
   let heroDown: 'me' | 'foe' | null = null;
+  /** A new match's opening: the heroes face off, then the table assembles. */
+  let versus = false;
+  let assembling = false;
   /** Numbers pinned to what they happened to. */
   let splats: { id: number; kind: 'damage' | 'heal' | 'armor'; amount: number; x: number; y: number; intensity: number }[] = [];
   let hitHero: 'me' | 'foe' | null = null;
@@ -353,7 +364,9 @@
     // derived from it (the End Turn label stayed "Enemy Turn" through the
     // handover). So the update finishes first, and playback begins after it.
     await tick();
+    const fresh = freshMatch(shown, view);
     shown = startingPoint(shown, view, events);
+    if (fresh) await faceOff();
     while (events.length > 0) {
       const event = events.shift() as GameEvent;
       events = events;
@@ -387,8 +400,7 @@
    * the cards the opening draws are about to deal still in the decks.
    */
   function startingPoint(from: PlayerView, to: PlayerView, queue: GameEvent[]): PlayerView {
-    const freshMatch = from.turnNumber === 0 || to.turnNumber < from.turnNumber;
-    if (!freshMatch) return { ...from, you: to.you, turnEndsIn: to.turnEndsIn };
+    if (!freshMatch(from, to)) return { ...from, you: to.you, turnEndsIn: to.turnEndsIn };
     historyShown = 0;
     heroDown = null;
     const draws = (owner: string) => queue.filter((e) => e.type === 'draw' && e.owner === owner).length;
@@ -400,6 +412,71 @@
       me: { ...to.me, mana: 0, maxMana: 0, deckCount: to.me.deckCount + draws(to.you) },
       foe: { ...to.foe, mana: 0, maxMana: 0, handCount: 0, deckCount: to.foe.deckCount + draws(foeId) }
     };
+  }
+
+  /**
+   * The first view of a match, or "Play again": the turn count went back, or
+   * a finished match is unfinished again — a match over on turn 1 restarts on
+   * turn 1, which the turn count alone misses.
+   */
+  const freshMatch = (from: PlayerView, to: PlayerView) =>
+    from.turnNumber === 0 || to.turnNumber < from.turnNumber || (from.winner !== null && to.winner === null);
+
+  /**
+   * Before the opening hand: both heroes, names and classes, face each other
+   * for a moment. Then the splash lifts and the table assembles under it — the
+   * decks slide in and the heroes drop onto their plinths, raising dust.
+   */
+  async function faceOff() {
+    versus = true;
+    await sleep(d(1600));
+    versus = false;
+    if (!spatial()) return;
+    assembling = true;
+    await sleep(d(420));
+    for (const el of [foeHeroEl, myHeroEl]) {
+      const plinth = el?.querySelector('.plinth');
+      if (!plinth) continue;
+      const r = plinth.getBoundingClientRect();
+      fx?.motes(r.left + r.width / 2, r.top + r.height / 2, { count: 14, speed: 160, gravity: 60, colors: ['#e8d2a2', '#c9a46a'], size: 4, life: 0.7 });
+      fx?.ring(r.left + r.width / 2, r.top + r.height / 2, { size: 150, color: 'rgba(236, 214, 170, .7)', life: 0.45 });
+    }
+    await sleep(d(380));
+    assembling = false;
+  }
+
+  // ── The result ──────────────────────────────────────────
+  /** Victory, defeat or a draw get the logo's treatment; anything else is a plain title. */
+  $: resultKind = !view.winner ? null : view.winner === 'draw' ? 'draw' : view.winner === view.you ? 'victory' : 'defeat';
+
+  let prizeEl: HTMLElement | undefined;
+  let counterEl: HTMLElement | undefined;
+  /** Coins in flight from the prize to the counter. */
+  let coins: { id: number; x: number; y: number; dx: number; dy: number; delay: number }[] = [];
+  $: if (!overTitle) coins = [];
+  $: if (goldWon > 0 && prizeEl && counterEl && coins.length === 0 && spatial()) throwCoins();
+
+  function throwCoins() {
+    const from = prizeEl!.getBoundingClientRect();
+    const to = counterEl!.getBoundingClientRect();
+    const box = prizeEl!.parentElement!.getBoundingClientRect();
+    const x = from.left + from.width / 2 - box.left;
+    const y = from.top + from.height / 2 - box.top;
+    const count = Math.min(12, Math.max(4, Math.round(goldWon / 5)));
+    coins = Array.from({ length: count }, (_, i) => ({
+      id: i,
+      x,
+      y,
+      dx: to.left + 10 - (from.left + from.width / 2),
+      dy: to.top + to.height / 2 - (from.top + from.height / 2),
+      delay: d(120 + i * 60)
+    }));
+  }
+
+  /** A quest bar fills from where it was to where the match left it. */
+  function fillTo(node: HTMLElement, q: QuestMove) {
+    node.style.width = `${(q.from / q.target) * 100}%`;
+    requestAnimationFrame(() => requestAnimationFrame(() => (node.style.width = `${(q.to / q.target) * 100}%`)));
   }
 
   /** Which side of the table an event's owner is on, from this seat. */
@@ -1012,6 +1089,7 @@
   class:quaking={quake > 0}
   class:still
   class:taunt-warn={tauntWarn}
+  class:assembling
   style:--quake={quake.toFixed(2)}
   style:--fit={fit.toFixed(3)}
   style:--pace={pace.toFixed(2)}
@@ -1039,7 +1117,7 @@
     the wordmark stays behind as the way back to it — pressing it does what
     pressing the header always did.
   -->
-  <button class="brand" on:click={() => (menuOpen = true)} title="Menu (Esc)">Flashstone</button>
+  <button class="brand" on:click={() => (menuOpen = true)} title="Menu (Esc)" aria-label="Menu"><Logo height={24} /></button>
 
   <section class="hero-row foe">
     <div class="foe-hand" aria-hidden="true" bind:this={foeHandEl}>
@@ -1057,6 +1135,7 @@
     <div></div>
 
     <div class="hero-block" bind:this={foeHeroEl}>
+      <span class="plinth" aria-hidden="true"></span>
       <HeroPortrait
         label={opponentName}
         name={opponentName}
@@ -1197,6 +1276,7 @@
     <div></div>
 
     <div class="hero-block" bind:this={myHeroEl}>
+      <span class="plinth" aria-hidden="true"></span>
       <HeroPortrait
         label="You"
         name={playerName}
@@ -1383,11 +1463,63 @@
     on:quit={quitToMenu}
   />
 
+  {#if versus}
+    <!-- The face-off: your hero against theirs, before the first card is dealt. -->
+    <div class="versus" out:fade={{ duration: d(320) }} aria-label={`${playerName} against ${opponentName}`}>
+      <div class="vs-side you">
+        <div class="vs-hero">
+          <HeroPortrait label="You" name={playerName} heroClass={shown.me.heroClass} health={shown.me.health} side="you" />
+        </div>
+        <span class="vs-class {shown.me.heroClass.toLowerCase()}">{shown.me.heroClass}</span>
+      </div>
+      <div class="vs-mark"><Logo word="VS" height={210} intro /></div>
+      <div class="vs-side foe">
+        <div class="vs-hero">
+          <HeroPortrait label={opponentName} name={opponentName} heroClass={shown.foe.heroClass} health={shown.foe.health} side="foe" />
+        </div>
+        <!-- Against the AI the name already is the class; the space is kept so both sides line up. -->
+        <span class="vs-class {shown.foe.heroClass.toLowerCase()}" class:echo={opponentName === shown.foe.heroClass}>{shown.foe.heroClass}</span>
+      </div>
+    </div>
+  {/if}
+
   <!-- Held until playback ends, so the killing blow is seen before the result. -->
   {#if overTitle && !draining}
-    <div class="overlay">
-      <div class="result">
-        <h2>{overTitle}</h2>
+    <div class="overlay {resultKind ?? ''}">
+      <div class="result" class:plated={resultKind}>
+        {#if resultKind}
+          <Logo word={resultKind.toUpperCase()} tone={resultKind === 'defeat' ? 'steel' : 'gold'} height={230} intro />
+        {:else}
+          <h2>{overTitle}</h2>
+        {/if}
+        {#if goldWon > 0}
+          <div class="purse">
+            <span class="prize-won" bind:this={prizeEl}>+{goldWon}</span>
+            <GoldCounter value={$account.gold} delay={spatial() ? d(650) : 0} bind:el={counterEl} />
+            {#each coins as coin (coin.id)}
+              <span
+                class="coin-fly"
+                style:left={`${coin.x}px`}
+                style:top={`${coin.y}px`}
+                style:--dx={`${coin.dx}px`}
+                style:--dy={`${coin.dy}px`}
+                style:animation-delay={`${coin.delay}ms`}
+                aria-hidden="true"
+              ></span>
+            {/each}
+          </div>
+        {/if}
+        {#if questMoves.length > 0}
+          <ul class="quest-moves" aria-label="Quest progress">
+            {#each questMoves as q (q.id)}
+              <li class:done={q.to >= q.target}>
+                <span class="q-label">{q.label}</span>
+                <span class="q-bar"><span class="q-fill" use:fillTo={q}></span></span>
+                <b>{q.to}/{q.target}</b>
+              </li>
+            {/each}
+          </ul>
+        {/if}
         {#if overNote}<p class="prize">{overNote}</p>{/if}
         {#if overAction}
           <button on:click={() => dispatch('overAction')}>{overAction}</button>
@@ -1481,26 +1613,21 @@
    */
   .brand {
     position: absolute;
-    top: 10px;
-    left: 18px;
+    top: 8px;
+    left: 14px;
     z-index: 60;
-    padding: 4px 6px;
+    padding: 2px 4px;
     border: 1px solid transparent;
     border-radius: 4px;
     background: none;
     cursor: pointer;
-    font-family: var(--display);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: .22em;
-    text-transform: uppercase;
-    /* Sits on the dark top tray now, so it takes the tray's light ink. */
-    color: rgba(236, 210, 160, .5);
-    transition: color .16s ease, border-color .16s ease;
+    /* Quiet while you play; itself again under the pointer. */
+    opacity: .72;
+    transition: opacity .16s ease, border-color .16s ease;
   }
   .brand:hover {
     border-color: rgba(236, 210, 160, .3);
-    color: var(--gold-bright);
+    opacity: 1;
   }
 
   .vignette {
@@ -1679,10 +1806,107 @@
   }
 
   /* Both heroes alike, as in Hearthstone: weapon to the left, power to the right. */
-  .hero-block > :global(.hero) { grid-column: 2; }
-  .hero-block > .hero-side { grid-column: 3; justify-self: start; }
+  .hero-block > :global(.hero) { grid-column: 2; grid-row: 1; }
+  .hero-block > .hero-side { grid-column: 3; grid-row: 1; justify-self: start; }
 
   .hero-side { display: flex; align-items: center; gap: 14px; padding-left: 8px; }
+
+  /* The stone each hero stands on: a carved disc under the portrait. */
+  .plinth {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    justify-self: center;
+    width: 150px;
+    height: 30px;
+    margin-bottom: -12px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 35%, #7a6a56, #463828 55%, #241a10);
+    box-shadow: inset 0 2px 0 rgba(255, 236, 200, .25), inset 0 -4px 6px rgba(0, 0, 0, .5), 0 8px 14px rgba(0, 0, 0, .45);
+  }
+
+  /* ── A new match ── */
+
+  .versus {
+    position: fixed;
+    inset: 0;
+    z-index: 420;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(16px, 6vw, 90px);
+    /* Your colour against theirs, split by a seam of light. */
+    background:
+      linear-gradient(100deg, transparent 49.6%, rgba(255, 226, 150, .9) 49.8% 50.2%, transparent 50.4%),
+      radial-gradient(120% 100% at 50% 50%, transparent 30%, rgba(0, 0, 0, .7)),
+      linear-gradient(100deg, #0f2a5c 0%, #163d7a 49.8%, #7a1e14 50.2%, #4a0f08 100%);
+    animation: fs-versus-in .35s ease-out both;
+  }
+
+  @keyframes fs-versus-in { from { opacity: 0; } }
+
+  .vs-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 70px;
+  }
+
+  .vs-side.you { animation: fs-versus-left .6s cubic-bezier(.2, 1.3, .4, 1) .1s both; }
+  .vs-side.foe { animation: fs-versus-right .6s cubic-bezier(.2, 1.3, .4, 1) .1s both; }
+
+  @keyframes fs-versus-left { from { transform: translateX(-60vw); } }
+  @keyframes fs-versus-right { from { transform: translateX(60vw); } }
+
+  /* HeroPortrait at its board size, scaled up whole. */
+  .vs-hero { transform: scale(1.7); pointer-events: none; }
+
+  .vs-class {
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .3em;
+    text-indent: .3em;
+    text-transform: uppercase;
+    color: #f4e2b8;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, .8);
+  }
+  .vs-class.designer { color: #b8fff0; }
+  .vs-class.engineer { color: #ffd9a8; }
+  .vs-class.consumer { color: #ecd4ff; }
+  .vs-class.manufacturer { color: #ffc4b4; }
+  .vs-class.echo { visibility: hidden; }
+
+  .vs-mark { filter: drop-shadow(0 0 30px rgba(255, 210, 120, .45)); }
+
+  /* Then the table assembles: decks slide in, heroes drop onto their stones. */
+  .assembling .foe-corner :global(.deck-pile),
+  .assembling .my-deck {
+    animation: fs-deck-in .55s cubic-bezier(.2, 1.2, .4, 1) both;
+  }
+
+  @keyframes fs-deck-in {
+    from { transform: translateX(220px) rotate(8deg); opacity: 0; }
+  }
+
+  .assembling .hero-block > :global(.hero) {
+    animation: fs-hero-drop .45s cubic-bezier(.55, 0, .9, .6) both;
+  }
+  .assembling .hero-row.foe .hero-block > :global(.hero) { animation-delay: .05s; }
+
+  @keyframes fs-hero-drop {
+    0% { transform: translateY(-160px) scale(1.25); opacity: 0; }
+    30% { opacity: 1; }
+    100% { transform: none; }
+  }
+
+  .assembling .plinth { animation: fs-plinth-thud .8s ease-out .38s both; }
+
+  @keyframes fs-plinth-thud {
+    0% { transform: none; }
+    12% { transform: scaleX(1.08) scaleY(.8); }
+    40% { transform: none; }
+  }
 
   .mana-dock {
     position: absolute;
@@ -2228,6 +2452,113 @@
     color: var(--gold-bright);
     text-shadow: 0 0 30px rgba(240, 214, 138, .4);
   }
+
+  /* Victory is lit warm from behind the word; a defeat goes cold. */
+  .overlay.victory { background: radial-gradient(60% 50% at 50% 40%, rgba(255, 196, 90, .28), transparent 70%), rgba(11, 8, 5, .88); }
+  .overlay.defeat { background: radial-gradient(60% 50% at 50% 40%, rgba(120, 150, 180, .16), transparent 70%), rgba(8, 9, 12, .9); }
+
+  /* The word is the plate: no box, just what came of the match under it. */
+  .result.plated {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 16px;
+    border: none;
+    background: none;
+    box-shadow: none;
+  }
+
+  .purse {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-top: 6px;
+  }
+
+  .prize-won {
+    font-family: var(--display);
+    font-size: 30px;
+    font-weight: 700;
+    color: #ffe08a;
+    text-shadow: 0 0 18px rgba(255, 200, 90, .7), 0 2px 4px rgba(0, 0, 0, .8);
+    animation: fs-prize-pop .5s cubic-bezier(.2, 1.6, .4, 1) both;
+  }
+
+  @keyframes fs-prize-pop { from { transform: scale(.3); opacity: 0; } }
+
+  .purse :global(.gold-counter) {
+    padding: 6px 14px 6px 10px;
+    border: 1px solid #7a5c30;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, .45);
+    font-size: 22px;
+  }
+  .purse :global(.gold-counter .coin) { width: 24px; height: 24px; }
+
+  /* Coins thrown from the prize: up first, then across into the counter. */
+  .coin-fly {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff3c4, #f2c65a 45%, #b07a22);
+    box-shadow: 0 0 8px rgba(255, 210, 110, .8);
+    pointer-events: none;
+    animation: fs-coin-fly .75s cubic-bezier(.5, 0, .6, 1) both;
+  }
+
+  @keyframes fs-coin-fly {
+    0% { transform: translate(-50%, -50%) scale(.4); opacity: 0; }
+    20% { transform: translate(-50%, -260%) scale(1); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.6); opacity: 0; }
+  }
+
+  .quest-moves {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(360px, 80vw);
+    margin: 18px 0 0;
+    padding: 12px 16px;
+    list-style: none;
+    border: 1px solid #5a4024;
+    border-radius: 8px;
+    background: rgba(20, 13, 7, .85);
+    animation: fs-versus-in .4s ease-out both;
+  }
+
+  .quest-moves li {
+    display: grid;
+    grid-template-columns: 1fr 120px auto;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #c9b994;
+    text-align: left;
+  }
+
+  .quest-moves b { font-family: var(--display); font-size: 12px; color: #e6d9bd; }
+
+  .q-bar {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: #120b05;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .8);
+  }
+
+  .q-fill {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #7a5620, #f2c65a);
+    transition: width .9s cubic-bezier(.3, .8, .3, 1) .5s;
+  }
+
+  /* A quest finished by this match glows. */
+  .quest-moves li.done .q-fill { background: linear-gradient(90deg, #3f9a4a, #9dff7a); box-shadow: 0 0 10px rgba(157, 255, 122, .7); }
+  .quest-moves li.done b { color: #9dff7a; }
 
   .result button {
     margin-top: 22px;

@@ -7,8 +7,10 @@ import {
   displayProgress,
   isComplete,
   questById,
+  questMoves,
   questsForDay
 } from './quests';
+import type { QuestRow, QuestTracks } from './client';
 
 describe('quest definitions', () => {
   it('has the five quests from DECISIONS.md §4', () => {
@@ -97,5 +99,38 @@ describe('completion', () => {
   it('never displays past the target', () => {
     expect(displayProgress(play30, 45)).toBe(30);
     expect(displayProgress(play30, 12)).toBe(12);
+  });
+});
+
+function row(id: string, progress: number, target = 3): QuestRow {
+  return { id, label: id, detail: '', target, reward: 10, progress, claimed: false, complete: progress >= target };
+}
+
+const tracks = (...quests: QuestRow[]): QuestTracks => ({ quests, intro: [] });
+
+describe('what a match moved', () => {
+  it('lists only the quests that went up, from where they were', () => {
+    const before = tracks(row('win2', 0, 2), row('play30', 12, 30), row('review5', 1, 5));
+    const after = tracks(row('win2', 1, 2), row('play30', 19, 30), row('review5', 1, 5));
+    expect(questMoves(before, after)).toEqual([
+      { id: 'win2', label: 'win2', from: 0, to: 1, target: 2 },
+      { id: 'play30', label: 'play30', from: 12, to: 19, target: 30 }
+    ]);
+  });
+
+  it('caps a bar at its target, and counts a quest that appeared as starting from nothing', () => {
+    const before = tracks(row('cast10', 9, 10));
+    const after = tracks(row('cast10', 14, 10), row('build', 1, 1));
+    expect(questMoves(before, after)).toEqual([
+      { id: 'cast10', label: 'cast10', from: 9, to: 10, target: 10 },
+      { id: 'build', label: 'build', from: 0, to: 1, target: 1 }
+    ]);
+  });
+
+  it('includes the intro track', () => {
+    const intro = { id: 'first', label: 'First match', detail: '', target: 1, gold: 0, packs: 1, claimed: false, complete: false };
+    expect(questMoves({ quests: [], intro: [{ ...intro, progress: 0 }] }, { quests: [], intro: [{ ...intro, progress: 1 }] })).toEqual([
+      { id: 'first', label: 'First match', from: 0, to: 1, target: 1 }
+    ]);
   });
 });

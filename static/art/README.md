@@ -93,6 +93,7 @@ the frame**, and leave the outer 8% clear.
 | `power-designer` · `power-engineer` · `power-consumer` · `power-manufacturer` | the face of a class's hero power disc | 372 × 372 px | **yes** |
 | `tray-you` · `tray-foe` | the dark ledge each hand sits on, the full width of the table | 2560 × 300 px | **yes** |
 | `doodad-lamp` · `doodad-printer` · `doodad-vise` · `doodad-pencils` | the four workbench toys at the ends of the boards | 384 × 384 px | **yes** |
+| `logo` | the whole Flashstone mark — wordmark and emblem — in the nav, the title and the corner of a match. Wide, not square: draw it at about 3.7 : 1 | 2220 × 600 px | **yes** |
 | `charge` | *not used:* Charge has no lasting mark, as in Hearthstone — it is shown as streaks on arrival | — | — |
 | `spell-mark` | the type line's mark on a Spell card | 144 × 144 px | **yes** |
 | `weapon-mark` | the type line's mark on a Weapon card (Phase 1B) | 144 × 144 px | **yes** |
@@ -156,8 +157,10 @@ backdrop looks deliberate rather than blank.
 > on `.table` in `MatchTable.svelte`. **A dark backdrop needs those two set back
 > to their pale values**, which are kept in a comment right beside them.
 >
-> `menu.webp` is specified but **not yet read by anything** — only the play
-> field is wired.
+> `menu.webp` is wired since REVISIONS R6: it sits behind every page except
+> the match, over the same dark layered gradient it falls back to. Keep it
+> dark — the menu plates and the quest panel are dark wood with gold text, and
+> dust motes drift over it on the title screen.
 
 ## 5. Gold (foil) variants — `art/ui/`
 
