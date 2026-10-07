@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rulesText } from './rulesText';
+import { glossaryFor, rulesText } from './rulesText';
 
 const flat = (text: string, sd = 0, spell = false) =>
   rulesText(text, sd, spell)
@@ -25,5 +25,21 @@ describe('card text', () => {
   it('keeps every character of the text', () => {
     const text = 'Deathrattle: Summon 2 1/1 Study Notes. Taunt.';
     expect(rulesText(text).map((r) => r.text).join('')).toBe(text);
+  });
+});
+
+describe('the glossary', () => {
+  it('explains the keywords a card has and the rules words in its text, once each', () => {
+    const card = { keywords: ['Taunt', 'DivineShield'], description: 'Battlecry: Freeze a random enemy minion. Freeze.' };
+    expect(glossaryFor(card).map((g) => g.term)).toEqual(['Taunt', 'Divine Shield', 'Battlecry', 'Freeze']);
+  });
+
+  it('knows Spell Damage from the stat, and Transform from its text', () => {
+    expect(glossaryFor({ keywords: [], description: 'Spell Damage +1', spellDamage: 1 }).map((g) => g.term)).toEqual(['Spell Damage']);
+    expect(glossaryFor({ keywords: [], description: 'Transform a minion into a 1/1 Study Note.' }).map((g) => g.term)).toEqual(['Transform']);
+  });
+
+  it('has nothing to say about a vanilla card', () => {
+    expect(glossaryFor({ keywords: [], description: '' })).toEqual([]);
   });
 });

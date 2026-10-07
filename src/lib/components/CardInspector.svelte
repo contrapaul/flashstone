@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import CardPreview from './CardPreview.svelte';
   import type { Card } from '../../types/cards';
+  import { glossaryFor } from '../presentation/rulesText';
 
   /**
    * A card, enlarged and centred, with its definition beside it.
@@ -40,6 +41,8 @@
 
   $: definition = card?.definition ?? '';
   $: sections = card?.sections ?? [];
+  /** What its rules words mean. Shown even with definitions off: it teaches the game, not the syllabus. */
+  $: glossary = card ? glossaryFor(card) : [];
 </script>
 
 <svelte:window on:keydown={onKeydown} />
@@ -59,13 +62,22 @@
         <CardPreview {card} {gold} playable />
       </div>
 
-      {#if showDefinition && definition}
+      {#if (showDefinition && definition) || glossary.length > 0}
         <aside class="meaning">
-          <h2>{card.name}</h2>
-          {#if sections.length > 0}
-            <p class="sections">{sections.join(' · ')}{card.hl ? ' · HL' : ''}</p>
+          {#if showDefinition && definition}
+            <h2>{card.name}</h2>
+            {#if sections.length > 0}
+              <p class="sections">{sections.join(' · ')}{card.hl ? ' · HL' : ''}</p>
+            {/if}
+            <p class="definition">{definition}</p>
           {/if}
-          <p class="definition">{definition}</p>
+          {#if glossary.length > 0}
+            <dl class="glossary" class:alone={!(showDefinition && definition)}>
+              {#each glossary as { term, meaning }}
+                <div><dt>{term}</dt><dd>{meaning}</dd></div>
+              {/each}
+            </dl>
+          {/if}
         </aside>
       {/if}
     </div>
@@ -174,6 +186,33 @@
     line-height: 1.55;
     color: var(--text);
     text-wrap: pretty;
+  }
+
+  /* Each rules word, bold, with its meaning beside it — under the definition, ruled off from it. */
+  .glossary {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .glossary.alone { margin: 0; padding: 0; border: none; }
+  .glossary div { display: flex; gap: 8px; align-items: baseline; }
+  .glossary dt {
+    flex: none;
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--gold-bright);
+  }
+  .glossary dd {
+    margin: 0;
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--text-dim);
   }
 
   /* Portrait and small screens stack the definition under the card. iPad
