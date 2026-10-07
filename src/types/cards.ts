@@ -103,6 +103,8 @@ export type Target =
   | 'AllMinions'
   /** Every friendly minion but the one with the text. */
   | 'OtherFriendly'
+  /** Every minion on both sides but the one with the text. */
+  | 'OtherMinions'
   /**
    * The caster's own hero, explicitly.
    *

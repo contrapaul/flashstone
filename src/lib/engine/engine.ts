@@ -879,6 +879,15 @@ function resolveTargets(
         ...enemyBoard.map((minion) => ({ kind: 'minion' as const, owner: foe, minion }))
       ];
 
+    case 'OtherFriendly':
+      return friendlyBoard.filter((m) => m !== source).map((minion) => ({ kind: 'minion' as const, owner, minion }));
+
+    case 'OtherMinions':
+      return [
+        ...friendlyBoard.filter((m) => m !== source).map((minion) => ({ kind: 'minion' as const, owner, minion })),
+        ...enemyBoard.map((minion) => ({ kind: 'minion' as const, owner: foe, minion }))
+      ];
+
     case 'SelfHero':
       return [{ kind: 'hero' as const, owner }];
 

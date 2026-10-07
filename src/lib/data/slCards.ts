@@ -151,6 +151,59 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     type: 'Spell', cost: 2, rarity: 'Epic', targeting: 'enemy',
     effects: [{ trigger: 'Battlecry', action: 'DestroyLater', target: 'Chosen' }]
   },
+  // Current through it: every spell you cast sparks out of it.
+  'electrical-resistivity-electical-conductivity': {
+    cost: 4, attack: 3, health: 5, keywords: [],
+    effects: [{ trigger: 'OnFriendlySpell', action: 'DealDamage', target: 'RandomEnemy', value: 2 }]
+  },
+  // The stage where the solution is made: everything moves now.
+  'designing-a-solution-stage': {
+    cost: 5, attack: 4, health: 4, keywords: ['Charge'],
+    effects: [{ trigger: 'Battlecry', action: 'GainKeyword', target: 'OtherFriendly', keyword: 'Charge' }]
+  },
+  // A group that lifts every member of it.
+  'focus-group': {
+    type: 'Minion', cost: 4, attack: 3, health: 3, keywords: [],
+    effects: [
+      { trigger: 'Passive', action: 'BuffAttack', target: 'OtherFriendly', value: 1 },
+      { trigger: 'Passive', action: 'BuffHealth', target: 'OtherFriendly', value: 1 }
+    ],
+    description: 'Your other minions have +1/+1.'
+  },
+  // Define the problem, and clear away everything that is not it.
+  'problem-statement': {
+    cost: 8, attack: 8, health: 8, keywords: [],
+    effects: [{ trigger: 'Battlecry', action: 'Destroy', target: 'OtherMinions' }]
+  },
+  // Their features stop working.
+  'functional-obsolescence': {
+    cost: 5, attack: 4, health: 5, keywords: [],
+    effects: [{ trigger: 'Battlecry', action: 'Silence', target: 'AllEnemies' }],
+    description: 'Battlecry: Silence all enemy minions.'
+  },
+
+  /*
+   * Uncommons that were vanilla, each given one simple effect drawn from its
+   * term (R8.3: vanilla belongs at Common, and only there).
+   */
+  'dynamic-data': { effects: [{ trigger: 'EndOfTurn', action: 'BuffAttack', target: 'Self', value: 1 }] },
+  'user-observation': { effects: [{ trigger: 'Battlecry', action: 'Freeze', target: 'EnemyMinion' }] },
+  'digital-human': { effects: [{ trigger: 'Battlecry', action: 'BuffHealth', target: 'FriendlyMinion', value: 2 }] },
+  'functional-prototype': { effects: [{ trigger: 'Deathrattle', action: 'SummonToken', value: 1 }] },
+  'orthographic-projection': { effects: [{ trigger: 'Battlecry', action: 'BuffHealth', target: 'OtherFriendly', value: 1 }] },
+  'prototyping-techniques': { effects: [{ trigger: 'Battlecry', action: 'SummonToken', value: 1 }] },
+  'rapid-prototyping': { attack: 2, health: 2, keywords: ['Charge'] },
+  'surface-model': { effects: [{ trigger: 'Battlecry', action: 'GainArmor', value: 3 }] },
+  malleability: { effects: [{ trigger: 'Battlecry', action: 'BuffAttack', target: 'FriendlyMinion', value: 2 }] },
+  'reactivity-food-safe': { effects: [{ trigger: 'Deathrattle', action: 'Heal', target: 'SelfHero', value: 3 }] },
+  thermoelectricity: { effects: [{ trigger: 'EndOfTurn', action: 'DealDamage', target: 'RandomEnemy', value: 1 }] },
+  user: { effects: [{ trigger: 'Battlecry', action: 'Heal', target: 'SelfHero', value: 3 }] },
+  'literature-search': { effects: [{ trigger: 'Battlecry', action: 'DrawCard', value: 1 }] },
+  'qualitative-data': { effects: [{ trigger: 'Deathrattle', action: 'DrawCard', value: 1 }] },
+  'user-journey': { effects: [{ trigger: 'StartOfTurn', action: 'Heal', target: 'SelfHero', value: 2 }] },
+  'design-for-disassembly': { effects: [{ trigger: 'Deathrattle', action: 'SummonToken', value: 1 }] },
+  'design-for-manufacture-dfm': { effects: [{ trigger: 'Battlecry', action: 'GainMana', value: 2 }] },
+
   // It breaks down.
   'biodegradable-material': {
     cost: 3, attack: 5, health: 5, rarity: 'Rare',

@@ -354,7 +354,14 @@ export const CUSTOM_CARDS: Card[] = [
   weapon('craft-knife', 'Craft Knife', 1, 1, 3, 'Common'),
   weapon('bench-hammer', 'Bench Hammer', 3, 3, 2, 'Uncommon'),
   weapon('press-brake', 'Press Brake', 5, 4, 3, 'Rare'),
-  weapon('the-jig', 'The Jig', 7, 5, 4, 'Legendary'),
+  // A jig makes every part come out the same — and better (R8.3: a Legendary does something).
+  {
+    ...weapon('the-jig', 'The Jig', 7, 5, 4, 'Legendary', 'Battlecry: Give your minions +1/+1.'),
+    effects: [
+      { trigger: 'Battlecry', action: 'BuffAttack', target: 'AllFriendly', value: 1 },
+      { trigger: 'Battlecry', action: 'BuffHealth', target: 'AllFriendly', value: 1 }
+    ]
+  },
 
   ...CLASS_CARDS
 ];

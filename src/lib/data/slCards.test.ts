@@ -112,6 +112,8 @@ describe('every card', () => {
   it('keeps keyword names out of the generated text', () => {
     for (const card of ALL_CARDS) {
       for (const keyword of card.keywords) {
+        // Naming it is fine when the text gives it to something else.
+        if (card.effects.some((e) => e.action === 'GainKeyword' && e.keyword === keyword)) continue;
         expect(card.description, `${card.id} repeats ${keyword}`).not.toContain(keyword);
       }
     }
@@ -211,5 +213,27 @@ describe('the set as a whole', () => {
         "type": "Minion",
       }
     `);
+  });
+});
+
+describe('what a rarity means (REVISIONS R8.3)', () => {
+  it('gives every Epic and Legendary text that does something', () => {
+    for (const card of ALL_CARDS.filter((c) => c.rarity === 'Epic' || c.rarity === 'Legendary')) {
+      expect(card.description, card.id).not.toBe('');
+      expect(card.effects.length + (card.spellDamage ?? 0), card.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps vanilla minions to Common', () => {
+    for (const card of SL_CARDS) {
+      const vanilla = card.type === 'Minion' && card.effects.length === 0 && card.keywords.length === 0;
+      if (vanilla) expect(card.rarity, card.id).toBe('Common');
+    }
+  });
+
+  it('gives a Common at most one keyword', () => {
+    for (const card of SL_CARDS.filter((c) => c.rarity === 'Common')) {
+      expect(card.keywords.length, card.id).toBeLessThanOrEqual(1);
+    }
   });
 });

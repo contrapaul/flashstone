@@ -432,7 +432,9 @@ const TARGET_PHRASE: Partial<Record<Target, string>> = {
   AllEnemies: 'all enemies',
   Self: 'this minion',
   Hero: 'your hero',
-  AllMinions: 'all minions'
+  AllMinions: 'all minions',
+  OtherFriendly: 'your other minions',
+  OtherMinions: 'all other minions'
 };
 
 const KEYWORD_TEXT: Record<Keyword, string> = {

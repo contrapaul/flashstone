@@ -57,6 +57,8 @@ describe('the class card set', () => {
   it('keeps keyword names out of class card text', () => {
     for (const card of ALL_CARDS) {
       for (const keyword of card.keywords) {
+        // Naming it is fine when the text gives it to something else.
+        if (card.effects.some((e) => e.action === 'GainKeyword' && e.keyword === keyword)) continue;
         expect(card.description, `${card.id} repeats ${keyword}`).not.toContain(keyword);
       }
     }
