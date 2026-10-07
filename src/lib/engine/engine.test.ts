@@ -908,3 +908,69 @@ describe('reactions', () => {
     expect(state.players.player.armor).toBe(0);
   });
 });
+
+describe('return and transform', () => {
+  const spell = (effects: Card['effects'], over: Partial<Card> = {}): Card => ({
+    ...minionCard({ cost: 0 }),
+    id: `spell-${Math.random()}`,
+    type: 'Spell',
+    attack: undefined,
+    health: undefined,
+    effects,
+    ...over
+  });
+
+  it("brings a Deathrattle: Return this minion back to hand as a fresh copy", () => {
+    const state = bareMatch();
+    const card = minionCard({ cost: 0, health: 1, keywords: ['Charge'], effects: [{ trigger: 'Deathrattle', action: 'ReturnToHand', target: 'Self' }] });
+    playCard(state, 'player', give(state, 'player', card));
+    const m = state.players.player.board[0];
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 5, health: 9 })));
+    state.current = 'player';
+    attack(state, 'player', m.instanceId, { kind: 'minion', instanceId: state.players.ai.board[0].instanceId });
+    expect(state.players.player.board).toHaveLength(0);
+    expect(state.players.player.hand.map((c) => c.id)).toEqual([card.id]);
+    expect(state.players.player.hand[0]).not.toBe(card);
+    expect(state.events.some((e) => e.type === 'bounce' && e.instanceId === m.instanceId)).toBe(true);
+  });
+
+  it("returns every minion to its owner's hand, and loses one when that hand is full", () => {
+    const state = bareMatch();
+    playCard(state, 'player', give(state, 'player', minionCard({ cost: 0 })));
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0 })));
+    state.players.ai.hand = Array.from({ length: 10 }, () => minionCard());
+    state.current = 'player';
+    playCard(state, 'player', give(state, 'player', spell([{ trigger: 'Battlecry', action: 'ReturnToHand', target: 'AllMinions' }])));
+    expect(state.players.player.board).toHaveLength(0);
+    expect(state.players.ai.board).toHaveLength(0);
+    expect(state.players.player.hand).toHaveLength(1);
+    expect(state.players.ai.hand).toHaveLength(10);
+    expect(state.events.find((e) => e.type === 'bounce' && e.owner === 'ai')).toMatchObject({ lost: true });
+  });
+
+  it('transforms a minion into a Study Note where it stands', () => {
+    const state = bareMatch();
+    state.current = 'ai';
+    state.players.ai.mana = 10;
+    playCard(state, 'ai', give(state, 'ai', minionCard({ cost: 0, attack: 8, health: 8, keywords: ['Taunt', 'DivineShield'] })));
+    state.current = 'player';
+    const target = state.players.ai.board[0];
+    const card = spell([{ trigger: 'Battlecry', action: 'Transform', target: 'Chosen' }]);
+    expect(playCard(state, 'player', give(state, 'player', card), undefined, { kind: 'minion', owner: 'ai', minion: target })).toBe(true);
+    expect(state.players.ai.board[0]).toMatchObject({ instanceId: target.instanceId, attack: 1, health: 1, keywords: [], divineShield: false });
+    expect(state.players.ai.board[0].card.name).toBe('Study Note');
+  });
+
+  it('never offers a hero to an effect that only works on minions', () => {
+    const state = bareMatch();
+    const transform = spell([{ trigger: 'Battlecry', action: 'Transform', target: 'Chosen' }]);
+    const index = give(state, 'player', transform);
+    expect(playCard(state, 'player', index, undefined, { kind: 'hero', owner: 'ai' })).toBe(false);
+    const bolt = spell([{ trigger: 'Battlecry', action: 'DealDamage', target: 'Chosen', value: 2 }]);
+    expect(playCard(state, 'player', give(state, 'player', bolt), undefined, { kind: 'hero', owner: 'ai' })).toBe(true);
+  });
+});

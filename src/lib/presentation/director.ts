@@ -113,7 +113,9 @@ const EFFECT_COLOR: Record<Action, string> = {
   DrawCard: '#9fc8ff',
   SummonToken: '#ffe7b0',
   GainMana: '#6cc4ff',
-  GainArmor: '#cfd8e0'
+  GainArmor: '#cfd8e0',
+  ReturnToHand: '#bfe3ff',
+  Transform: '#e6d4ff'
 };
 
 /** Hits that land together: the two sides of a trade, every target of a sweep. */
@@ -553,6 +555,33 @@ export async function direct(cue: GameEvent, stage: Stage): Promise<void> {
       stage.advance(cue);
       audio().play('mana-fill');
       return;
+
+    case 'bounce': {
+      // Lifted off the board and back towards its owner's hand.
+      const el = stage.unit(cue.instanceId);
+      audio().play('card-pickup');
+      if (el && spatial()) {
+        const mine = stage.side(cue.owner) === 'me';
+        await gsap.to(el, { y: mine ? 140 : -140, scale: 0.45, opacity: 0, duration: d(380) / 1000, ease: 'power2.in' });
+      }
+      stage.advance(cue);
+      return;
+    }
+
+    case 'transform': {
+      // It turns over and comes up as something else, in a puff.
+      const id = cue.instanceId;
+      audio().play('card-flip');
+      pulse(() => stage.mark('swapping', id, true), () => stage.mark('swapping', id, false), 520);
+      await wait(260);
+      stage.advance(cue);
+      const el = stage.unit(id);
+      if (el) {
+        const at = centreOf(el);
+        stage.fx()?.motes(at.x, at.y, { colors: ['#e6d4ff', '#ffffff'], count: 16, speed: 160, gravity: -60, life: 0.8, size: 6 });
+      }
+      return;
+    }
   }
 }
 

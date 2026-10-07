@@ -9,6 +9,7 @@ import {
 } from './engine';
 import {
   HERO_POWER_COST,
+  aimsAtMinions,
   canAttack,
   canHeroAttack,
   canUseHeroPower,
@@ -131,7 +132,7 @@ function* spendMana(state: MatchState): AiTurn {
  */
 function chooseSpellTarget(state: MatchState, card: Card): Character | undefined {
   const side = card.targeting ?? 'any';
-  const legal = spellTargets(state, 'ai', side);
+  const legal = spellTargets(state, 'ai', side, aimsAtMinions(card));
   if (legal.length === 0) return undefined;
 
   const effect = card.effects.find((e) => e.target === 'Chosen');
@@ -158,7 +159,7 @@ function chooseSpellTarget(state: MatchState, card: Card): Character | undefined
     return biggest ?? ownHero ?? legal[0];
   }
 
-  if (action === 'Destroy' || action === 'Silence') {
+  if (action === 'Destroy' || action === 'Silence' || action === 'Transform' || action === 'ReturnToHand') {
     const biggest = [...enemyMinions].sort((a, b) => b.minion.attack - a.minion.attack)[0];
     return biggest ?? (side === 'enemy' ? undefined : enemyHero);
   }

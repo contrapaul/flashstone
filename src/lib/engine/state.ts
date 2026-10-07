@@ -1,4 +1,4 @@
-import type { Card, CardClass, CardType, Trigger } from '../../types/cards';
+import type { Action, Card, CardClass, CardType, Trigger } from '../../types/cards';
 import type { CueRef } from './events';
 
 export const HERO_HEALTH = 30;
@@ -64,7 +64,9 @@ export type HistoryResult =
   | 'silenced'
   | 'shielded'
   | 'summoned'
-  | 'armor';
+  | 'armor'
+  | 'returned'
+  | 'transformed';
 
 export interface HistoryTarget {
   ref: CueRef;
@@ -259,10 +261,28 @@ export function canHeroAttack(player: PlayerState): boolean {
  * interesting one, since it means a Taunt wall stops attacks but not a fireball.
  * Stealth still hides a minion from being picked.
  */
+/** Aimed actions that only mean anything to a minion: a hero is not offered as their target. */
+export const MINION_ONLY: ReadonlySet<Action> = new Set([
+  'Destroy',
+  'Silence',
+  'SwapStats',
+  'BuffAttack',
+  'BuffHealth',
+  'GainKeyword',
+  'ReturnToHand',
+  'Transform'
+]);
+
+/** Whether a card's aimed effect can only be pointed at minions. */
+export function aimsAtMinions(card: Card): boolean {
+  return card.effects.some((e) => e.target === 'Chosen' && MINION_ONLY.has(e.action));
+}
+
 export function spellTargets(
   state: MatchState,
   caster: PlayerId,
-  side: 'any' | 'enemy' | 'friendly' = 'any'
+  side: 'any' | 'enemy' | 'friendly' = 'any',
+  minionsOnly = false
 ): Character[] {
   const foe = opponentOf(caster);
   const out: Character[] = [];
@@ -271,7 +291,7 @@ export function spellTargets(
     for (const minion of state.players[owner].board) {
       if (isTargetable(minion)) out.push({ kind: 'minion', owner, minion });
     }
-    out.push({ kind: 'hero', owner });
+    if (!minionsOnly) out.push({ kind: 'hero', owner });
   };
 
   if (side !== 'friendly') add(foe);

@@ -68,6 +68,21 @@ const OVERRIDES: Record<string, Partial<Card>> = {
     cost: 4, attack: 2, health: 6, rarity: 'Rare',
     effects: [{ trigger: 'OnDamaged', action: 'BuffAttack', target: 'Self', value: 2 }]
   },
+  // It remembers its shape: kill it and it comes back to your hand.
+  'shape-memory-material': {
+    cost: 5, attack: 4, health: 5, rarity: 'Legendary', keywords: [],
+    effects: [{ trigger: 'Deathrattle', action: 'ReturnToHand', target: 'Self' }]
+  },
+  // The manufacturer takes it back.
+  'take-back-legislation': {
+    type: 'Spell', cost: 5, rarity: 'Epic',
+    effects: [{ trigger: 'Battlecry', action: 'ReturnToHand', target: 'AllMinions' }]
+  },
+  // Less material.
+  dematerialization: {
+    type: 'Spell', cost: 4, rarity: 'Epic', targeting: 'any',
+    effects: [{ trigger: 'Battlecry', action: 'Transform', target: 'Chosen' }]
+  },
   // It breaks down.
   'biodegradable-material': {
     cost: 3, attack: 5, health: 5, rarity: 'Rare',

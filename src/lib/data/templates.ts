@@ -1,5 +1,6 @@
 import type { CardType, Effect, Keyword, Rarity, Target } from '../../types/cards';
 import { RARITY_WEIGHTS } from '../../utils/rarity';
+import { STUDY_NOTE, tokenById } from './tokens';
 
 /**
  * The card templates — the actual game cards.
@@ -430,7 +431,8 @@ const TARGET_PHRASE: Partial<Record<Target, string>> = {
   RandomEnemy: 'a random enemy',
   AllEnemies: 'all enemies',
   Self: 'this minion',
-  Hero: 'your hero'
+  Hero: 'your hero',
+  AllMinions: 'all minions'
 };
 
 const KEYWORD_TEXT: Record<Keyword, string> = {
@@ -472,6 +474,14 @@ function phrase(effect: Effect): string {
       return `Swap ${target}'s Attack and Health`;
     case 'GainArmor':
       return `Gain ${value} Armor`;
+    case 'ReturnToHand':
+      if (effect.target === 'Self') return 'Return this to your hand';
+      if (effect.target === 'AllMinions') return "Return all minions to their owners' hands";
+      return `Return ${effect.target === 'Chosen' ? 'a minion' : target} to its owner's hand`;
+    case 'Transform': {
+      const into = (effect.condition && tokenById(effect.condition)) || STUDY_NOTE;
+      return `Transform ${effect.target === 'Chosen' ? 'a minion' : target} into a ${into.attack}/${into.health} ${into.name}`;
+    }
   }
   // Exhaustive: adding an Action without a case here is a type error, which is
   // how a new action gets caught before it ships as a blank card.

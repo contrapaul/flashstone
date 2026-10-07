@@ -204,6 +204,8 @@
                   {:else if r.result === 'silenced'}<b class="kw">Silenced</b>
                   {:else if r.result === 'shielded'}<b class="kw gold">Shield</b>
                   {:else if r.result === 'armor'}<b class="kw steel">Armor</b>
+                  {:else if r.result === 'returned'}<b class="kw">Returned</b>
+                  {:else if r.result === 'transformed'}<b class="kw">Transformed</b>
                   {/if}
                 {/each}
                 {#if s.killed}<svg class="mark recycle" viewBox="0 0 24 24" aria-hidden="true"><use href="#fs-chronicle-recycle" /></svg>{/if}
@@ -313,6 +315,8 @@
                 {:else if r.result === 'silenced'}<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M6.5 6.5 L17.5 17.5" /></svg>
                 {:else if r.result === 'shielded'}<svg viewBox="0 0 24 24"><path d="M12 3 L19 6 V12 C19 16 16 19 12 21 C8 19 5 16 5 12 V6 Z M9 9 L15 15" /></svg>
                 {:else if r.result === 'armor'}<svg viewBox="0 0 24 24"><path d="M12 3 L19 6 V12 C19 16 16 19 12 21 C8 19 5 16 5 12 V6 Z" /></svg>
+                {:else if r.result === 'returned'}<svg viewBox="0 0 24 24"><path d="M9 7 L4 12 L9 17 M4 12 H15 A5 5 0 0 0 15 2" /></svg>
+                {:else if r.result === 'transformed'}<svg viewBox="0 0 24 24"><path d="M4 8 H16 L12 4 M20 16 H8 L12 20" /></svg>
                 {/if}
               </span>
             {/each}
@@ -680,4 +684,5 @@
   .result.frozen { background: #1d6fa8; border-color: #cdeeff; }
   .result.silenced { background: #4a4a52; }
   .result.armor { background: #5a6b78; border-color: #e6eef4; }
+  .result.returned, .result.transformed { background: #4a3f7a; border-color: #e6d4ff; }
 </style>

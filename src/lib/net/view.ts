@@ -1,4 +1,4 @@
-import { BOARD_LIMIT, maxAttacksFor } from '../engine/state';
+import { BOARD_LIMIT, aimsAtMinions, maxAttacksFor } from '../engine/state';
 import type { Card } from '../../types/cards';
 import type { ChosenRef, PlayerView, SerialisedMinion, TargetRef } from './protocol';
 
@@ -69,13 +69,14 @@ export function turnIsSpent(view: PlayerView): boolean {
  */
 export function chosenTargetsFromView(view: PlayerView, card: Card): ChosenRef[] {
   const side = card.targeting ?? 'any';
+  const minionsOnly = aimsAtMinions(card);
   const out: ChosenRef[] = [];
 
   const add = (board: SerialisedMinion[], which: 'me' | 'foe') => {
     for (const m of board) {
       if (!m.keywords.includes('Stealth')) out.push({ kind: 'minion', instanceId: m.instanceId });
     }
-    out.push({ kind: 'hero', side: which });
+    if (!minionsOnly) out.push({ kind: 'hero', side: which });
   };
 
   if (side !== 'friendly') add(view.foe.board, 'foe');

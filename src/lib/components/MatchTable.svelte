@@ -153,7 +153,7 @@
    * two are made equal when playback ends.
    *
    * The **hand** is still read from `view`: a draw never names its card, and
-   * `pendingDraws` holds new cards back until their cue. Legality and input
+   * `pendingDraws` holds new cards (drawn or returned) back until their cue. Legality and input
    * read `view` too — they are only live when nothing is playing, which is
    * exactly when the two agree.
    */
@@ -234,7 +234,9 @@
 
   /** Cards whose draw cue is still queued are held back, so a draw is first
       seen on its own animation rather than appearing a second earlier. */
-  $: pendingDraws = events.filter((e) => e.type === 'draw' && e.owner === view.you).length;
+  $: pendingDraws = events.filter(
+    (e) => (e.type === 'draw' || (e.type === 'bounce' && !e.lost)) && e.owner === view.you
+  ).length;
   $: visibleHand = view.me.hand.slice(0, view.me.hand.length - pendingDraws);
 
   /** The player at this seat: their name on the plate, their back on the deck. */

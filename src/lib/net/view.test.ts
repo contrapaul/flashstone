@@ -207,3 +207,14 @@ describe('the Chronicle', () => {
     expect(named).toBeGreaterThan(1000);
   });
 });
+
+describe('aiming at minions only', () => {
+  it('lights no hero for a card whose aimed effect only works on minions', async () => {
+    const { chosenTargetsFromView } = await import('./view');
+    const v = { ...emptyView(), foe: { ...emptyView().foe, board: [minion()] } };
+    const polymorph = { ...minion().card, type: 'Spell' as const, effects: [{ trigger: 'Battlecry' as const, action: 'Transform' as const, target: 'Chosen' as const }] };
+    expect(chosenTargetsFromView(v, polymorph)).toEqual([{ kind: 'minion', instanceId: 'm1' }]);
+    const bolt = { ...polymorph, effects: [{ trigger: 'Battlecry' as const, action: 'DealDamage' as const, target: 'Chosen' as const, value: 2 }] };
+    expect(chosenTargetsFromView(v, bolt).some((t) => t.kind === 'hero')).toBe(true);
+  });
+});

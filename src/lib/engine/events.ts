@@ -77,6 +77,13 @@ type Cue =
       aim: 'chosen' | 'random' | 'auto';
       candidates?: CueRef[];
     }
+  /**
+   * A minion goes back to its owner's hand — or, the hand being full, is lost.
+   * Public: it was on the board. `handCount` is the hand after it.
+   */
+  | { type: 'bounce'; owner: PlayerId; instanceId: string; handCount: number; lost: boolean }
+  /** A minion becomes something else where it stands. */
+  | { type: 'transform'; instanceId: string; minion: MinionSnapshot }
   /** Drawn into a full hand and destroyed. Public, as in Hearthstone. */
   | { type: 'burn'; owner: PlayerId; card: Card; deckCount: number }
   /** An empty deck deals damage; the `damage` cue that follows carries it. */
@@ -138,6 +145,8 @@ export const EVENT_BEAT: Record<GameEvent['type'], number> = {
   trigger: 260,
   // The director holds the target line and the projectile itself.
   effect: 0,
+  bounce: 420,
+  transform: 560,
   burn: 900,
   fatigue: 700
 };

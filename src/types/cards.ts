@@ -13,7 +13,8 @@
 // v0.5 adds classes: `CardClass`, a `class` field, `GainArmor`, the `AllFriendly`
 //   and `SelfHero` targets, and per-card `spellDamage`.
 // v0.6 (REVISIONS R8.4) adds reactions: triggers `OnDamaged`, `OnFriendlyDeath`,
-//   `OnFriendlySpell` and `OnFriendlyPlay`.
+//   `OnFriendlySpell` and `OnFriendlyPlay`; actions `ReturnToHand` and
+//   `Transform`; target `AllMinions`.
 // card.validator.ts must be updated in the same commit.
 // ──────────────────────────────────────────────────────────────
 
@@ -72,7 +73,11 @@ export type Action =
   /** Swaps a minion's Attack and Health. */
   | 'SwapStats'
   /** Adds armor to the caster's hero. Armor is spent before health. */
-  | 'GainArmor';
+  | 'GainArmor'
+  /** Sends a minion back to its owner's hand; with the hand full, it is lost. */
+  | 'ReturnToHand'
+  /** Turns a minion into a token in place — `condition` names it, the Study Note by default. */
+  | 'Transform';
 export type Target =
   | 'Self'
   | 'EnemyMinion'
@@ -82,6 +87,8 @@ export type Target =
   | 'AllEnemies'
   /** Every friendly minion. Does not include the hero. */
   | 'AllFriendly'
+  /** Every minion on both sides. */
+  | 'AllMinions'
   /**
    * The caster's own hero, explicitly.
    *

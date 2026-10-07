@@ -28,7 +28,9 @@ const EffectSchema = z.object({
     'Freeze',
     'Silence',
     'SwapStats',
-    'GainArmor'
+    'GainArmor',
+    'ReturnToHand',
+    'Transform'
   ]),
   target: z
     .enum([
@@ -39,6 +41,7 @@ const EffectSchema = z.object({
       'RandomEnemy',
       'AllEnemies',
       'AllFriendly',
+      'AllMinions',
       'SelfHero',
       'Chosen'
     ])

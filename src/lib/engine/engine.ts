@@ -12,6 +12,7 @@ import {
   canAttack,
   canHeroAttack,
   canUseHeroPower,
+  aimsAtMinions,
   findMinion,
   spellPowerOf,
   legalTargets,
@@ -438,7 +439,7 @@ export function isLegalChosenTarget(
   card: Card,
   chosen: Character
 ): boolean {
-  const legal = spellTargets(state, caster, card.targeting ?? 'any');
+  const legal = spellTargets(state, caster, card.targeting ?? 'any', aimsAtMinions(card));
   return legal.some((t) =>
     t.kind === 'hero'
       ? chosen.kind === 'hero' && chosen.owner === t.owner
@@ -713,6 +714,12 @@ function resolveTargets(
     case 'AllFriendly':
       return friendlyBoard.map((minion) => ({ kind: 'minion' as const, owner, minion }));
 
+    case 'AllMinions':
+      return [
+        ...friendlyBoard.map((minion) => ({ kind: 'minion' as const, owner, minion })),
+        ...enemyBoard.map((minion) => ({ kind: 'minion' as const, owner: foe, minion }))
+      ];
+
     case 'SelfHero':
       return [{ kind: 'hero' as const, owner }];
 
@@ -899,6 +906,14 @@ function resolveEffect(
         }
         break;
 
+      case 'ReturnToHand':
+        if (target.kind === 'minion') returnToHand(state, target.owner, target.minion);
+        break;
+
+      case 'Transform':
+        if (target.kind === 'minion') transform(state, target.minion, (effect.condition && tokenById(effect.condition)) || STUDY_NOTE);
+        break;
+
       case 'GainKeyword': {
         // v0.3 gave Effect a real `keyword` field. Older cards carried it on
         // `condition`, so that is still read as a fallback.
@@ -918,6 +933,39 @@ function resolveEffect(
       }
     }
   }
+}
+
+/**
+ * Back to its owner's hand, as the card it was — fresh, its buffs and damage
+ * gone. A copy, so two Study Notes coming back are two cards, not one twice.
+ * With the hand full it is lost, as in Hearthstone. Works on a minion already
+ * dead, too: Shape Memory Material's Deathrattle returns it from the grave.
+ */
+function returnToHand(state: MatchState, owner: PlayerId, minion: MinionInstance): void {
+  const p = state.players[owner];
+  note(state, state.openEntry, { ref: { kind: 'minion', instanceId: minion.instanceId }, result: 'returned' }, minion.card);
+  const at = p.board.indexOf(minion);
+  if (at >= 0) p.board.splice(at, 1);
+  const lost = p.hand.length >= HAND_LIMIT;
+  if (!lost) p.hand.push({ ...minion.card });
+  state.log.push(`${minion.card.name} returns to ${owner}'s hand${lost ? ', which is full' : ''}.`);
+  emit(state, { type: 'bounce', owner, instanceId: minion.instanceId, handCount: p.hand.length, lost });
+}
+
+/** Becomes `into` where it stands: a new minion in all but its place on the board. */
+function transform(state: MatchState, minion: MinionInstance, into: Card): void {
+  note(state, state.openEntry, { ref: { kind: 'minion', instanceId: minion.instanceId }, result: 'transformed' }, minion.card);
+  state.log.push(`${minion.card.name} becomes ${into.name}.`);
+  minion.card = into;
+  minion.attack = into.attack ?? 0;
+  minion.health = minion.maxHealth = into.health ?? 1;
+  minion.keywords = [...into.keywords];
+  minion.divineShield = into.keywords.includes('DivineShield');
+  minion.frozen = false;
+  minion.silenced = false;
+  minion.buffed = false;
+  minion.summonedThisTurn = true;
+  emit(state, { type: 'transform', instanceId: minion.instanceId, minion: snapshotMinion(minion) });
 }
 
 function emitBuff(state: MatchState, minion: MinionInstance): void {

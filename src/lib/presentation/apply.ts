@@ -125,6 +125,16 @@ export function applyCue(shown: PlayerView, cue: GameEvent): PlayerView {
     case 'heroPower':
       return patchSide(shown, sideOf(cue.owner), { heroPowerUsed: true, mana: cue.mana });
 
+    case 'bounce': {
+      const s = sideOf(cue.owner);
+      const board = shown[s].board.filter((m) => m.instanceId !== cue.instanceId);
+      // Your own hand is read from the view; theirs is only ever a count.
+      return withSpellDamage(patchSide(shown, s, s === 'foe' ? { board, handCount: cue.handCount } : { board }));
+    }
+
+    case 'transform':
+      return withSpellDamage(mapMinion(shown, cue.instanceId, () => ({ ...cue.minion, keywords: [...cue.minion.keywords] })));
+
     case 'trigger':
     case 'effect':
     case 'fatigue':
