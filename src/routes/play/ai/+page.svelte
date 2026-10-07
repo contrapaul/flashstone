@@ -27,9 +27,9 @@
 
   let deckCards: Card[] = resolveDeck(starterDeck());
   let heroClass: CardClass = DEFAULT_CLASS;
-  /** The opponent rotates class per match, so all four get seen in practice. */
+  /** The opponent rotates class per match, so all four get seen in practice — with that class's cards. */
   let aiClass: CardClass = 'Manufacturer';
-  const aiCards: Card[] = buildAiDeck();
+  let aiCards: Card[] = [];
 
   let view: PlayerView = emptyView();
   let events: GameEvent[] = [];
@@ -67,6 +67,7 @@
     aiThinking = false;
     source?.destroy();
     aiClass = PLAYABLE_CLASSES[Math.floor(Math.random() * PLAYABLE_CLASSES.length)];
+    aiCards = buildAiDeck(Math.floor(Math.random() * 2 ** 31), aiClass);
     source = new LocalSource(deckCards, aiCards, handlers, aiTurn, {
       player: heroClass,
       ai: aiClass

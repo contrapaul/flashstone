@@ -1,5 +1,6 @@
-import type { Card } from '../../types/cards';
+import type { Card, CardClass } from '../../types/cards';
 import { createRng, shuffle } from '../engine/rng';
+import { cardFitsClass } from '../decks/deck';
 import { ALL_CARDS } from './cards';
 
 /**
@@ -26,28 +27,45 @@ const STAPLES = ['drafting-blade', 'bench-hammer', 'fireball', 'frostbolt', 'dis
 
 const DECK_TARGET = 30;
 
-/** Seeded so practice is reproducible; vary the seed for a different opponent. */
-export function buildAiDeck(seed = 20260821): Card[] {
+/**
+ * A deck for a class, as a player would build one: **every one of the class's
+ * own cards first**, then the staples, then Neutral cards filling out the
+ * curve around them. So each class plays like itself in practice — the
+ * Designer goes wide, the Engineer armors up — and the deck is legal for that
+ * class. `Neutral` builds a deck of Neutral cards only.
+ *
+ * Seeded so practice is reproducible; vary the seed for a different opponent.
+ */
+export function buildAiDeck(seed = 20260821, heroClass: CardClass = 'Neutral'): Card[] {
   const rng = createRng(seed >>> 0);
-  const deck: Card[] = [];
+  const fits = (c: Card) => cardFitsClass(c, heroClass);
+  const classCards = heroClass === 'Neutral' ? [] : ALL_CARDS.filter((c) => c.class === heroClass);
+  const deck: Card[] = [...classCards];
 
   for (const id of STAPLES) {
     const card = ALL_CARDS.find((c) => c.id === id);
-    if (card) deck.push(card);
+    if (card && fits(card) && !deck.includes(card)) deck.push(card);
   }
 
+  // The curve is for the whole deck, so what is already in it counts against
+  // each cost's share. Neutral cards fill whatever is left.
   for (const [cost, want] of Object.entries(CURVE)) {
+    const have = deck.filter((c) => Math.min(c.cost, 7) === Number(cost)).length;
     const pool = shuffle(
       rng,
-      ALL_CARDS.filter((c) => c.cost === Number(cost))
+      ALL_CARDS.filter((c) => c.cost === Number(cost) && (c.class ?? 'Neutral') === 'Neutral')
     );
-    // One copy each, so no per-card or Legendary limit can be breached, and
-    // never a card the staples already supplied.
+    // One copy each, so no per-card or Legendary limit can be breached.
     const fresh = pool.filter((c) => !deck.includes(c));
-    deck.push(...fresh.slice(0, want));
+    deck.push(...fresh.slice(0, Math.max(0, want - have)));
   }
 
-  // The staples pushed it over; trim from the top of the curve, which is where
-  // an extra card matters least.
-  return deck.sort((a, b) => a.cost - b.cost).slice(0, DECK_TARGET);
+  // Over the target: trim Neutral cards from the top of the curve, where an
+  // extra card matters least. The class's own cards always stay.
+  const sorted = deck.sort((a, b) => a.cost - b.cost);
+  while (sorted.length > DECK_TARGET) {
+    const last = sorted.findLastIndex((c) => !classCards.includes(c));
+    sorted.splice(last, 1);
+  }
+  return sorted;
 }
