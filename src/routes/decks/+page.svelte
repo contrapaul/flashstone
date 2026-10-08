@@ -226,7 +226,9 @@
   }
 
   function build() {
-    deck = autoBuild(owned, Date.now(), deckClass);
+    const built = autoBuild(owned, Date.now(), deckClass);
+    // A name the player typed survives; only the placeholder gives way.
+    deck = deck.name === emptyDeck().name ? built : { ...built, name: deck.name };
     saved = false;
   }
 
