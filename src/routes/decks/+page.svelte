@@ -8,6 +8,8 @@
   import { cardFitsClass } from '$lib/decks/deck';
   import { DEFAULT_CLASS } from '$lib/data/starter';
   import { ALL_CARDS, cardById } from '$lib/data/cards';
+  import { unseen } from '$lib/collection/unseen';
+  import { RARITY_COLOR } from '../../utils/art';
   import { ownedCount, isGold, type Owned } from '$lib/collection/owned';
   import {
     DECK_SIZE,
@@ -144,6 +146,22 @@
   let ownedOnly = false;
   /** Cards a saved deck held two of before they became Legendary. */
   let trimmedLegends: string[] = [];
+
+  /**
+   * How much of each class's cards, and of the Neutral set, is collected — as a
+   * bar of rarity-coloured segments, each as wide as that rarity's share of the
+   * set and filled as far as it is owned, with its gem at its start.
+   */
+  const COMPLETION_GROUPS = ['Neutral', ...PLAYABLE_CLASSES] as const;
+  $: completion = COMPLETION_GROUPS.map((group) => {
+    const cards = ALL_CARDS.filter((c) => (c.class ?? 'Neutral') === group);
+    const segments = RARITIES.map((rarity) => {
+      const of = cards.filter((c) => c.rarity === rarity);
+      return { rarity, total: of.length, owned: of.filter((c) => ownedCount(owned, c.id) > 0).length };
+    }).filter((s) => s.total > 0);
+    const have = segments.reduce((n, s) => n + s.owned, 0);
+    return { group, segments, have, total: cards.length };
+  });
 
   const RARITIES: Rarity[] = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
 
@@ -375,13 +393,41 @@
         <span class="shown">{visible.length} shown</span>
       </div>
 
+      <div class="completion" aria-label="Collection progress">
+        {#each completion as row (row.group)}
+          <div class="completion-row" title={`${row.group}: ${row.have} of ${row.total} cards`}>
+            <span class="completion-name">{row.group}</span>
+            <span class="completion-bar">
+              {#each row.segments as seg (seg.rarity)}
+                <span
+                  class="seg"
+                  style:flex-grow={seg.total}
+                  style:--rarity={RARITY_COLOR[seg.rarity]}
+                  title={`${seg.rarity}: ${seg.owned} of ${seg.total}`}
+                >
+                  <span class="seg-fill" style:width={`${(seg.owned / seg.total) * 100}%`}></span>
+                  <svg class="seg-gem" viewBox="0 0 12 14" aria-hidden="true">
+                    <polygon points="6,0.6 11.4,4 11.4,10 6,13.4 0.6,10 0.6,4" />
+                  </svg>
+                </span>
+              {/each}
+            </span>
+            <span class="completion-count">{row.have}/{row.total}</span>
+          </div>
+        {/each}
+      </div>
+
       <div class="grid">
         {#each visible as card (card.id)}
           {@const have = ownedCount(owned, card.id)}
           {@const limit = Math.min(copyLimitFor(card.rarity), have)}
           {@const inDeck = countOf(deck, card.id)}
           {@const maxed = have > 0 && inDeck >= limit}
-          <div class="tile" class:locked={have === 0}>
+          <div class="tile" class:locked={have === 0} on:pointerenter={() => unseen.seen(card.id)}>
+            {#if $unseen.has(card.id) && have > 0}
+              <!-- Pulled from a pack and not looked at yet: gone once the pointer passes over it. -->
+              <span class="new-badge" aria-label="New">New</span>
+            {/if}
             <button
               class="tile-btn"
               disabled={!canAdd(deck, owned, card.id)}
@@ -951,6 +997,62 @@
   /* Centred under the card, clear of the attack and health gems in the bottom
      corners — and written as a count (×2), not a ratio, so it cannot be misread
      as a statline. */
+  /* Pulled from a pack and not yet looked at. */
+  .new-badge {
+    position: absolute;
+    z-index: 5;
+    top: -8px;
+    right: -6px;
+    padding: 2px 8px;
+    border-radius: 9px;
+    border: 1px solid #7ed68c;
+    background: #183a1e;
+    font-family: var(--display);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #b8ffc4;
+    pointer-events: none;
+    animation: fs-new-badge 1.6s ease-in-out infinite;
+  }
+
+  @keyframes fs-new-badge {
+    0%, 100% { box-shadow: 0 0 4px rgba(126, 214, 140, .4); }
+    50% { box-shadow: 0 0 14px rgba(126, 214, 140, 1); }
+  }
+
+  /* Collection progress: one bar a class, in rarity-coloured segments. */
+  .completion {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px 18px;
+    margin: 0 0 14px;
+  }
+  .completion-row { display: flex; align-items: center; gap: 8px; }
+  .completion-name {
+    width: 104px;
+    flex: none;
+    font-family: var(--display);
+    font-size: 9.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .completion-bar { flex: 1; display: flex; gap: 4px; height: 10px; }
+  .seg {
+    position: relative;
+    flex-basis: 0;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--rarity) 45%, #120b05);
+    background: color-mix(in srgb, var(--rarity) 22%, #120b05);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .7);
+  }
+  .seg-fill { display: block; height: 100%; border-radius: 3px; background: var(--rarity); box-shadow: 0 0 6px color-mix(in srgb, var(--rarity) 60%, transparent); }
+  .seg-gem { position: absolute; left: -5px; top: -3px; width: 12px; height: 14px; }
+  .seg-gem polygon { fill: var(--rarity); stroke: #1a1007; stroke-width: 1.4; }
+  .completion-count { font-family: var(--display); font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
   .owned-count {
     position: absolute;
     left: 50%;
