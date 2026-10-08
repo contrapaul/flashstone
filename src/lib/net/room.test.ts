@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveDeck } from '../decks/deck';
 import { starterDeck } from '../data/starter';
 import { buildAiDeck } from '../data/aiDeck';
-import { applyMessage, createRoomState, emoteAllowed, forceEndTurn, viewFor } from './room';
+import { applyMessage, createRoomState, emoteAllowed, forceEndTurn, takeEvents, viewFor } from './room';
 import { parseClientMessage } from './protocol';
 import { cardById } from '../data/cards';
 import type { MatchState } from '../engine/state';
@@ -328,6 +328,16 @@ describe('the mulligan', () => {
     expect(viewFor(state, 'player').mulligan).toBeNull();
     // The Coin comes after the mulligan, so it can never be sent back.
     expect(state.players.ai.hand.some((c) => c.name === 'The Coin')).toBe(true);
+  });
+
+  it("hands over the deal's cues on their own, so the first view can play them", () => {
+    const state = opening();
+    // Both opening hands, dealt as the match is made: 3 cards and 4.
+    expect(takeEvents(state).filter((e) => e.type === 'draw')).toHaveLength(7);
+    // Taken once, they never ride along with the first action, where they would
+    // deal the hands a second time over the ones already on screen.
+    const result = applyMessage(state, 'ai', { type: 'mulligan', replace: [] });
+    expect(result.events.some((e) => e.type === 'draw')).toBe(false);
   });
 
   it('conserves the deck, and never deals a replaced card straight back', () => {

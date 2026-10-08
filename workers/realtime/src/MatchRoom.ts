@@ -1,5 +1,6 @@
 import type { Card, CardClass } from '../../../src/types/cards';
 import type { MatchState, PlayerId } from '../../../src/lib/engine/state';
+import type { GameEvent } from '../../../src/lib/engine/events';
 import { resolveDeck, withinCopyLimits, type Deck } from '../../../src/lib/decks/deck';
 import { cardById } from '../../../src/lib/data/cards';
 import {
@@ -9,6 +10,7 @@ import {
   createRoomState,
   emoteAllowed,
   forceEndTurn,
+  takeEvents,
   viewFor
 } from '../../../src/lib/net/room';
 import { parseClientMessage, type ServerMessage } from '../../../src/lib/net/protocol';
@@ -96,14 +98,21 @@ export class MatchRoom {
       // socket down with it. The players get a message they can act on instead
       // of a connection that refuses to open for no stated reason.
       try {
-        if (!this.match) await this.start();
+        // The deal goes out with the first view. Left in the match, it would
+        // ride along with the first action instead and deal both hands again
+        // over the ones already on screen.
+        let deal: GameEvent[] = [];
+        if (!this.match) {
+          await this.start();
+          deal = takeEvents(this.match!);
+        }
         // **Both** seats are told the match is on, not just the one that just
         // arrived. The player who got here first was last told `waiting`, and
         // nothing else ever revises that: their board stays uninteractive for
         // the whole match, so they cannot move, time out turn after turn, and
         // lose on the missed-turn rule without ever having been able to play.
         this.announceStart();
-        this.pushState([]);
+        this.pushState(deal);
       } catch (e) {
         console.error('Failed to start match:', e);
         this.broadcast({

@@ -99,11 +99,7 @@ export function applyMessage(
   from: PlayerId,
   message: ClientMessage
 ): ApplyResult {
-  const drain = (): GameEvent[] => {
-    const events = [...(state.events ?? [])];
-    state.events = [];
-    return events;
-  };
+  const drain = () => takeEvents(state);
 
   if (state.winner) return { ok: false, error: 'The match is over.', events: [] };
 
@@ -229,14 +225,21 @@ export function forceEndTurn(state: MatchState): GameEvent[] {
   // Out of time before the first turn: whoever has not decided keeps their hand.
   if (state.mulligan) {
     for (const id of Object.keys(state.mulligan) as PlayerId[]) mulligan(state, id, []);
-    const events = [...(state.events ?? [])];
-    state.events = [];
-    return events;
+    return takeEvents(state);
   }
   state.log.push('Turn timed out.');
   // A choice left open when time runs out takes its first option.
   while (state.choices.length > 0) choose(state, state.choices[0].owner, 0);
   endTurn(state);
+  return takeEvents(state);
+}
+
+/**
+ * The cues waiting to be sent, emptied. A new match holds the deal — both
+ * opening hands' draws — which the room sends with the first view, so the
+ * tables deal the cards rather than finding them already in hand.
+ */
+export function takeEvents(state: MatchState): GameEvent[] {
   const events = [...(state.events ?? [])];
   state.events = [];
   return events;
