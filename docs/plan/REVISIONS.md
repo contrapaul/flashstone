@@ -1153,13 +1153,36 @@ from hand-authoring, as §8 anticipated.
 Still valid, unchanged, and best done during play sessions:
 
 - [ ] `PHASE-7` §1.1 / §5.3 — play the economy and the new-player package for real.
-- [ ] `PHASE-7` §4.1 — what the shop offers a complete collection.
-- [ ] `PHASE-8` §5.1 / §5.2 — ten slots in a signed-in browser, and a chosen deck
+      Still needs players: judgement, not a test.
+- [ ] `PHASE-7` §4.1 — what the shop offers a complete collection. Still Paul's
+      decision. Nobody can be there yet: 78 packs is about a month of play.
+- [x] `PHASE-8` §5.1 / §5.2 — ten slots in a signed-in browser, and a chosen deck
       played online.
-- [ ] `PHASE-4` "found along the way" — confirm `play30` and `cast10` end to end on
+      → *Done 2026-10-08, locally, with two signed-in test accounts:* the
+      browser, and a scripted second player against `npm run realtime`. Built
+      an Engineer deck and a Designer deck in two slots and switched between
+      them. An AI match took the active deck's class. An online room used the
+      host's active deck, not their most recent one. The mulligan, an emote and
+      turns all went over the wire.
+- [x] `PHASE-4` "found along the way" — confirm `play30` and `cast10` end to end on
       a day they come round.
+      → *Done 2026-10-08,* when both came round. Three cards played online
+      moved `play30` to 3/30, after the fix below. `cast10` was filled through
+      the client's own progress call (not by casting ten spells in a match),
+      then claimed from the home page: it paid 50 gold and showed R10.4's card.
 - [ ] `OPEN-QUESTIONS.md` #18 — class hero portraits. R4.9 makes SVG frames the
-      fallback either way.
+      fallback either way. Waiting on Paul's drawings.
+
+**Found and fixed while checking these:**
+
+- **Online matches never counted cards played or spells cast.** Only the AI
+  table reported them, so "Play 30 cards" and "Cast 10 spells" never moved
+  online. This is the same kind of hole Phase 7 found for online wins.
+- **An online match dealt its opening hands twice.** The room held back the
+  deal's draw cues until the first action, after both tables had already shown
+  the hands. The opponent's hand showed 8 cards for a moment.
+- **Auto-build overwrote a typed deck name** with "Auto-built deck", so two
+  such decks looked identical on the slots and the New Game screen.
 
 ---
 

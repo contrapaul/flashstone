@@ -113,13 +113,16 @@ room. Each had to learn the same new answer.
 
 ## 5. What has not been played
 
-- [ ] **5.1** Nothing has driven ten slots in a **signed-in** browser. The route
+- [x] **5.1** Nothing has driven ten slots in a **signed-in** browser. The route
       handlers are covered by tests and the signed-out path was checked by hand,
       but "build a Designer deck and an Engineer deck and switch between them"
       is still an unrun sentence. `0005` is applied remotely, so nothing blocks
       it.
-- [ ] **5.2** Online play with a chosen deck (§3.1) is likewise untested against
+- [x] **5.2** Online play with a chosen deck (§3.1) is likewise untested against
       a real match room.
+
+Both were driven on 2026-10-08, locally, with two signed-in accounts
+(`REVISIONS.md` R11).
 
 **Migration `0005_active_deck.sql` is applied, locally and remotely** (verified
 2026-08-22 — `profiles.active_deck` is live). The realtime Worker has **not**
