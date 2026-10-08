@@ -52,7 +52,7 @@
    */
   function onClickSound(event: MouseEvent) {
     const target = (event.target as Element | null)?.closest('button, a[href], [role="button"]');
-    if (target && !target.closest('.hand, .board, .hero-row, .centre, .flipper, .option')) audio().play('ui-click', { volume: 0.7 });
+    if (target && !target.closest('.hand, .board, .hero-row, .centre, .flipper, .option, .foil')) audio().play('ui-click', { volume: 0.7 });
   }
 
   let hoverSounded: Element | null = null;
