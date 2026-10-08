@@ -1116,23 +1116,35 @@ from hand-authoring, as §8 anticipated.
 **Depends on:** R1.8 (FX), R7 (sound). Keeps the click-to-flip rule from
 `DECISIONS.md` §3.
 
-- [ ] **R10.1 — The pack ceremony.** Drag the pack onto a central socket (or tap it);
+- [x] **R10.1 — The pack ceremony.** Drag the pack onto a central socket (or tap it);
       it shakes, glows and bursts. Five face-down cards fan into an arc, and **each
       card's rarity light leaks from beneath it before you flip it**: nothing for a
       Common, green for Uncommon, blue beams for Rare, a purple pulse for Epic, and
       orange god-rays for Legendary. Hovering a hidden card swells its glow and its
       sound. That is the moment of hope this whole section exists for.
-- [ ] **R10.2 — Reveals scale with rarity.** Common: a clean flip. Rare: a blue burst.
+- [x] **R10.2 — Reveals scale with rarity.** Common: a clean flip. Rare: a blue burst.
       Epic: a purple burst and a shake. Legendary: the screen dims, the card zooms
       to centre, its name banner unfurls, a sting plays, and it settles back into
       the fan. Gold adds a foil sweep and coin sparkle. "New" tags glow.
-- [ ] **R10.3 — The collection.** Cards you haven't viewed yet carry a glowing NEW
+      → *Done:* `PackOpening.svelte`. Tapping the pack still opens it, so a
+      trackpad or a touch screen is never stuck at the socket.
+- [x] **R10.3 — The collection.** Cards you haven't viewed yet carry a glowing NEW
       badge until hovered. Legendaries shimmer in the grid. Per-class completion
       bars use the rarity gems.
-- [ ] **R10.4 — Rewards.** Quest completion slides in as a card with a filling bar
+      → *Done:* "unseen" is kept per browser (`collection/unseen.ts`), like the
+      quest dot: losing it costs a badge, never a card. The bars sit above the
+      grid, one for Neutral and one for each class, with a segment for each rarity.
+- [x] **R10.4 — Rewards.** Quest completion slides in as a card with a filling bar
       and flying coins; gold counts up everywhere it changes.
-- [ ] **R10.5 — Card backs** that move: the three purchasable backs gain a subtle
+      → *Done:* `RewardToast.svelte` in the layout, fed by a queue
+      (`quests/rewards.ts`), so three claims show one after another. The nav
+      counter holds its count until the coins land. The shop's balance is a
+      `GoldCounter` now too.
+- [x] **R10.5 — Card backs** that move: the three purchasable backs gain a subtle
       animated shimmer. That sells them, and Ascendant should look the most alive.
+      → *Done:* a sheen in the back's own hue crosses every back except the free
+      Grimoire. Ascendant also turns golden rays behind its star, and its star
+      breathes. All of it stops under Reduced motion.
 
 ---
 
