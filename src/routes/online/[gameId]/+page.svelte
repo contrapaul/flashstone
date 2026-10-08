@@ -84,7 +84,14 @@
   onDestroy(() => source?.destroy());
 
   function onPlayCard(event: CustomEvent<{ handIndex: number; slot?: number; target?: ChosenRef }>) {
+    const card = view.me.hand[event.detail.handIndex];
     source?.playCard(event.detail.handIndex, event.detail.slot, event.detail.target);
+    // Counted as the AI table counts them: "play 30 cards" and "cast 10 spells"
+    // are any match's, and nothing online was reporting them at all.
+    if (card) {
+      reportProgress('cardsPlayed', 1);
+      if (card.type === 'Spell') reportProgress('spellsCast', 1);
+    }
   }
 
   function onHeroAttack(event: CustomEvent<{ target: TargetRef }>) {
