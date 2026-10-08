@@ -10,6 +10,8 @@
   import Logo from '$lib/components/Logo.svelte';
   import GoldCounter from '$lib/components/GoldCounter.svelte';
   import MenuBackdrop from '$lib/components/MenuBackdrop.svelte';
+  import RewardToast from '$lib/components/RewardToast.svelte';
+  import { rewards } from '$lib/quests/rewards';
   import { account } from '$lib/account';
   import { settings } from '$lib/settings';
   import { audio, initAudio } from '$lib/audio';
@@ -38,6 +40,9 @@
    * room under `/online/` count.
    */
   $: inMatch = isMatch($page.url.pathname);
+
+  /** The nav's gold counter, where a claimed quest's coins land. */
+  let goldEl: HTMLElement | undefined;
 
   // ── Sound ──
   // Started before anything asks for it; silent until the first click or key.
@@ -146,7 +151,8 @@
     {#if !$account.loading}
       <a class="account" class:signed-in={$account.user} href="/account">
         {#if $account.user}
-          <GoldCounter value={$account.gold} />
+          <!-- While a claimed quest's coins are in the air, the count waits for them. -->
+          <GoldCounter value={$account.gold} delay={$rewards.length > 0 ? 1400 : 0} bind:el={goldEl} />
           <span class="who">{$account.user.username}</span>
         {:else}
           <span class="who">Sign in</span>
@@ -167,6 +173,10 @@
   {#if !inMatch}<MenuBackdrop dust={$page.url.pathname === '/'} />{/if}
   <slot />
 </div>
+
+{#each $rewards.slice(0, 1) as reward (reward)}
+  <RewardToast {reward} target={goldEl} on:done={rewards.shift} />
+{/each}
 
 <style>
   .shell { --chrome: 55px; }

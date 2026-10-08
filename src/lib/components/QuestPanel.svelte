@@ -3,6 +3,7 @@
   import type { IntroRow, QuestRow } from '$lib/quests/client';
   import { fetchQuests, claimQuest, nextRefreshIn } from '$lib/quests/client';
   import { audio } from '$lib/audio';
+  import { rewards } from '$lib/quests/rewards';
 
   /**
    * Two tracks, one panel each: the one-time intro quests that hand a new
@@ -43,11 +44,13 @@
     busy = questId;
     error = null;
     errorTrack = intro.some((q) => q.id === questId) ? 'intro' : 'daily';
+    const label = [...intro, ...quests].find((q) => q.id === questId)?.label ?? 'Quest';
     const result = await claimQuest(questId);
     if (result.quests) quests = result.quests;
     if (result.intro) intro = result.intro;
     if (result.ok) {
       audio().play('quest-complete');
+      rewards.push({ label, gold: result.awarded, packs: result.awardedPacks, back: !!result.awardedBack });
       dispatch('claimed', result.awarded);
     } else {
       error = result.reason ?? 'Could not claim that.';

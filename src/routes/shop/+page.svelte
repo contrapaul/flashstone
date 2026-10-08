@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import PackOpening from '$lib/components/PackOpening.svelte';
   import CardBack from '$lib/components/CardBack.svelte';
+  import GoldCounter from '$lib/components/GoldCounter.svelte';
   import QuestPanel from '$lib/components/QuestPanel.svelte';
   import { account } from '$lib/account';
   import { ALL_CARDS } from '$lib/data/cards';
@@ -117,7 +118,7 @@
     <header>
       <h1>Shop</h1>
       <span class="balance">
-        {gold} gold{#if packsHeld > 0} · {packsHeld} unopened{/if}
+        <GoldCounter value={gold} />{#if packsHeld > 0} · {packsHeld} unopened{/if}
       </span>
     </header>
 
