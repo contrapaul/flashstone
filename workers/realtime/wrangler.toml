@@ -32,6 +32,24 @@ class_name = "Lobby"
 tag = "v1"
 new_sqlite_classes = ["MatchRoom", "Lobby"]
 
+# Logs, traces and issue detection, as switched on in the Cloudflare dashboard.
+# Kept here too, or the next deploy would switch them back off.
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
+
+# Not yet known to wrangler (4.149 warns and skips it); kept so it applies
+# once wrangler catches up with the dashboard.
+[observability.issue_detection]
+enabled = true
+
 [vars]
 # Browser origins allowed to reach this Worker, comma-separated. `*.` matches one
 # level of subdomain, which is what covers Pages preview builds
