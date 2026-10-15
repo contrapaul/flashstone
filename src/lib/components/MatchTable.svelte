@@ -297,6 +297,30 @@
     });
   }
 
+  /**
+   * Which card the pointer means, read from the fan at rest: the slot whose
+   * centre is nearest, as Tome of Secrets does. Reading it from whatever is
+   * under the pointer made it jump, since the neighbours slide away as a card
+   * lifts and another one lands under the pointer. Sticky while the pointer is
+   * on the lifted card, which grows past its slot.
+   */
+  function onHandPointerMove(event: PointerEvent) {
+    if (event.pointerType !== 'mouse' || drag || !handEl) return;
+    const lifted = hovered === null ? null : handEl.querySelector(`.hand-slot[data-index="${hovered}"] .card`);
+    const box = lifted?.getBoundingClientRect();
+    if (box && event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom) return;
+    const rest = layoutFan(visibleHand.length, null, handRoom);
+    const hand = handEl.getBoundingClientRect();
+    const x = (event.clientX - (hand.left + hand.width / 2)) / handScale;
+    if (rest.length === 0 || x < rest[0]!.x - CARD_WIDTH / 2 || x > rest[rest.length - 1]!.x + CARD_WIDTH / 2) {
+      hovered = null;
+      return;
+    }
+    let best = 0;
+    for (let i = 1; i < rest.length; i++) if (Math.abs(x - rest[i]!.x) < Math.abs(x - rest[best]!.x)) best = i;
+    hovered = best;
+  }
+
   /** Only shrinks when even the tightest fan will not fit. */
   $: handScale = Math.min(
     1,
@@ -1542,6 +1566,7 @@
     class:active={isMyTurn(shown)}
     style:transform={`scale(${handScale.toFixed(3)})`}
     bind:this={handEl}
+    on:pointermove={onHandPointerMove}
     on:pointerleave={() => (hovered = null)}
   >
     {#each visibleHand as card, i (card)}
@@ -1554,7 +1579,6 @@
         style:--x={`${fan[i]?.x ?? 0}px`}
         style:--y={`${fan[i]?.y ?? 0}px`}
         style:--r={`${fan[i]?.r ?? 0}deg`}
-        on:pointerenter={(e) => e.pointerType === 'mouse' && !drag && (hovered = i)}
         on:focusin={() => (hovered = i)}
         on:focusout={() => hovered === i && (hovered = null)}
       >

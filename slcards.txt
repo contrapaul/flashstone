@@ -114,7 +114,7 @@ User-Centred Research Methods	A suite of research methods used to explore the tr
 Usability	The extent to which a product can be used by specified users to achieve specified goals effectively and efficiently, while functioning in a predictable and consistent manner.									
 Usability Objectives	Usability objectives include learnability, efficiency, memorability, errors and satisfaction.									
 User	A person utilizing the product.									
-Designing a Solution Stage	The fourth stage in the DP design process, where the intended solution is developed through iterative model—test—refine cycles.									
+Designing a Solution Stage	The fourth stage in the DP design process, where the intended solution is developed through iterative model-test-refine cycles.									
 B2.1
 Design Specification	A list of requirements, constraints and considerations that a yet to be designed product must fulfil.									
 Design Thinking	A non-linear, iterative process used to solve problems.									
@@ -129,7 +129,7 @@ Primary Persona	A profile of the primary user for a product experiencing a chall
 Product Analysis	The examination of a product to determine its features, strengths and weaknesses and to identify opportunities for improvement.									
 Product Requirements	The essential capabilities a product must have to be successful.									
 Problem Statement	A concise and clear description of a problem in a few sentences that states what is to be addressed.									
-Qualitative Data	Typically, descriptive data is used to find out in depth the way people think or feel—their perception. Useful for research at the individual or small (focus) group level.									
+Qualitative Data	Typically, descriptive data is used to find out in depth the way people think or feel: their perception. Useful for research at the individual or small (focus) group level.									
 Quantitative Data	Data that can be measured and recorded using numbers. Examples include height, shoe size and the depth of a kitchen counter and the weight of a laptop.									
 Storyboard	In the context of DP design technology, a storyboard is a visual way to communicate product usage through images, photographs or drawings, to convey the user experience. This is recorded to identify opportunities to redesign a product in order to provide a solution.									
 User Journey	A person’s perceptions and responses that result from the use, or anticipated use, of a product, system or service. A user’s journey shows empathy and is communicated through a storyboard.									
@@ -174,7 +174,7 @@ C2.2
 Biodegradable Material	A material that will decompose into basic substances through the action of microorganisms when in an environment with sufficient water, oxygen, temperature and nutrients.									
 Circular Economy	An economic model in which resources remain in use for as long as possible, from which maximum value is extracted while in use, and the products and materials are recovered and regenerated at the end of the product life cycle.									
 Dematerialization	The reduction of total material and energy throughput of any product and service.									
-Linear Approach/Economy	An economic model that follows a take—make—dispose approach, leading to depletion of resources and waste.									
+Linear Approach/Economy	An economic model that follows a take-make-dispose approach, leading to depletion of resources and waste.									
 Renewable Energy Sources	A natural resource of energy that can be replenished with the passage of time or that does not abate at all.									
 Take-Back Legislation	Laws that require manufacturers to “take back” products at the end of their life for disposal or recycling. Also known as “extended producer responsibility”.					
 C3.1			
