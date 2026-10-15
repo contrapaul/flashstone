@@ -39,7 +39,7 @@ export const INTRO_QUESTS: IntroQuestDef[] = [
   {
     id: FIRST_MATCH,
     label: 'Play your first match',
-    detail: 'Win or lose — finishing it is enough.',
+    detail: 'Win or lose, finishing it is enough.',
     metric: 'matches',
     target: 1,
     gold: 100,

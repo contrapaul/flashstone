@@ -202,7 +202,7 @@
 
 <div class="pack" class:calm>
   {#if stage !== 'dealt'}
-    <p class="lead">Drag the pack onto the socket — or tap it.</p>
+    <p class="lead">Drag the pack onto the socket, or tap it.</p>
     <div class="stage">
       <!-- The sealed pack: a crimped foil packet with the mark on it. -->
       <div

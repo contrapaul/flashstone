@@ -142,7 +142,7 @@ export function deckProblems(deck: Deck, owned: Owned): string[] {
     const legendary = overLimit.filter((e) => cardById(e[0])?.rarity === 'Legendary');
     problems.push(
       legendary.length > 0
-        ? `Only ${LEGENDARY_COPIES} copy of a Legendary is allowed — ${legendary.length} over.`
+        ? `Only ${LEGENDARY_COPIES} copy of a Legendary is allowed (${legendary.length} over).`
         : `More than ${MAX_COPIES} copies of ${overLimit.length} card(s).`
     );
   }

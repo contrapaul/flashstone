@@ -30,7 +30,7 @@
     class:foe={!mine}
     disabled={!mine || !usable}
     style:--power-art={art ? `url("${art}")` : 'none'}
-    title={`${power.name} — ${power.description} (${HERO_POWER_COST} mana)`}
+    title={`${power.name}: ${power.description} (${HERO_POWER_COST} mana)`}
     on:click
   >
     <span class="disc">

@@ -10,14 +10,14 @@
   version of this page is in git history. This route is unlinked from the nav;
   it exists so an old bookmark explains itself rather than 404ing.
 -->
-<svelte:head><title>Import — Flashstone</title></svelte:head>
+<svelte:head><title>Import · Flashstone</title></svelte:head>
 
 <main>
   <h1>Import is shelved</h1>
   <p>
     Flashstone is now built from a single curated set of Design &amp; Technology
     cards, so there is nothing to import into. Every card you can collect is in the
-    collection browser already — you unlock them by opening packs.
+    collection browser already. You unlock them by opening packs.
   </p>
   <a class="cta" href="/decks">Open the collection</a>
 </main>

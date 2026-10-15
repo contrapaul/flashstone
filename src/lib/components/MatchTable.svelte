@@ -1475,7 +1475,7 @@
     <div
       class="hero-block"
       role="group"
-      aria-label="Your hero — right-click or hold it for emotes"
+      aria-label="Your hero. Right-click or hold it for emotes"
       bind:this={myHeroEl}
       on:contextmenu|preventDefault={() => (wheelOpen = !wheelOpen)}
       on:pointerdown={onHeroHoldStart}

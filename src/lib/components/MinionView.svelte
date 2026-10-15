@@ -287,7 +287,7 @@
     {/if}
 
     {#if asleep}
-      <span class="zzz" aria-label="Asleep — can attack next turn"><i>z</i><i>z</i><i>z</i></span>
+      <span class="zzz" aria-label="Asleep: can attack next turn"><i>z</i><i>z</i><i>z</i></span>
     {/if}
 
     {#if hasBadges && (!minion.silenced || hushing)}

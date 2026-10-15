@@ -151,11 +151,11 @@
   $: deckLine = !deckReady
     ? ''
     : deckPlayable
-      ? `Taking in “${deckName}” — ${DECK_SIZE} cards.`
-      : `${distinctCount(owned)} of ${ALL_CARDS.length} cards collected — taking in the starter deck.`;
+      ? `Taking in “${deckName}”, ${DECK_SIZE} cards.`
+      : `${distinctCount(owned)} of ${ALL_CARDS.length} cards collected. Taking in the starter deck.`;
 </script>
 
-<svelte:head><title>New Game — Flashstone</title></svelte:head>
+<svelte:head><title>New Game · Flashstone</title></svelte:head>
 
 <main>
   <header class="top">
@@ -192,7 +192,7 @@
     {:else if !$account.user}
       <section class="panel gate">
         <p class="muted">
-          Online play needs an account — the match runs on the server, which has to know
+          Online play needs an account. The match runs on the server, which has to know
           whose deck is whose. Practice against the AI works without one.
         </p>
         <a class="cta" href="/account">Sign in or create an account</a>
@@ -207,7 +207,7 @@
           {#if hosted}
             <p class="muted">
               Waiting for an opponent{hosted.isPublic
-                ? ' — your game is in the list beside this'
+                ? '. Your game is in the list beside this'
                 : ''}.
             </p>
             <div class="invite">
@@ -267,7 +267,7 @@
     <div class="rules">
       <p class="lead">
         Flashstone is a turn-based card game built from the Design &amp; Technology
-        syllabus. Every term is a card, so the reading happens while you play — there is
+        syllabus. Every term is a card, so the reading happens while you play. There is
         no quiz interrupting the match.
       </p>
 
@@ -285,7 +285,7 @@
           <li>You gain one mana crystal per turn, up to ten, and refill to full each turn.</li>
           <li>You draw one card at the start of every turn.</li>
           <li>
-            Run out of cards and you take <strong>fatigue</strong> damage instead — one,
+            Run out of cards and you take <strong>fatigue</strong> damage instead: one,
             then two, then three, climbing every draw. Long games end this way.
           </li>
           <li>You may hold at most seven minions on the board.</li>
@@ -300,7 +300,7 @@
         <h2>Combat</h2>
         <ul>
           <li>
-            A minion can't attack the turn it lands — it has summoning sickness — unless it
+            A minion can't attack the turn it lands (it has summoning sickness) unless it
             has Charge.
           </li>
           <li>
@@ -334,12 +334,12 @@
           have played once plays the same way forever.
         </p>
         <p>
-          A card on the table shows only what matters to the game — its ability, and any
+          A card on the table shows only what matters to the game: its ability, and any
           keywords it has. The <strong>definition is not printed on the card</strong>:
           click a card to inspect it, or open the collection, and the definition is there.
         </p>
         <p>
-          You start with 15 cards, two copies of each — one complete deck. The rest are
+          You start with 15 cards, two copies of each, one complete deck. The rest are
           collected by opening packs. A deck holds 30 cards, at most two copies of any
           card, and only one copy of a Legendary.
         </p>
@@ -348,7 +348,7 @@
       <section>
         <h2>Deck rules</h2>
         <p>
-          A deck is exactly 30 cards with at most two copies of any one card — so you need
+          A deck is exactly 30 cards with at most two copies of any one card, so you need
           at least 15 flashcards to field a full deck. Build one by hand on the Collection
           page, or press Auto-build and adjust from there.
         </p>

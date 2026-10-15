@@ -146,7 +146,7 @@
       class:breaking={breaking && !weapon}
       class:drawn={toolArt}
       style:--ui={toolArt ? `url("${toolArt}")` : null}
-      title={`${shownWeapon.name} — ${shownWeapon.attack} attack, ${shownWeapon.durability} left`}
+      title={`${shownWeapon.name}: ${shownWeapon.attack} attack, ${shownWeapon.durability} left`}
       in:arrive
     >
       {#if !toolArt}

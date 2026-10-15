@@ -96,7 +96,7 @@
     const hits = struck(entry).map(
       (s) => `${s.name} ${s.results.map((r) => (r.amount ? `${r.result} ${r.amount}` : r.result)).join(', ')}${s.killed ? ' destroyed' : ''}`
     );
-    return `${who}: ${what}${hits.length ? ` — ${hits.join('; ')}` : ''}`;
+    return `${who}: ${what}${hits.length ? `, ${hits.join('; ')}` : ''}`;
   }
 
   // ── The open entry ──────────────────────────────────────

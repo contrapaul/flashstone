@@ -201,7 +201,7 @@
     : null;
 </script>
 
-<svelte:head><title>Practice — Flashstone</title></svelte:head>
+<svelte:head><title>Practice · Flashstone</title></svelte:head>
 
 <MatchTable
   {view}

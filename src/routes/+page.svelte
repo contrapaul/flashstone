@@ -50,8 +50,8 @@
   $: status = !ready
     ? ''
     : deckPlayable
-      ? `Playing “${deck?.name}” — ${DECK_SIZE} cards.`
-      : `${distinctCount(owned)} of ${ALL_CARDS.length} cards collected — playing the starter deck.`;
+      ? `Playing “${deck?.name}”, ${DECK_SIZE} cards.`
+      : `${distinctCount(owned)} of ${ALL_CARDS.length} cards collected. Playing the starter deck.`;
 
   // Online and the rules are tabs of the New Game screen now, not menu entries.
   const menu = [
@@ -90,7 +90,7 @@
       <section class="placeholder">
         <h2>Daily quests</h2>
         <p>
-          Three quests a day, refreshing at UTC midnight, each paying gold — plus a
+          Three quests a day, refreshing at UTC midnight, each paying gold, plus a
           one-time set for new players that pays packs. They need an account to track.
         </p>
         <a class="cta" href="/account">Sign in</a>

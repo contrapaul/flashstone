@@ -68,7 +68,7 @@ export function rulesText(text: string, spellDamage = 0, isSpell = false): Run[]
 export const GLOSSARY: Record<string, string> = {
   Taunt: 'Enemies must attack this first.',
   Charge: 'Can attack the turn it is played.',
-  'Divine Shield': 'The first time it would take damage, it takes none — and the shield breaks.',
+  'Divine Shield': 'The first time it would take damage, it takes none, and the shield breaks.',
   Windfury: 'Can attack twice each turn.',
   Stealth: 'Can’t be attacked, or picked as a target, by the opponent.',
   Battlecry: 'Happens when you play it from your hand.',

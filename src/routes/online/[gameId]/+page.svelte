@@ -142,10 +142,10 @@
       ? 'Opponent left'
       : null;
 
-  $: overNote = status.kind === 'opponentLeft' ? 'They may reconnect — or you can head back.' : null;
+  $: overNote = status.kind === 'opponentLeft' ? 'They may reconnect, or you can head back.' : null;
 </script>
 
-<svelte:head><title>Online match — Flashstone</title></svelte:head>
+<svelte:head><title>Online match · Flashstone</title></svelte:head>
 
 {#if joining}
   <p class="notice">Joining…</p>

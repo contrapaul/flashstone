@@ -54,7 +54,8 @@
    * Every button, link and checkbox clicks — except on the playing surface, whose
    * cards, minions, heroes and End Turn make sounds of their own, the cards of a
    * pack, a Discover or the mulligan, which make theirs, and anything marked
-   * `data-own-sound`. The menu plates and nav links also tick under the pointer.
+   * `data-own-sound`. The menu plates also tick under the pointer; the header
+   * does not, so its buttons sound like every other menu button.
    */
   function onClickSound(event: MouseEvent) {
     const target = (event.target as Element | null)?.closest('button, a[href], [role="button"], input[type="checkbox"]');
@@ -64,7 +65,7 @@
   let hoverSounded: Element | null = null;
   function onHoverSound(event: PointerEvent) {
     if (event.pointerType !== 'mouse') return;
-    const target = (event.target as Element | null)?.closest('nav a, main .menu a');
+    const target = (event.target as Element | null)?.closest('main .menu a');
     if (target && target !== hoverSounded) audio().play('ui-hover', { volume: 0.4 });
     hoverSounded = target ?? null;
   }
@@ -108,7 +109,7 @@
     const owned = loadCollection() ?? starterCollection();
     const deck = loadDeck();
     if (deck && isLegal(deck, owned)) {
-      deckLabel = `Deck — ${deck.name} · ${deck.cardIds.length} cards`;
+      deckLabel = `Deck: ${deck.name} · ${deck.cardIds.length} cards`;
     } else {
       deckLabel = `${totalCopies(owned)} cards · starter deck`;
     }

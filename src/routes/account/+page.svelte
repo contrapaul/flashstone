@@ -92,7 +92,7 @@
   };
 </script>
 
-<svelte:head><title>Account — Flashstone</title></svelte:head>
+<svelte:head><title>Account · Flashstone</title></svelte:head>
 
 <main>
   {#if $account.loading}

@@ -134,7 +134,7 @@
   $: clock = `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 </script>
 
-<svelte:head><title>Review — Flashstone</title></svelte:head>
+<svelte:head><title>Review · Flashstone</title></svelte:head>
 <svelte:window on:keydown={onKeydown} on:pointerdown={touch} />
 
 <main>
@@ -150,7 +150,7 @@
         {#each SECTIONS as section}<option value={section}>{section}</option>{/each}
       </select>
       <span class="progress">{order.length === 0 ? 0 : index + 1} / {order.length}</span>
-      <span class="clock" title="Active review time — pauses when you stop">{clock}</span>
+      <span class="clock" title="Active review time. Pauses when you stop">{clock}</span>
     </div>
   </header>
 

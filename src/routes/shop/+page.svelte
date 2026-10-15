@@ -94,7 +94,7 @@
   $: canAffordPack = gold >= PACK_COST;
 </script>
 
-<svelte:head><title>Shop — Flashstone</title></svelte:head>
+<svelte:head><title>Shop · Flashstone</title></svelte:head>
 
 <main>
   {#if $account.loading}
@@ -103,7 +103,7 @@
     <section class="panel gate">
       <h1>Shop</h1>
       <p class="muted">
-        Gold, packs and daily quests need an account — they have to live on the server so
+        Gold, packs and daily quests need an account. They have to live on the server so
         they follow you between devices and cannot be edited from the browser. Practice
         against the AI works without one.
       </p>
@@ -134,8 +134,8 @@
 
         {#if complete}
           <p class="note">
-            You have every card at two copies. Packs would only repeat what you have —
-            come back when more cards are added.
+            You have every card at two copies. Packs would only repeat what you have.
+            Come back when more cards are added.
           </p>
         {:else}
           <p class="note">{collected} of {ALL_CARDS.length} cards collected.</p>
@@ -144,7 +144,7 @@
         <div class="pack-actions">
           {#if packsHeld > 0 && !complete}
             <button on:click={openOwned} disabled={busy}>
-              {busy ? 'Opening…' : `Open a pack — ${packsHeld} waiting`}
+              {busy ? 'Opening…' : `Open a pack (${packsHeld} waiting)`}
             </button>
           {/if}
 
@@ -153,7 +153,7 @@
             on:click={buyPack}
             disabled={busy || !canAffordPack || complete}
           >
-            {busy ? 'Opening…' : `Buy a pack — ${PACK_COST}g`}
+            {busy ? 'Opening…' : `Buy a pack: ${PACK_COST}g`}
           </button>
         </div>
         {#if !canAffordPack && !complete}
@@ -165,7 +165,7 @@
         <h2>Card backs</h2>
         <p class="muted">
           What the other player sees. Card backs are the only thing gold buys besides
-          packs — gold cards cannot be bought at all.
+          packs. Gold cards cannot be bought at all.
         </p>
 
         <div class="backs">

@@ -55,7 +55,7 @@
 <div class="row choice">
   <span>
     <span class="label">Animation</span>
-    <span class="note">Fast plays everything quicker. Reduced stops anything moving across the table — it fades instead.</span>
+    <span class="note">Fast plays everything quicker. Reduced stops anything moving across the table. It fades instead.</span>
   </span>
   <span class="segments" role="radiogroup" aria-label="Animation">
     {#each MOTIONS as option}

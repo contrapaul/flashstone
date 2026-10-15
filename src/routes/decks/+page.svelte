@@ -271,11 +271,11 @@
   /** Why a card cannot be added — shown as the tile's tooltip. */
   function tileTitle(card: Card): string {
     const have = ownedCount(owned, card.id);
-    if (have === 0) return `${card.name} — not in your collection`;
+    if (have === 0) return `${card.name}: not in your collection`;
     if (countOf(deck, card.id) >= allowedCopies(owned, card.id)) {
       return card.rarity === 'Legendary'
-        ? `${card.name} — Legendaries are limited to 1 per deck`
-        : `${card.name} — already at ${allowedCopies(owned, card.id)} copies`;
+        ? `${card.name}: Legendaries are limited to 1 per deck`
+        : `${card.name}: already at ${allowedCopies(owned, card.id)} copies`;
     }
     return `Add ${card.name}`;
   }
@@ -293,13 +293,13 @@
   }
 </script>
 
-<svelte:head><title>Collection — Flashstone</title></svelte:head>
+<svelte:head><title>Collection · Flashstone</title></svelte:head>
 
 <main>
   <header>
     <h1>Collection</h1>
     <p class="sub">
-      {distinct} of {ALL_CARDS.length} cards collected. Two copies of a card per deck —
+      {distinct} of {ALL_CARDS.length} cards collected. Two copies of a card per deck,
       Legendaries one.
     </p>
 
@@ -349,7 +349,7 @@
       {#if !signedIn}
         <p class="slot-note">
           Signed-in players keep up to {MAX_DECKS} decks, each with its own class.
-          <a href="/account">Sign in</a> to unlock the rest — this one stays on this device
+          <a href="/account">Sign in</a> to unlock the rest. This one stays on this device
           either way.
         </p>
       {:else if slotsLeft === 0}
@@ -369,7 +369,7 @@
       {/each}
       {#if heroPower}
         <span class="power-note">
-          <strong>{heroPower.name}</strong> — {heroPower.description}
+          <strong>{heroPower.name}:</strong> {heroPower.description}
         </span>
       {/if}
     </div>
@@ -500,7 +500,7 @@
       {:else if problems.length > 0}
         <p class="warn">{problems.join(' ')}</p>
       {:else}
-        <p class="ok">Legal — ready to play.</p>
+        <p class="ok">Legal and ready to play.</p>
       {/if}
 
       <ul class="deck-list">
