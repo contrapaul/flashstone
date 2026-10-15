@@ -7,6 +7,7 @@
   import { loadCollection } from '$lib/decks/storage';
   import { createReviewTimer } from '$lib/review/timer';
   import { reportProgress } from '$lib/quests/client';
+  import { audio } from '$lib/audio';
   import { createRng, shuffle } from '$lib/engine/rng';
 
   /**
@@ -97,6 +98,7 @@
   function next() {
     touch();
     if (order.length === 0) return;
+    audio().play('card-add');
     index = (index + 1) % order.length;
     revealed = false;
   }
@@ -104,12 +106,14 @@
   function previous() {
     touch();
     if (order.length === 0) return;
+    audio().play('card-add');
     index = (index - 1 + order.length) % order.length;
     revealed = false;
   }
 
   function reveal() {
     touch();
+    audio().play('card-add');
     revealed = true;
   }
 
@@ -166,7 +170,7 @@
           {/if}
           <p class="definition">{current.definition}</p>
         {:else}
-          <button class="reveal" on:click={reveal}>
+          <button class="reveal" data-own-sound on:click={reveal}>
             <span>Reveal definition</span>
             <span class="hint">Space</span>
           </button>
@@ -174,7 +178,7 @@
       </aside>
     </div>
 
-    <nav class="steps">
+    <nav class="steps" data-own-sound>
       <button class="ghost" on:click={previous}>← Previous</button>
       <button on:click={next}>Next →</button>
     </nav>

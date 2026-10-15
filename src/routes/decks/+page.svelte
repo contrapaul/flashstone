@@ -40,6 +40,7 @@
   } from '$lib/collection/sync';
   import { MAX_DECKS } from '$lib/decks/deck';
   import { reportProgress } from '$lib/quests/client';
+  import { audio } from '$lib/audio';
 
   let owned: Owned = {};
   let deck: Deck = emptyDeck();
@@ -216,16 +217,19 @@
   $: distinct = distinctCount(owned);
 
   function add(id: string) {
+    audio().play('card-add');
     deck = addCard(deck, owned, id);
     saved = false;
   }
 
   function remove(id: string) {
+    audio().play('card-add');
     deck = removeCard(deck, id);
     saved = false;
   }
 
   function build() {
+    audio().play('card-add');
     const built = autoBuild(owned, Date.now(), deckClass);
     // A name the player typed survives; only the placeholder gives way.
     deck = deck.name === emptyDeck().name ? built : { ...built, name: deck.name };
@@ -432,6 +436,7 @@
             {/if}
             <button
               class="tile-btn"
+              data-own-sound
               disabled={!canAdd(deck, owned, card.id)}
               on:click={() => add(card.id)}
               title={tileTitle(card)}
@@ -501,7 +506,7 @@
       <ul class="deck-list">
         {#each entries as entry (entry.card.id)}
           <li>
-            <button class="row" on:click={() => remove(entry.card.id)} title="Remove one">
+            <button class="row" data-own-sound on:click={() => remove(entry.card.id)} title="Remove one">
               <span class="cost">{entry.card.cost}</span>
               <span class="name">{entry.card.name}</span>
               <span class="stat">
@@ -516,7 +521,7 @@
       </ul>
 
       <div class="deck-actions">
-        <button class="ghost" on:click={build}>Auto-build</button>
+        <button class="ghost" data-own-sound on:click={build}>Auto-build</button>
         <button class="ghost" on:click={clear} disabled={deck.cardIds.length === 0}>
           Clear
         </button>

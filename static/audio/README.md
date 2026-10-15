@@ -31,6 +31,7 @@ Named exactly:
 | `card-hover` | the pointer lifts a card in your hand (quiet) |
 | `card-pickup` | you pick a card up to play it |
 | `card-play` | a minion or weapon is put down — yours as you drop it, theirs as it is revealed |
+| `card-add` | a card goes into or out of a deck in the deck builder, or Auto-build fills one; and a card is revealed or turned to the next in Review |
 | `spell-cast` | a spell is cast |
 | `minion-land` | a minion costing 1–3 lands on the board |
 | `minion-land-heavy` | one costing 4 or more lands (played lower for 7 and up, which also shakes the table) |
@@ -65,7 +66,7 @@ Named exactly:
 | `reveal-rare` · `reveal-epic` · `reveal-legendary` | …and it is that rarity (the best one, for "Reveal all") |
 | `gold` | gold arrives: a win, a quest, the daily bonus |
 | `quest-complete` | a quest is finished in a match, or claimed |
-| `ui-click` | any button or link off the table |
+| `ui-click` | any button, link or checkbox off the table — menus, settings, toggles, the in-match menu (not End Turn) |
 | `ui-hover` | the pointer moves onto a menu plate or a nav link |
 
 **Extra takes:** `hit-light.wav`, `hit-light-2.wav`, `hit-light-3.wav` are all the
@@ -137,7 +138,9 @@ which:
 `turn-end` switch_003 · `victory` maximize_001 · `defeat` error_005 · `pack-open` bookOpen ·
 `card-flip` bookFlip3 · `reveal-rare` confirmation_001 · `reveal-epic` question_003 ·
 `reveal-legendary` maximize_005 · `gold` handleCoins2 (+ handleCoins) ·
-`quest-complete` confirmation_002 · `ui-click` click_002 (+ toggle_004) · `ui-hover` tick_002.
+`quest-complete` confirmation_002 · `ui-hover` tick_002.
+
+Not placeholders: `card-add` and `ui-click` are Flashstone's own, converted from MP3.
 
 Still silent: `fuse` (neither pack has a loop that suits) and `emote` (unused).
 There is no music yet.

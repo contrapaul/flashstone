@@ -16,7 +16,7 @@ import { settings, type Volume } from './settings';
  */
 
 export type SfxId =
-  | 'card-draw' | 'card-hover' | 'card-pickup' | 'card-play'
+  | 'card-draw' | 'card-hover' | 'card-pickup' | 'card-play' | 'card-add'
   | 'minion-land' | 'minion-land-heavy' | 'spell-cast' | 'attack-swing'
   | 'hit-light' | 'hit-heavy' | 'hero-hurt' | 'death' | 'shield-pop' | 'taunt-up'
   | 'freeze' | 'thaw' | 'silence' | 'buff' | 'heal' | 'armor'
