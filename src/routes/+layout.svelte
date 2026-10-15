@@ -51,13 +51,14 @@
   $: if (!inMatch) audio().music($page.url.pathname === '/' ? 'title' : 'menu');
 
   /*
-   * Every button and link clicks — except on the playing surface, whose cards,
-   * minions, heroes and End Turn make sounds of their own, and the cards of a
-   * pack or a Discover, which make theirs. The menu plates and nav links also tick under the pointer.
+   * Every button, link and checkbox clicks — except on the playing surface, whose
+   * cards, minions, heroes and End Turn make sounds of their own, the cards of a
+   * pack, a Discover or the mulligan, which make theirs, and anything marked
+   * `data-own-sound`. The menu plates and nav links also tick under the pointer.
    */
   function onClickSound(event: MouseEvent) {
-    const target = (event.target as Element | null)?.closest('button, a[href], [role="button"]');
-    if (target && !target.closest('.hand, .board, .hero-row, .centre, .flipper, .option, .foil')) audio().play('ui-click', { volume: 0.7 });
+    const target = (event.target as Element | null)?.closest('button, a[href], [role="button"], input[type="checkbox"]');
+    if (target && !target.closest('.hand, .board, .hero-row, .centre, .flipper, .choosing .option, .foil, [data-own-sound]')) audio().play('ui-click', { volume: 0.7 });
   }
 
   let hoverSounded: Element | null = null;
